@@ -13,7 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * 요청마다 traceId를 부여하는 서블릿 필터.
  *
- * <p>{@code X-Request-Id} 헤더를 재사용하거나 새로 생성한 traceId를 MDC · 요청 attribute · 응답 헤더에
+ * <p>{@code X-Request-Id} 헤더를 재사용하거나 새로 생성한 traceId를 MDC({@code request_id}) · 요청 attribute · 응답 헤더에
  * 실어 로그 · 에러 응답 · 클라이언트가 같은 값으로 하나의 요청 흐름을 추적하게 한다.
  */
 @Component
@@ -21,7 +21,7 @@ public class TraceIdFilter extends OncePerRequestFilter {
 
     public static final String TRACE_ID_HEADER = "X-Request-Id";
     public static final String TRACE_ID_ATTRIBUTE = "traceId";
-    public static final String TRACE_ID_MDC_KEY = "traceId";
+    public static final String REQUEST_ID_MDC_KEY = "request_id";
 
     @Override
     protected void doFilterInternal(
@@ -33,12 +33,12 @@ public class TraceIdFilter extends OncePerRequestFilter {
 
         request.setAttribute(TRACE_ID_ATTRIBUTE, traceId);
         response.setHeader(TRACE_ID_HEADER, traceId);
-        MDC.put(TRACE_ID_MDC_KEY, traceId);
+        MDC.put(REQUEST_ID_MDC_KEY, traceId);
 
         try {
             filterChain.doFilter(request, response);
         } finally {
-            MDC.remove(TRACE_ID_MDC_KEY);
+            MDC.remove(REQUEST_ID_MDC_KEY);
         }
     }
 
