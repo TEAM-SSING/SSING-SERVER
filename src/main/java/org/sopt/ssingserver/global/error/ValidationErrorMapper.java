@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
+// Spring validation 예외를 정책 응답 형식(errors: { field: message })으로 변환한다.
 final class ValidationErrorMapper {
 
     private static final String DEFAULT_VALIDATION_MESSAGE = "요청 값이 올바르지 않습니다.";
@@ -26,6 +27,7 @@ final class ValidationErrorMapper {
         Map<String, String> errors = new LinkedHashMap<>();
 
         for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
+            // 같은 필드에서 여러 검증이 실패하면 먼저 발견된 메시지만 응답한다.
             errors.putIfAbsent(fieldError.getField(), resolveMessage(fieldError));
         }
 
