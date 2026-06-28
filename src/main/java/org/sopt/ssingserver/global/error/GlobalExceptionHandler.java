@@ -3,9 +3,7 @@ package org.sopt.ssingserver.global.error;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.sopt.ssingserver.global.logging.TraceIdFilter;
 import org.sopt.ssingserver.global.response.BaseResponse;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -22,6 +20,12 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final ErrorResponseFactory errorResponseFactory;
+
+    public GlobalExceptionHandler(ErrorResponseFactory errorResponseFactory) {
+        this.errorResponseFactory = errorResponseFactory;
+    }
+
     // 비즈니스 규칙 위반
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<BaseResponse<Void>> handleBusinessException(
@@ -29,8 +33,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         ErrorCode errorCode = exception.getErrorCode();
-        return ResponseEntity.status(errorCode.getStatus())
-                .body(BaseResponse.error(errorCode, resolveTraceId(request)));
+        return errorResponseFactory.error(errorCode, request);
     }
 
     // @Valid @RequestBody DTO의 필드 검증 실패
@@ -39,8 +42,7 @@ public class GlobalExceptionHandler {
             MethodArgumentNotValidException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BaseResponse.validationError(ValidationErrorMapper.from(exception), resolveTraceId(request)));
+        return errorResponseFactory.validationError(ValidationErrorMapper.from(exception), request);
     }
 
     // 컨트롤러 메서드 파라미터(@RequestParam, @PathVariable) 검증 실패
@@ -49,8 +51,7 @@ public class GlobalExceptionHandler {
             HandlerMethodValidationException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BaseResponse.validationError(ValidationErrorMapper.from(exception), resolveTraceId(request)));
+        return errorResponseFactory.validationError(ValidationErrorMapper.from(exception), request);
     }
 
     // 요청 바디 JSON 파싱 실패
@@ -59,8 +60,7 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BaseResponse.error(CommonErrorCode.BAD_REQUEST, resolveTraceId(request)));
+        return errorResponseFactory.error(CommonErrorCode.BAD_REQUEST, request);
     }
 
     // 필수 @RequestParam 누락
@@ -69,8 +69,7 @@ public class GlobalExceptionHandler {
             MissingServletRequestParameterException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BaseResponse.validationError(ValidationErrorMapper.from(exception), resolveTraceId(request)));
+        return errorResponseFactory.validationError(ValidationErrorMapper.from(exception), request);
     }
 
     // 파라미터 타입 불일치
@@ -79,8 +78,7 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BaseResponse.error(CommonErrorCode.BAD_REQUEST, resolveTraceId(request)));
+        return errorResponseFactory.error(CommonErrorCode.BAD_REQUEST, request);
     }
 
     // 허용되지 않은 HTTP 메서드 요청
@@ -89,8 +87,7 @@ public class GlobalExceptionHandler {
             HttpRequestMethodNotSupportedException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
-                .body(BaseResponse.error(CommonErrorCode.METHOD_NOT_ALLOWED, resolveTraceId(request)));
+        return errorResponseFactory.error(CommonErrorCode.METHOD_NOT_ALLOWED, request);
     }
 
     // 매핑되지 않는 경로 요청
@@ -99,8 +96,7 @@ public class GlobalExceptionHandler {
             NoResourceFoundException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(BaseResponse.error(CommonErrorCode.NOT_FOUND, resolveTraceId(request)));
+        return errorResponseFactory.error(CommonErrorCode.NOT_FOUND, request);
     }
 
     // 그 외 처리되지 않은 모든 예외
@@ -109,15 +105,8 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
-        String traceId = resolveTraceId(request);
+        String traceId = errorResponseFactory.resolveTraceId(request);
         log.error("Unhandled exception. traceId={}", traceId, exception);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(BaseResponse.error(CommonErrorCode.INTERNAL_ERROR, traceId));
-    }
-
-    // TraceIdFilter가 요청 attribute에 심어둔 traceId 조회
-    private String resolveTraceId(HttpServletRequest request) {
-        Object traceId = request.getAttribute(TraceIdFilter.TRACE_ID_ATTRIBUTE);
-        return traceId != null ? traceId.toString() : null;
+        return errorResponseFactory.error(CommonErrorCode.INTERNAL_ERROR, request);
     }
 }
