@@ -24,6 +24,7 @@ class ErrorResponseFactory {
     }
 
     String resolveTraceId(HttpServletRequest request) {
+        // 실패 응답의 traceId는 TraceIdFilter가 로그 MDC에 넣은 request_id와 같은 값을 사용한다.
         Object traceId = request.getAttribute(TraceIdFilter.TRACE_ID_ATTRIBUTE);
         return traceId != null ? traceId.toString() : null;
     }
