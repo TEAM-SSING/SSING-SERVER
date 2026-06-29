@@ -105,8 +105,8 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
-        String traceId = errorResponseFactory.resolveTraceId(request);
-        log.error("Unhandled exception. traceId={}", traceId, exception);
+        String requestId = errorResponseFactory.resolveRequestId(request);
+        log.error("Unhandled exception. requestId={}", requestId, exception);
         return errorResponseFactory.error(CommonErrorCode.INTERNAL_ERROR, request);
     }
 }

@@ -14,7 +14,7 @@ public record BaseResponse<T>(
         String message,
         T data,
         Map<String, String> errors,
-        String traceId
+        String requestId
 ) {
 
     // 컨트롤러가 직접 호출하지 못하게 두어 SuccessResponseFactory의 204 body 검증을 우회하지 않게 한다.
@@ -24,19 +24,19 @@ public record BaseResponse<T>(
     }
 
     // 실패 응답
-    public static BaseResponse<Void> error(ErrorCode errorCode, String traceId) {
-        return new BaseResponse<>(false, errorCode.getCode(), errorCode.getMessage(), null, null, traceId);
+    public static BaseResponse<Void> error(ErrorCode errorCode, String requestId) {
+        return new BaseResponse<>(false, errorCode.getCode(), errorCode.getMessage(), null, null, requestId);
     }
 
     // validation은 field별 code를 만들지 않고 root code와 필드별 message map으로만 표현한다.
-    public static BaseResponse<Void> validationError(Map<String, String> errors, String traceId) {
+    public static BaseResponse<Void> validationError(Map<String, String> errors, String requestId) {
         return new BaseResponse<>(
                 false,
                 CommonErrorCode.VALIDATION_FAILED.getCode(),
                 CommonErrorCode.VALIDATION_FAILED.getMessage(),
                 null,
                 errors,
-                traceId
+                requestId
         );
     }
 

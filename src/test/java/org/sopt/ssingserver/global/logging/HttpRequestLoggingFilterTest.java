@@ -26,7 +26,7 @@ class HttpRequestLoggingFilterTest {
         logger.addAppender(appender);
 
         try {
-            MDC.put(TraceIdFilter.REQUEST_ID_MDC_KEY, "req-123");
+            MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-123");
             MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/songs");
             MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -47,7 +47,7 @@ class HttpRequestLoggingFilterTest {
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);
-            MDC.remove(TraceIdFilter.REQUEST_ID_MDC_KEY);
+            MDC.remove(RequestIdFilter.REQUEST_ID_MDC_KEY);
         }
     }
 
