@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: ssing-server
+  profiles:
+    default: local
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
