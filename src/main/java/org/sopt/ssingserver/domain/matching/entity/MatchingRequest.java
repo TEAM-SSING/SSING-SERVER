@@ -18,6 +18,7 @@ import lombok.NoArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.entity.BaseTimeEntity;
@@ -61,8 +62,9 @@ public class MatchingRequest extends BaseTimeEntity {
     @Column(nullable = false, length = 40)
     private MatchingRequestStatus status;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 40)
-    private String statusReason;
+    private MatchingRequestStatusReason statusReason;
 
     @ManyToOne(fetch = FetchType.LAZY)
     private MatchingOffer matchingOffer;

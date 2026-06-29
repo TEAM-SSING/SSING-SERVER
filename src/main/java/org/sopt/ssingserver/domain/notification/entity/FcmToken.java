@@ -9,7 +9,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -19,11 +18,7 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 
 @Getter
 @Entity
-@Table(
-        name = "fcm_tokens",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_fcm_tokens_token", columnNames = {"token"})
-        })
+@Table(name = "fcm_tokens")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FcmToken extends BaseTimeEntity {
 
@@ -35,7 +30,7 @@ public class FcmToken extends BaseTimeEntity {
     @JoinColumn(nullable = false)
     private Member member;
 
-    @Column(nullable = false, length = 500)
+    @Column(nullable = false, length = 500, unique = true)
     private String token;
 
     @Column(nullable = false)
