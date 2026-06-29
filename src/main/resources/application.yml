@@ -10,3 +10,10 @@ spring:
         format_sql: true
         jdbc:
           time_zone: UTC
+
+ssing:
+  auth:
+    jwt:
+      issuer: ssing
+      secret: ${SSING_JWT_SECRET:}
+      access-token-expiration: PT1H
