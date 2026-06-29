@@ -1,0 +1,13 @@
+package org.sopt.ssingserver.domain.matching.enums;
+
+public enum MatchingRequestStatusReason {
+    NO_AVAILABLE_INSTRUCTOR,
+    CONSUMER_CANCELED,
+    CONSUMER_REJECTED_INSTRUCTOR,
+    INSTRUCTOR_REJECTED,
+    INSTRUCTOR_TIMEOUT,
+    CONFIRMATION_TIMEOUT,
+    PAYMENT_TIMEOUT,
+    GROUP_CANCELED,
+    SYSTEM_ERROR
+}
