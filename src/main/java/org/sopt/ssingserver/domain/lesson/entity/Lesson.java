@@ -55,7 +55,7 @@ public class Lesson extends BaseTimeEntity {
     private LessonLevel lessonLevel;
 
     @Column(nullable = false)
-    private int headcount;
+    private int totalHeadcount;
 
     @Column(nullable = false)
     private int durationMinutes;
