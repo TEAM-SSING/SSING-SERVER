@@ -2,9 +2,9 @@ package org.sopt.ssingserver.global.response;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
+import tools.jackson.databind.ObjectMapper;
 
 class BaseResponseTest {
 
