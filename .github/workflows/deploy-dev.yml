@@ -1,0 +1,390 @@
+name: Deploy Dev
+
+# dev 자동 배포와 수동 재배포 트리거
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# dev 배포 동시 실행 제어
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+# 저장소 읽기 전용 권한
+permissions:
+  contents: read
+
+# EC2 배포 경로와 Compose 파일명
+env:
+  DEPLOY_DIR: /home/ubuntu/ssing
+  COMPOSE_FILE: docker-compose.dev.yml
+
+jobs:
+  build-and-deploy:
+    # GitHub Environment dev 배포 컨텍스트
+    environment: dev
+
+    # EC2 t4g 계열과 동일한 ARM64 빌드 환경
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      # 저장소 코드 체크아웃
+      - name: 저장소 코드 체크아웃
+        uses: actions/checkout@v4
+
+      # 배포 입력값 사전 점검
+      - name: GitHub Variables와 Secrets 사전 점검
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          SSING_DEV_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
+          SSING_DEV_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
+          SSING_DEV_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
+          SSING_DEV_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
+          SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::배포 입력값 사전 점검"
+          echo "필수 GitHub Variables와 Secrets 등록 여부 확인"
+
+          required_vars=(
+            DOCKERHUB_IMAGE
+            DOCKERHUB_USERNAME
+            DOCKERHUB_TOKEN
+            EC2_HOST
+            EC2_USERNAME
+            EC2_SSH_PRIVATE_KEY
+            SSING_DEV_DATASOURCE_URL
+            SSING_DEV_DATASOURCE_USERNAME
+            SSING_DEV_DATASOURCE_PASSWORD
+            SSING_DEV_JWT_SECRET
+            SSING_DEV_DOMAIN
+          )
+
+          missing=0
+          for var_name in "${required_vars[@]}"; do
+            if [ -z "${!var_name}" ]; then
+              echo "::error title=GitHub 설정값 누락::${var_name} 값이 비어 있습니다. Repository Settings > Secrets and variables > Actions에서 민감값은 Secrets, 일반 설정값은 Variables에 등록하세요."
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "누락된 GitHub Variable 또는 Secret 등록 후 workflow 재실행 필요"
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=배포 입력값 사전 점검 완료::필수 GitHub Variables와 Secrets가 모두 설정되어 있습니다."
+          echo "::endgroup::"
+
+      # Docker 이미지 태그 생성
+      - name: Docker 이미지 태그 생성
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::Docker 이미지 태그 생성"
+          {
+            printf 'IMAGE_TAG=%s\n' "${DOCKERHUB_IMAGE}:dev-${GITHUB_SHA}"
+            printf 'IMAGE_LATEST=%s\n' "${DOCKERHUB_IMAGE}:dev-latest"
+          } >> "$GITHUB_ENV"
+          echo "::notice title=Docker 이미지 태그 생성 완료::커밋 고정 태그와 dev-latest 태그를 생성했습니다."
+          echo "::endgroup::"
+
+      # 프로젝트 Java 21 실행 환경
+      - name: Java 21 실행 환경 준비
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Gradle 캐시와 실행 환경
+      - name: Gradle 캐시와 실행 환경 준비
+        uses: gradle/actions/setup-gradle@v4
+
+      # Gradle Wrapper 실행 권한
+      - name: Gradle Wrapper 실행 권한 부여
+        run: |
+          set -euo pipefail
+
+          echo "::group::Gradle Wrapper 실행 권한"
+          chmod +x gradlew
+          echo "::notice title=Gradle Wrapper 실행 권한 완료::gradlew 실행 권한을 부여했습니다."
+          echo "::endgroup::"
+
+      # 전체 빌드와 테스트 검증
+      - name: Gradle 빌드와 테스트 검증
+        run: |
+          set -euo pipefail
+
+          echo "::group::Gradle 빌드와 테스트 검증"
+          echo "실행 명령: ./gradlew clean build"
+
+          if ! ./gradlew clean build; then
+            echo "::error title=Gradle 빌드 실패::컴파일 오류, 테스트 실패, 또는 Gradle 설정 문제입니다. 이 단계 위쪽의 FAILED task와 테스트 리포트 경로를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=Gradle 검증 완료::컴파일과 테스트가 통과했습니다."
+          echo "::endgroup::"
+
+      # Docker Hub 이미지 push 인증
+      - name: Docker Hub 로그인
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ARM64 Docker 이미지 빌드 도구
+      - name: Docker Buildx 준비
+        uses: docker/setup-buildx-action@v3
+
+      # ARM64 Docker 이미지 빌드와 push
+      - name: ARM64 Docker 이미지 빌드와 푸시
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_LATEST }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # EC2 SSH 접속 준비
+      - name: EC2 SSH 접속 준비
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::EC2 SSH 접속 준비"
+          echo "SSH 개인 키 파일 생성과 EC2 host key 등록"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/ssing-dev-key
+          chmod 600 ~/.ssh/ssing-dev-key
+
+          if ! ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts; then
+            echo "::error title=EC2 host key 등록 실패::EC2_HOST 값, EC2 실행 상태, 보안 그룹의 22번 인바운드 허용 여부를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=EC2 SSH 접속 준비 완료::SSH 키와 known_hosts 설정을 완료했습니다."
+          echo "::endgroup::"
+
+      # EC2 배포 파일 업로드
+      - name: EC2 배포 파일 업로드
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::EC2 배포 파일 업로드"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+
+          echo "배포 디렉터리 생성: $DEPLOY_DIR"
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "mkdir -p '$DEPLOY_DIR'"; then
+            echo "::error title=EC2 배포 디렉터리 생성 실패::EC2_USERNAME, EC2_HOST, SSH 키, EC2 보안 그룹, EC2 디스크 권한을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "Docker Compose와 Caddyfile 업로드"
+          if ! scp -i ~/.ssh/ssing-dev-key \
+            deploy/docker-compose.dev.yml \
+            deploy/Caddyfile \
+            "$SSH_TARGET:$DEPLOY_DIR/"; then
+            echo "::error title=EC2 배포 파일 업로드 실패::SSH 접속 상태, $DEPLOY_DIR 디렉터리 권한, 네트워크 연결 상태를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=EC2 배포 파일 업로드 완료::docker-compose.dev.yml과 Caddyfile을 EC2에 업로드했습니다."
+          echo "::endgroup::"
+
+      # EC2 런타임 환경변수 파일 생성
+      - name: EC2 런타임 환경변수 생성
+        env:
+          SSING_IMAGE: ${{ env.IMAGE_TAG }}
+          SPRING_PROFILES_ACTIVE: dev
+          SSING_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
+          SSING_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
+          SSING_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
+          SSING_JPA_DDL_AUTO: ${{ vars.SSING_DEV_JPA_DDL_AUTO }}
+          SSING_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
+          SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
+          JAVA_OPTS: ${{ vars.SSING_DEV_JAVA_OPTS }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::EC2 런타임 환경변수 생성"
+          echo "GitHub Variables와 Secrets 기반 EC2 .env 파일 생성"
+
+          required_vars=(
+            SSING_IMAGE
+            SSING_DATASOURCE_URL
+            SSING_DATASOURCE_USERNAME
+            SSING_DATASOURCE_PASSWORD
+            SSING_JWT_SECRET
+            SSING_DEV_DOMAIN
+            EC2_HOST
+            EC2_USERNAME
+          )
+
+          missing=0
+          for var_name in "${required_vars[@]}"; do
+            if [ -z "${!var_name}" ]; then
+              echo "::error title=런타임 환경변수 누락::${var_name} 값이 비어 있습니다. GitHub Variables/Secrets 이름과 workflow env 매핑을 확인하세요."
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "누락된 환경변수 등록 후 workflow 재실행 필요"
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          SSING_JPA_DDL_AUTO="${SSING_JPA_DDL_AUTO:-update}"
+          JAVA_OPTS="${JAVA_OPTS:--XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=40.0}"
+
+          trap 'rm -f .deploy.env' EXIT
+          umask 077
+          {
+            printf 'SSING_IMAGE=%s\n' "$SSING_IMAGE"
+            printf 'SPRING_PROFILES_ACTIVE=%s\n' "$SPRING_PROFILES_ACTIVE"
+            printf 'SSING_DATASOURCE_URL=%s\n' "$SSING_DATASOURCE_URL"
+            printf 'SSING_DATASOURCE_USERNAME=%s\n' "$SSING_DATASOURCE_USERNAME"
+            printf 'SSING_DATASOURCE_PASSWORD=%s\n' "$SSING_DATASOURCE_PASSWORD"
+            printf 'SSING_JPA_DDL_AUTO=%s\n' "$SSING_JPA_DDL_AUTO"
+            printf 'SSING_JWT_SECRET=%s\n' "$SSING_JWT_SECRET"
+            printf 'SSING_DEV_DOMAIN=%s\n' "$SSING_DEV_DOMAIN"
+            printf 'JAVA_OPTS=%s\n' "$JAVA_OPTS"
+          } > .deploy.env
+
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+
+          echo "EC2 .env 파일 업로드"
+          if ! scp -i ~/.ssh/ssing-dev-key .deploy.env "$SSH_TARGET:$DEPLOY_DIR/.env"; then
+            echo "::error title=EC2 .env 업로드 실패::SSH 연결, $DEPLOY_DIR 권한, EC2 디스크 여유 공간을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "EC2 .env 파일 권한 제한"
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "chmod 600 '$DEPLOY_DIR/.env'"; then
+            echo "::error title=EC2 .env 권한 설정 실패::EC2_USERNAME 사용자가 $DEPLOY_DIR/.env 파일 권한을 변경할 수 있는지 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=EC2 런타임 환경변수 생성 완료::GitHub Variables와 Secrets 기반 .env 파일을 EC2에 반영했습니다."
+          echo "::endgroup::"
+
+      # EC2 Docker Compose 재시작
+      - name: EC2 Docker Compose 재시작
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::EC2 Docker Compose 재시작"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' bash -s" <<'EOF'
+          set -euo pipefail
+          echo "배포 디렉터리 이동: $DEPLOY_DIR"
+          cd "$DEPLOY_DIR"
+
+          echo "최신 Docker 이미지 pull"
+          sudo docker compose --env-file .env -f "$COMPOSE_FILE" pull
+
+          echo "Docker Compose 컨테이너 재시작"
+          sudo docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans
+
+          echo "Docker Compose 컨테이너 상태"
+          sudo docker compose --env-file .env -f "$COMPOSE_FILE" ps
+          EOF
+          then
+            echo "::error title=EC2 Docker Compose 재시작 실패::EC2의 Docker 실행 상태, Docker Hub 이미지 pull 가능 여부, docker-compose.dev.yml 문법, .env 값을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=EC2 Docker Compose 재시작 완료::최신 이미지 pull과 컨테이너 재시작을 완료했습니다."
+          echo "::endgroup::"
+
+      # 애플리케이션 헬스체크
+      - name: 애플리케이션 헬스체크
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::애플리케이션 헬스체크"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' bash -s" <<'EOF'
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+
+          for attempt in {1..30}; do
+            echo "헬스체크 시도: ${attempt}/30"
+            if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "헬스체크 성공: /actuator/health status UP"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "헬스체크 실패: app 컨테이너 최근 로그"
+          sudo docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=100 app
+          exit 1
+          EOF
+          then
+            echo "::error title=애플리케이션 헬스체크 실패::앱 기동 실패, DB 연결 실패, JWT/환경변수 누락, 또는 /actuator/health 비정상 가능성이 있습니다. 바로 위 app 컨테이너 로그를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=애플리케이션 헬스체크 완료::/actuator/health 응답이 UP입니다."
+          echo "::endgroup::"
+
+      # 배포 결과 요약
+      - name: 배포 결과 요약
+        if: always()
+        run: |
+          {
+            echo "## Dev 배포 결과"
+            echo ""
+            echo "- 상태: \`${{ job.status }}\`"
+            echo "- 브랜치: \`${{ github.ref_name }}\`"
+            echo "- 커밋: \`${{ github.sha }}\`"
+            echo "- 배포 경로: \`$DEPLOY_DIR\`"
+            echo ""
+            echo "실패한 경우 GitHub Actions 화면에서 자동으로 펼쳐진 실패 step을 먼저 확인하세요."
+            echo "각 실패 step의 \`::error\` 메시지에 확인해야 할 설정과 로그 위치를 적어두었습니다."
+          } >> "$GITHUB_STEP_SUMMARY"

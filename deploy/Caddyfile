@@ -1,0 +1,10 @@
+# dev API 진입 주소
+# - 도메인 연결 전 IP-only 임시 배포: SSING_DEV_DOMAIN=:80
+# - 도메인 연결 후 HTTPS 배포: SSING_DEV_DOMAIN=dev-api.example.com
+{$SSING_DEV_DOMAIN} {
+	# 응답 압축
+	encode zstd gzip
+
+	# Spring Boot 컨테이너 프록시
+	reverse_proxy app:8080
+}
