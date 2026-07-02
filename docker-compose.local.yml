@@ -1,0 +1,27 @@
+services:
+  mysql:
+    image: mysql:8.4.8
+    container_name: ssing-local-mysql
+    ports:
+      - "${SSING_LOCAL_DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_DATABASE: ${SSING_LOCAL_DB_NAME:-ssing_local}
+      MYSQL_USER: ${SSING_LOCAL_DB_USERNAME:-ssing}
+      MYSQL_PASSWORD: ${SSING_LOCAL_DB_PASSWORD:-ssing}
+      MYSQL_ROOT_PASSWORD: ${SSING_LOCAL_DB_ROOT_PASSWORD:-ssing_root}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --skip-name-resolve
+    volumes:
+      - ssing-local-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  ssing-local-mysql-data:

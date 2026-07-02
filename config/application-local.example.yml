@@ -1,0 +1,16 @@
+spring:
+  config:
+    import: optional:file:.env.local[.properties]
+  datasource:
+    url: jdbc:mysql://127.0.0.1:${SSING_LOCAL_DB_PORT:3306}/${SSING_LOCAL_DB_NAME:ssing_local}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+    username: ${SSING_LOCAL_DB_USERNAME:ssing}
+    password: ${SSING_LOCAL_DB_PASSWORD:ssing}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+ssing:
+  auth:
+    jwt:
+      secret: ${SSING_JWT_SECRET:local-dev-secret-key-for-hs256-signature-change-me}
