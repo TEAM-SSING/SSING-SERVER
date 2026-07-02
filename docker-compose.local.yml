@@ -9,7 +9,7 @@ services:
       MYSQL_USER: ${SSING_LOCAL_DB_USERNAME:-ssing}
       MYSQL_PASSWORD: ${SSING_LOCAL_DB_PASSWORD:-ssing}
       MYSQL_ROOT_PASSWORD: ${SSING_LOCAL_DB_ROOT_PASSWORD:-ssing_root}
-      TZ: Asia/Seoul
+      TZ: UTC
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
