@@ -1,0 +1,64 @@
+name: ssing-dev
+
+services:
+  # Spring Boot 애플리케이션 컨테이너
+  app:
+    image: ${SSING_IMAGE}
+    container_name: ssing-dev-app
+    restart: unless-stopped
+
+    # GitHub Actions가 생성해서 EC2에 업로드하는 런타임 환경변수 파일
+    env_file:
+      - .env
+
+    # 기본 dev 프로필과 JVM 옵션
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      JAVA_OPTS: ${JAVA_OPTS:-}
+
+    # EC2 내부 헬스체크 전용 포트
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    # Caddy와 애플리케이션 간 내부 통신 네트워크
+    networks:
+      - ssing-dev
+
+  # HTTPS 종료와 reverse proxy 컨테이너
+  caddy:
+    image: caddy:2.10-alpine
+    container_name: ssing-dev-caddy
+    restart: unless-stopped
+
+    # 애플리케이션 컨테이너 우선 생성 순서
+    depends_on:
+      - app
+
+    # Caddyfile 도메인 치환 값
+    environment:
+      SSING_DEV_DOMAIN: ${SSING_DEV_DOMAIN}
+
+    # 외부 HTTP/HTTPS 진입 포트
+    ports:
+      - "80:80"
+      - "443:443"
+
+    # Caddy 설정 파일과 인증서/설정 영속 볼륨
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ssing-dev-caddy-data:/data
+      - ssing-dev-caddy-config:/config
+
+    # 애플리케이션 컨테이너 접근 네트워크
+    networks:
+      - ssing-dev
+
+# dev 배포 전용 Docker 네트워크
+networks:
+  ssing-dev:
+    name: ssing-dev
+
+# Caddy 인증서와 내부 설정 보존 볼륨
+volumes:
+  ssing-dev-caddy-data:
+  ssing-dev-caddy-config:

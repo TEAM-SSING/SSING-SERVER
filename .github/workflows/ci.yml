@@ -1,0 +1,62 @@
+name: CI
+
+# PR 검증과 main 반영 후 재검증 트리거
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+# 저장소 읽기 전용 권한
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # EC2 t4g 계열과 동일한 ARM64 검증 환경
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      # 저장소 코드 체크아웃
+      - name: 저장소 코드 체크아웃
+        uses: actions/checkout@v4
+
+      # 프로젝트 Java 21 실행 환경
+      - name: Java 21 실행 환경 준비
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Gradle 캐시와 실행 환경
+      - name: Gradle 캐시와 실행 환경 준비
+        uses: gradle/actions/setup-gradle@v4
+
+      # Gradle Wrapper 실행 권한
+      - name: Gradle Wrapper 실행 권한 부여
+        run: |
+          set -euo pipefail
+
+          echo "::group::Gradle Wrapper 실행 권한"
+          chmod +x gradlew
+          echo "::notice title=Gradle Wrapper 실행 권한 완료::gradlew 실행 권한을 부여했습니다."
+          echo "::endgroup::"
+
+      # 전체 빌드와 테스트 검증
+      - name: Gradle 빌드와 테스트 검증
+        run: |
+          set -euo pipefail
+
+          echo "::group::Gradle 빌드와 테스트 검증"
+          echo "실행 명령: ./gradlew clean build"
+
+          if ! ./gradlew clean build; then
+            echo "::error title=Gradle 빌드 실패::컴파일 오류, 테스트 실패, 또는 Gradle 설정 문제입니다. 이 단계 위쪽의 FAILED task와 테스트 리포트 경로를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=Gradle 검증 완료::컴파일과 테스트가 통과했습니다."
+          echo "::endgroup::"

@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: ${SSING_DATASOURCE_URL}
+    username: ${SSING_DATASOURCE_USERNAME}
+    password: ${SSING_DATASOURCE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${SSING_JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        format_sql: false
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health
