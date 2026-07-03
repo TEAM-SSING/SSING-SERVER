@@ -11,7 +11,6 @@ public record DevPersonaResponse(
         DevPersonaTemplate template,
         MemberRole role,
         MemberStatus memberStatus,
-        InstructorStatusResponse instructorStatus,
-        DevMetaResponse devMeta
+        InstructorStatusResponse instructorStatus
 ) {
 }

@@ -5,7 +5,6 @@ import java.time.LocalDate;
 import java.util.List;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.CreateDevPersonaResponse;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevAuthTokenResponse;
-import org.sopt.ssingserver.domain.auth.dev.dto.response.DevMetaResponse;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaListResponse;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaResponse;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaSnapshotResponse;
@@ -102,8 +101,7 @@ public class DevAuthService {
                 tokens.refreshToken(),
                 tokens.tokenType(),
                 tokens.expiresIn(),
-                DevPersonaSnapshotResponse.from(persona),
-                persona.devMeta()
+                DevPersonaSnapshotResponse.from(persona)
         );
     }
 
@@ -161,8 +159,7 @@ public class DevAuthService {
                 template,
                 member.getRole(),
                 member.getStatus(),
-                resolveInstructorStatus(member.getId()),
-                DevMetaResponse.manual(template)
+                resolveInstructorStatus(member.getId())
         );
     }
 

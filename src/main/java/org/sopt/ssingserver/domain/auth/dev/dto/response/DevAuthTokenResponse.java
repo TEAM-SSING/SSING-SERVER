@@ -5,7 +5,6 @@ public record DevAuthTokenResponse(
         String refreshToken,
         String tokenType,
         long expiresIn,
-        DevPersonaSnapshotResponse persona,
-        DevMetaResponse devMeta
+        DevPersonaSnapshotResponse persona
 ) {
 }
