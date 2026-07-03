@@ -9,9 +9,11 @@ on:
     branches:
       - main
 
-# 저장소 읽기 전용 권한
 permissions:
   contents: read
+  issues: read
+  checks: write
+  pull-requests: write
 
 jobs:
   build:
@@ -60,3 +62,10 @@ jobs:
 
           echo "::notice title=Gradle 검증 완료::컴파일과 테스트가 통과했습니다."
           echo "::endgroup::"
+
+      # 테스트 결과를 GitHub Check와 PR 코멘트에 게시
+      - name: 테스트 결과 게시
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: (!cancelled())
+        with:
+          files: build/test-results/test/TEST-*.xml
