@@ -1,6 +1,8 @@
 package org.sopt.ssingserver.global.security;
 
 import java.time.Clock;
+import org.sopt.ssingserver.domain.auth.config.KakaoOAuthProperties;
+import org.sopt.ssingserver.domain.auth.config.RefreshTokenProperties;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProperties;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.auth.token.JjwtAccessTokenProvider;
@@ -16,19 +18,27 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
-@EnableConfigurationProperties(AccessTokenProperties.class)
+@EnableConfigurationProperties({
+        AccessTokenProperties.class,
+        RefreshTokenProperties.class,
+        KakaoOAuthProperties.class
+})
 public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             AccessTokenProvider accessTokenProvider,
+            AuthTokenExtractor authTokenExtractor,
+            SecurityFilterSkipMatcher securityFilterSkipMatcher,
             SecurityAuthenticationEntryPoint securityAuthenticationEntryPoint,
             SecurityAccessDeniedHandler securityAccessDeniedHandler
     ) throws Exception {
         // Security 체인 내부 전용 필터
         AccessTokenAuthenticationFilter accessTokenAuthenticationFilter = new AccessTokenAuthenticationFilter(
                 accessTokenProvider,
+                authTokenExtractor,
+                securityFilterSkipMatcher,
                 securityAuthenticationEntryPoint
         );
 
@@ -39,8 +49,14 @@ public class SecurityConfig {
                         .authenticationEntryPoint(securityAuthenticationEntryPoint)
                         .accessDeniedHandler(securityAccessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
-                        // Access Token 없는 인증 API
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/kakao", "/api/v1/auth/refresh")
+                        // 커스텀 필터에서 직접 검증하지 않는 인증 API
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/consumer/auth/kakao",
+                                "/api/v1/instructor/auth/kakao",
+                                "/api/v1/auth/refresh",
+                                "/api/v1/auth/logout"
+                        )
                         .permitAll()
                         .requestMatchers("/error").permitAll()
                         // TODO: 관리자 권한 세분화 시 DB 현재 role/status/소유자 기준의 후속 인가 추가
