@@ -47,6 +47,7 @@ jobs:
           SSING_DEV_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
           SSING_DEV_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
           SSING_DEV_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
+          SSING_DEV_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
         run: |
           set -euo pipefail
@@ -65,6 +66,7 @@ jobs:
             SSING_DEV_DATASOURCE_USERNAME
             SSING_DEV_DATASOURCE_PASSWORD
             SSING_DEV_JWT_SECRET
+            SSING_DEV_KAKAO_APP_ID
             SSING_DEV_DOMAIN
           )
 
@@ -228,6 +230,7 @@ jobs:
           SSING_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
           SSING_JPA_DDL_AUTO: ${{ vars.SSING_DEV_JPA_DDL_AUTO }}
           SSING_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
+          SSING_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
           JAVA_OPTS: ${{ vars.SSING_DEV_JAVA_OPTS }}
           EC2_HOST: ${{ vars.EC2_HOST }}
@@ -244,6 +247,7 @@ jobs:
             SSING_DATASOURCE_USERNAME
             SSING_DATASOURCE_PASSWORD
             SSING_JWT_SECRET
+            SSING_KAKAO_APP_ID
             SSING_DEV_DOMAIN
             EC2_HOST
             EC2_USERNAME
@@ -276,6 +280,7 @@ jobs:
             printf 'SSING_DATASOURCE_PASSWORD=%s\n' "$SSING_DATASOURCE_PASSWORD"
             printf 'SSING_JPA_DDL_AUTO=%s\n' "$SSING_JPA_DDL_AUTO"
             printf 'SSING_JWT_SECRET=%s\n' "$SSING_JWT_SECRET"
+            printf 'SSING_KAKAO_APP_ID=%s\n' "$SSING_KAKAO_APP_ID"
             printf 'SSING_DEV_DOMAIN=%s\n' "$SSING_DEV_DOMAIN"
             printf 'JAVA_OPTS=%s\n' "$JAVA_OPTS"
           } > .deploy.env
