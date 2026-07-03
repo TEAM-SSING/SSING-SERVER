@@ -11,7 +11,6 @@ public record AuthLoginResult(
         Long memberId,
         String nickname,
         MemberRole role,
-        MemberStatus memberStatus,
-        String instructorStatus
+        MemberStatus memberStatus
 ) {
 }

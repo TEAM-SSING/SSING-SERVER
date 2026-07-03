@@ -3,6 +3,7 @@ package org.sopt.ssingserver.domain.auth.controller;
 import jakarta.validation.Valid;
 import org.sopt.ssingserver.domain.auth.dto.request.KakaoLoginRequest;
 import org.sopt.ssingserver.domain.auth.dto.response.AuthLoginResult;
+import org.sopt.ssingserver.domain.auth.dto.response.InstructorAuthLoginResult;
 import org.sopt.ssingserver.domain.auth.dto.response.InstructorKakaoLoginResponse;
 import org.sopt.ssingserver.domain.auth.repository.OAuthAccountRepository;
 import org.sopt.ssingserver.domain.auth.response.AuthSuccessCode;
@@ -31,7 +32,8 @@ public class InstructorAuthController {
     public ResponseEntity<BaseResponse<InstructorKakaoLoginResponse>> loginWithKakao(
             @Valid @RequestBody KakaoLoginRequest request
     ) {
-        AuthLoginResult result = authService.loginWithKakao(request.kakaoAccessToken());
+        InstructorAuthLoginResult instructorResult = authService.loginInstructorWithKakao(request.kakaoAccessToken());
+        AuthLoginResult result = instructorResult.loginResult();
         InstructorKakaoLoginResponse response = new InstructorKakaoLoginResponse(
                 result.accessToken(),
                 result.refreshToken(),
@@ -42,7 +44,7 @@ public class InstructorAuthController {
                         result.nickname(),
                         result.role(),
                         result.memberStatus(),
-                        result.instructorStatus()
+                        instructorResult.instructorStatus()
                 )
         );
         return SuccessResponseFactory.success(AuthSuccessCode.AUTH_LOGIN_SUCCESS, response);

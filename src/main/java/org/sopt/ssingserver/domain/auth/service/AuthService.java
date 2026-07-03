@@ -13,6 +13,8 @@ import org.sopt.ssingserver.domain.auth.client.KakaoTokenInfo;
 import org.sopt.ssingserver.domain.auth.config.RefreshTokenProperties;
 import org.sopt.ssingserver.domain.auth.dto.response.AuthRefreshResponse;
 import org.sopt.ssingserver.domain.auth.dto.response.AuthLoginResult;
+import org.sopt.ssingserver.domain.auth.dto.response.InstructorAuthLoginResult;
+import org.sopt.ssingserver.domain.auth.dto.response.InstructorStatusResponse;
 import org.sopt.ssingserver.domain.auth.entity.OAuthAccount;
 import org.sopt.ssingserver.domain.auth.entity.RefreshToken;
 import org.sopt.ssingserver.domain.auth.enums.OAuthProvider;
@@ -31,6 +33,7 @@ import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,7 +50,6 @@ import org.springframework.util.StringUtils;
 public class AuthService {
 
     private static final String TOKEN_TYPE = "Bearer";
-    private static final String INSTRUCTOR_STATUS_NONE = "NONE";
     private static final String REFRESH_TOKEN_PREFIX = "rt_";
     private static final String DEFAULT_NICKNAME_PREFIX = "스키어";
     private static final int REFRESH_TOKEN_BYTES = 32;
@@ -90,13 +92,29 @@ public class AuthService {
         this.clock = clock;
     }
 
-    public AuthLoginResult loginWithKakao(String kakaoAccessToken) {
+    public AuthLoginResult loginConsumerWithKakao(String kakaoAccessToken) {
+        return loginWithKakao(kakaoAccessToken);
+    }
+
+    public InstructorAuthLoginResult loginInstructorWithKakao(String kakaoAccessToken) {
+        AuthLoginResult loginResult = loginWithKakao(kakaoAccessToken);
+        return new InstructorAuthLoginResult(
+                loginResult,
+                resolveInstructorStatus(loginResult.memberId())
+        );
+    }
+
+    private AuthLoginResult loginWithKakao(String kakaoAccessToken) {
         // 카카오 토큰 검증 후 신규 회원 프로필 조회
         KakaoTokenInfo tokenInfo = kakaoOAuthClient.validateAccessToken(kakaoAccessToken);
         KakaoProfile kakaoProfile = loadProfileIfNewMember(tokenInfo.providerUserId(), kakaoAccessToken);
 
         // 외부 API 호출 이후 DB 쓰기 트랜잭션 경계
-        return transactionTemplate.execute(status -> loginWithKakaoInTransaction(tokenInfo.providerUserId(), kakaoProfile));
+        try {
+            return transactionTemplate.execute(status -> loginWithKakaoInTransaction(tokenInfo.providerUserId(), kakaoProfile));
+        } catch (DataIntegrityViolationException exception) {
+            return recoverConcurrentLogin(tokenInfo.providerUserId(), exception);
+        }
     }
 
     private KakaoProfile loadProfileIfNewMember(String providerUserId, String kakaoAccessToken) {
@@ -108,6 +126,23 @@ public class AuthService {
 
     private AuthLoginResult loginWithKakaoInTransaction(String providerUserId, KakaoProfile kakaoProfile) {
         Member member = findOrCreateMember(providerUserId, kakaoProfile);
+        return issueLoginResult(member);
+    }
+
+    private AuthLoginResult recoverConcurrentLogin(
+            String providerUserId,
+            DataIntegrityViolationException exception
+    ) {
+        return transactionTemplate.execute(status -> oauthAccountRepository.findByProviderAndProviderUserId(
+                        OAuthProvider.KAKAO,
+                        providerUserId
+                )
+                .map(OAuthAccount::getMember)
+                .map(this::issueLoginResult)
+                .orElseThrow(() -> exception));
+    }
+
+    private AuthLoginResult issueLoginResult(Member member) {
         validateActiveMember(member);
 
         String accessToken = accessTokenProvider.createAccessToken(member.getId(), member.getRole());
@@ -121,8 +156,7 @@ public class AuthService {
                 member.getId(),
                 member.getNickname(),
                 member.getRole(),
-                member.getStatus(),
-                resolveInstructorStatus(member)
+                member.getStatus()
         );
     }
 
@@ -255,11 +289,11 @@ public class AuthService {
         }
     }
 
-    private String resolveInstructorStatus(Member member) {
+    private InstructorStatusResponse resolveInstructorStatus(Long memberId) {
         // 강사 프로필 없음 응답 계산값
-        return instructorProfileRepository.findByMemberId(member.getId())
+        return instructorProfileRepository.findByMemberId(memberId)
                 .map(InstructorProfile::getApprovalStatus)
-                .map(Enum::name)
-                .orElse(INSTRUCTOR_STATUS_NONE);
+                .map(InstructorStatusResponse::from)
+                .orElse(InstructorStatusResponse.NONE);
     }
 }

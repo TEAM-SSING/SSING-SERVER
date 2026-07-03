@@ -31,7 +31,7 @@ public class ConsumerAuthController {
     public ResponseEntity<BaseResponse<ConsumerKakaoLoginResponse>> loginWithKakao(
             @Valid @RequestBody KakaoLoginRequest request
     ) {
-        AuthLoginResult result = authService.loginWithKakao(request.kakaoAccessToken());
+        AuthLoginResult result = authService.loginConsumerWithKakao(request.kakaoAccessToken());
         ConsumerKakaoLoginResponse response = new ConsumerKakaoLoginResponse(
                 result.accessToken(),
                 result.refreshToken(),

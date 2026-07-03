@@ -16,7 +16,7 @@ public record InstructorKakaoLoginResponse(
             String nickname,
             MemberRole role,
             MemberStatus memberStatus,
-            String instructorStatus
+            InstructorStatusResponse instructorStatus
     ) {
     }
 }
