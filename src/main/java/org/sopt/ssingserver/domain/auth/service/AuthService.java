@@ -32,7 +32,6 @@ import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -41,12 +40,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Service
-@ConditionalOnBean({
-        OAuthAccountRepository.class,
-        MemberRepository.class,
-        RefreshTokenRepository.class,
-        InstructorProfileRepository.class
-})
 public class AuthService {
 
     private static final String TOKEN_TYPE = "Bearer";

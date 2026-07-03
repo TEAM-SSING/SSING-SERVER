@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -18,7 +19,13 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 
 @Getter
 @Entity
-@Table(name = "refresh_tokens")
+@Table(
+        name = "refresh_tokens",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_refresh_tokens_token_hash",
+                columnNames = "token_hash"
+        )
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RefreshToken extends BaseTimeEntity {
 
