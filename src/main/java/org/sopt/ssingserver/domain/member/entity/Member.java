@@ -38,4 +38,13 @@ public class Member extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private MemberStatus status;
+
+    public static Member createOAuthMember(String nickname, String profileImageUrl) {
+        Member member = new Member();
+        member.nickname = nickname;
+        member.profileImageUrl = profileImageUrl;
+        member.role = MemberRole.CONSUMER;
+        member.status = MemberStatus.ACTIVE;
+        return member;
+    }
 }

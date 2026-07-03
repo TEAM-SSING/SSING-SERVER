@@ -48,4 +48,12 @@ public class OAuthAccount extends BaseTimeEntity {
 
     @Column(nullable = false, length = 100)
     private String providerUserId;
+
+    public static OAuthAccount create(Member member, OAuthProvider provider, String providerUserId) {
+        OAuthAccount oauthAccount = new OAuthAccount();
+        oauthAccount.member = member;
+        oauthAccount.provider = provider;
+        oauthAccount.providerUserId = providerUserId;
+        return oauthAccount;
+    }
 }
