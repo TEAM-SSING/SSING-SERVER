@@ -14,3 +14,5 @@ ssing:
   auth:
     jwt:
       secret: ${SSING_JWT_SECRET:local-dev-secret-key-for-hs256-signature-change-me}
+    kakao:
+      app-id: ${SSING_KAKAO_APP_ID:1234}

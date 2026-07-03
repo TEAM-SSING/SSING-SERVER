@@ -15,6 +15,9 @@ public record KakaoOAuthProperties(
         if (baseUrl == null || baseUrl.isBlank()) {
             baseUrl = "https://kapi.kakao.com";
         }
+        if (appId == null || appId.isBlank()) {
+            throw new IllegalArgumentException("Kakao app id must not be blank.");
+        }
         if (connectTimeout == null) {
             connectTimeout = Duration.ofSeconds(2);
         }
