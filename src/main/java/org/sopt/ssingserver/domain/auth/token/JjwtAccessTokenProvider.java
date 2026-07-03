@@ -102,6 +102,7 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
 
     private AccessTokenClaims toAccessTokenClaims(Claims claims) {
         try {
+            validateClaims(claims);
             return new AccessTokenClaims(
                     readMemberId(claims),
                     readRole(claims),
@@ -112,6 +113,19 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
             throw exception;
         } catch (IllegalArgumentException exception) {
             throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN, exception);
+        }
+    }
+
+    private void validateClaims(Claims claims) {
+        if (claims == null) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+        if (!properties.issuer().equals(claims.getIssuer())) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+        String tokenType = claims.get(CLAIM_TOKEN_TYPE, String.class);
+        if (!ACCESS_TOKEN_TYPE.equals(tokenType)) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN);
         }
     }
 
