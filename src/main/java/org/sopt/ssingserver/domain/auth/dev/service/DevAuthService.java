@@ -22,10 +22,12 @@ import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Profile({"local", "dev"})
 @Service
 @Transactional(readOnly = true)
 public class DevAuthService {
