@@ -37,7 +37,7 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
         Instant issuedAt = Instant.now(clock);
         Instant expiresAt = issuedAt.plus(properties.accessTokenExpiration());
 
-        // Access Token 최소 claim
+        // Access Token 최소 claim 구성
         return Jwts.builder()
                 .issuer(properties.issuer())
                 .subject(String.valueOf(memberId))
@@ -56,7 +56,6 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
         }
 
         try {
-            // JJWT 내부 구현 경계
             Claims claims = Jwts.parser()
                     .verifyWith(secretKey)
                     .requireIssuer(properties.issuer())
@@ -66,17 +65,52 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
                     .parseSignedClaims(token)
                     .getPayload();
 
+            return toAccessTokenClaims(claims);
+        } catch (ExpiredJwtException exception) {
+            // 만료 Access Token 에러 분기
+            throw new AccessTokenException(AuthErrorCode.AUTH_TOKEN_EXPIRED, exception);
+        } catch (JwtException | IllegalArgumentException exception) {
+            // JJWT 예외의 서비스 에러 코드 변환
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN, exception);
+        }
+    }
+
+    @Override
+    public AccessTokenClaims parseAccessTokenAllowExpired(String token) {
+        if (token == null || token.isBlank()) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(secretKey)
+                    .requireIssuer(properties.issuer())
+                    .require(CLAIM_TOKEN_TYPE, ACCESS_TOKEN_TYPE)
+                    .clock(() -> Date.from(Instant.now(clock)))
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            return toAccessTokenClaims(claims);
+        } catch (ExpiredJwtException exception) {
+            // 로그아웃 전용 만료 Access Token 허용
+            return toAccessTokenClaims(exception.getClaims());
+        } catch (JwtException | IllegalArgumentException exception) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN, exception);
+        }
+    }
+
+    private AccessTokenClaims toAccessTokenClaims(Claims claims) {
+        try {
             return new AccessTokenClaims(
                     readMemberId(claims),
                     readRole(claims),
                     readIssuedAt(claims),
                     readExpiresAt(claims)
             );
-        } catch (ExpiredJwtException exception) {
-            // 만료 Access Token 에러 분기
-            throw new AccessTokenException(AuthErrorCode.AUTH_TOKEN_EXPIRED, exception);
-        } catch (JwtException | IllegalArgumentException exception) {
-            // JJWT 예외의 서비스 에러 코드 변환
+        } catch (AccessTokenException exception) {
+            throw exception;
+        } catch (IllegalArgumentException exception) {
             throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN, exception);
         }
     }
