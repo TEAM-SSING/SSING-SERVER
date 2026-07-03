@@ -1,0 +1,93 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: ko-KR
+
+reviews:
+  profile: chill
+
+  poem: false
+  in_progress_fortune: false
+  sequence_diagrams: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+
+  auto_review:
+    ignore_title_keywords:
+      - "WIP"
+      - "[skip review]"
+
+    labels:
+      - "!do-not-review"
+
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "renovate[bot]"
+      - "github-actions[bot]"
+
+  path_filters:
+    - "!**/build/**"
+    - "!**/.gradle/**"
+    - "!**/.idea/**"
+
+  path_instructions:
+    - path: "src/main/java/**/*.java"
+      instructions: |
+        - 의존성은 final 필드와 생성자 주입을 사용한다.
+        - 클래스 멤버는 상수, 필드, 생성자, public 메서드, private 메서드 순서로 배치한다.
+
+    - path: "src/main/java/**/controller/**/*.java"
+      instructions: |
+        - 성공 응답은 SuccessResponseFactory를 사용한다.
+        - 응답 body가 있으면 SuccessResponseFactory.success를 사용한다.
+        - 204 응답은 SuccessResponseFactory.noContent를 사용하고 body를 반환하지 않는다.
+        - 서비스 API는 /api/v1, 개발 전용 API는 /dev prefix를 사용한다.
+        - Swagger annotation은 controller.docs의 *ApiDocs 인터페이스에 작성한다.
+
+    - path: "src/main/java/**/dto/**/*.java"
+      instructions: |
+        - DTO는 record 작성을 기본으로 한다.
+        - 요청 DTO는 동작 기준의 {동작}{도메인}Request 형식으로 작성한다.
+        - 응답 DTO는 도메인 기준의 {도메인}{용도}Response 형식으로 작성한다.
+        - 동작이 도메인 전체에 자명하면 LoginRequest, SignUpRequest처럼 도메인명을 생략할 수 있다.
+        - JSON field 이름은 camelCase를 사용한다.
+        - enum 응답 값은 UPPER_SNAKE_CASE를 사용한다.
+        - 날짜는 YYYY-MM-DD 형식을 사용한다.
+        - 날짜와 시간은 timezone offset을 포함한 ISO-8601 형식을 사용한다.
+
+    - path: "src/main/java/**/service/**/*.java"
+      instructions: |
+        - 비즈니스 규칙 위반은 ErrorCode를 가진 BusinessException으로 처리한다.
+        - 조회 결과가 없을 때 null 비교 대신 Optional.orElseThrow를 사용한다.
+
+    - path: "src/main/java/**/entity/**/*.java"
+      instructions: |
+        - enum 필드는 @Enumerated(EnumType.STRING)으로 저장한다.
+        - DB 테이블명은 복수형 snake_case, 실제 DB 컬럼명은 snake_case를 사용한다.
+        - 중복되면 안 되는 데이터는 DB unique 제약으로도 방지한다.
+        - ON DELETE CASCADE를 기본적으로 사용하지 않는다.
+        - 특정 시점은 UTC로 저장하고 날짜 자체가 의미인 값은 DATE 또는 LocalDate로 저장한다.
+
+    - path: "src/main/java/**/error/**/*ErrorCode.java"
+      instructions: |
+        - ErrorCode enum 구현체의 상수는 UPPER_SNAKE_CASE여야 한다.
+        - 숫자형 코드(COMMON_001 등)를 사용하면 지적한다.
+        - HTTP status를 포함한 코드(HTTP_404_NOT_FOUND 등)를 사용하면 지적한다.
+        - 내부 구현 정보를 노출하는 코드(MYSQL_DUPLICATE_KEY, NULL_POINTER, JPA_ENTITY_NOT_FOUND 등)를 사용하면 지적한다.
+
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: |
+        PR 제목은 `[유형] 간결한 내용` 형식을 사용한다.
+
+    description:
+      mode: warning
+
+  tools:
+    fbinfer:
+      enable_java: true
+
+chat:
+  art: false
