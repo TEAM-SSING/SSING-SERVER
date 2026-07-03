@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SSING Dev Auth Console</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --line: #d9e1ec;
+            --text: #172033;
+            --muted: #667085;
+            --primary: #155eef;
+            --primary-dark: #004eeb;
+            --danger: #d92d20;
+            --success: #067647;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        button,
+        input,
+        textarea {
+            font: inherit;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 24px;
+            border-bottom: 1px solid var(--line);
+            background: var(--surface);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.25;
+        }
+
+        main {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .button {
+            min-height: 40px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--text);
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+
+        .button.primary {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #ffffff;
+        }
+
+        .button.primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .button:disabled {
+            cursor: not-allowed;
+            opacity: 0.45;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .status {
+            min-height: 24px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .status.success {
+            color: var(--success);
+        }
+
+        .status.error {
+            color: var(--danger);
+        }
+
+        .persona-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .persona-row {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--surface);
+            overflow: hidden;
+        }
+
+        .persona-main {
+            display: grid;
+            grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(120px, max-content)) auto;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+        }
+
+        .persona-key {
+            font-weight: 700;
+        }
+
+        .cell {
+            color: var(--muted);
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            border-radius: 999px;
+            background: #eef4ff;
+            color: #1849a9;
+            padding: 3px 9px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .token-panel {
+            display: grid;
+            gap: 10px;
+            padding: 14px 16px 16px;
+            border-top: 1px solid var(--line);
+            background: #fbfcfe;
+        }
+
+        .token-field {
+            display: grid;
+            grid-template-columns: 120px 1fr auto;
+            align-items: start;
+            gap: 10px;
+        }
+
+        .token-field label {
+            padding-top: 8px;
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 70px;
+            resize: vertical;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px;
+            color: var(--text);
+            background: #ffffff;
+        }
+
+        dialog {
+            width: min(640px, calc(100vw - 32px));
+            border: 0;
+            border-radius: 8px;
+            padding: 0;
+            box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+        }
+
+        dialog::backdrop {
+            background: rgba(15, 23, 42, 0.44);
+        }
+
+        .modal {
+            padding: 20px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .modal-title {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .form-grid {
+            display: grid;
+            gap: 14px;
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+        }
+
+        .field label {
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        input {
+            min-height: 40px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+
+        .choice-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .choice {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--surface);
+            padding: 9px 12px;
+            cursor: pointer;
+        }
+
+        .choice.selected {
+            border-color: var(--primary);
+            background: #eef4ff;
+            color: #1849a9;
+            font-weight: 700;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 18px;
+        }
+
+        @media (max-width: 860px) {
+            header,
+            main {
+                padding: 16px;
+            }
+
+            .persona-main {
+                grid-template-columns: 1fr;
+                align-items: stretch;
+            }
+
+            .token-field {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>SSING Dev Auth Console</h1>
+    <button class="button primary" id="openCreateModal">유저 생성</button>
+</header>
+<main>
+    <div class="toolbar">
+        <div class="status" id="status"></div>
+        <button class="button" id="refreshPersonas">새로고침</button>
+    </div>
+    <section class="persona-list" id="personaList"></section>
+</main>
+
+<dialog id="createDialog">
+    <form class="modal" method="dialog" id="createForm">
+        <div class="modal-header">
+            <h2 class="modal-title">유저 생성</h2>
+            <button class="button" type="button" id="closeCreateModal">닫기</button>
+        </div>
+        <div class="form-grid">
+            <div class="field">
+                <label for="personaKey">personaKey</label>
+                <input id="personaKey" name="personaKey" autocomplete="off" required>
+            </div>
+            <div class="field">
+                <label for="nickname">nickname</label>
+                <input id="nickname" name="nickname" autocomplete="off" required>
+            </div>
+            <div class="field">
+                <label>구분</label>
+                <div class="choice-row" id="roleChoices">
+                    <button class="choice" type="button" data-role-choice="consumer">소비자</button>
+                    <button class="choice" type="button" data-role-choice="instructor">강사</button>
+                </div>
+            </div>
+            <div class="field" id="templateField" hidden>
+                <label>상태</label>
+                <div class="choice-row" id="templateChoices"></div>
+            </div>
+            <div id="modalTokenPanel"></div>
+            <div class="status" id="modalStatus"></div>
+        </div>
+        <div class="modal-actions">
+            <button class="button primary" id="createPersonaButton" type="submit" disabled>유저 생성</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+    const templatesByRole = {
+        consumer: [
+            ["GENERAL_CONSUMER", "일반 소비자"],
+            ["SUSPENDED_CONSUMER", "정지된 소비자"]
+        ],
+        instructor: [
+            ["INSTRUCTOR_PENDING", "심사 중 강사"],
+            ["INSTRUCTOR_APPROVED", "승인된 강사"]
+        ]
+    };
+
+    const state = {
+        personas: [],
+        selectedRole: null,
+        selectedTemplate: null
+    };
+
+    const status = document.querySelector("#status");
+    const modalStatus = document.querySelector("#modalStatus");
+    const personaList = document.querySelector("#personaList");
+    const dialog = document.querySelector("#createDialog");
+    const createForm = document.querySelector("#createForm");
+    const createButton = document.querySelector("#createPersonaButton");
+    const templateField = document.querySelector("#templateField");
+    const templateChoices = document.querySelector("#templateChoices");
+    const modalTokenPanel = document.querySelector("#modalTokenPanel");
+
+    document.querySelector("#openCreateModal").addEventListener("click", () => {
+        resetCreateForm();
+        dialog.showModal();
+    });
+    document.querySelector("#closeCreateModal").addEventListener("click", () => dialog.close());
+    document.querySelector("#refreshPersonas").addEventListener("click", loadPersonas);
+
+    document.querySelectorAll("[data-role-choice]").forEach(button => {
+        button.addEventListener("click", () => selectRole(button.dataset.roleChoice));
+    });
+
+    createForm.addEventListener("input", syncCreateButton);
+    createForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        await createPersona();
+    });
+
+    async function loadPersonas() {
+        setStatus(status, "불러오는 중", "");
+        try {
+            const response = await requestJson("/dev/auth/personas");
+            state.personas = response.data.personas;
+            renderPersonas();
+            setStatus(status, `${state.personas.length}명`, "success");
+        } catch (error) {
+            setStatus(status, error.message, "error");
+        }
+    }
+
+    function renderPersonas() {
+        personaList.replaceChildren();
+        if (state.personas.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "persona-row";
+            empty.innerHTML = `<div class="persona-main"><span class="cell">생성된 유저가 없습니다.</span></div>`;
+            personaList.append(empty);
+            return;
+        }
+
+        state.personas.forEach(persona => {
+            const row = document.createElement("article");
+            row.className = "persona-row";
+            row.innerHTML = `
+                <div class="persona-main">
+                    <div>
+                        <div class="persona-key">${escapeHtml(persona.personaKey)}</div>
+                        <div class="cell">${escapeHtml(persona.nickname)}</div>
+                    </div>
+                    <span class="badge">${persona.template}</span>
+                    <span class="cell">${persona.role}</span>
+                    <span class="cell">${persona.memberStatus}</span>
+                    <span class="cell">${persona.instructorStatus}</span>
+                    <button class="button primary" type="button">토큰 발급/복사</button>
+                </div>
+                <div class="token-panel" hidden></div>
+            `;
+            row.querySelector("button").addEventListener("click", () => issueTokenForRow(persona, row));
+            personaList.append(row);
+        });
+    }
+
+    async function issueTokenForRow(persona, row) {
+        const panel = row.querySelector(".token-panel");
+        panel.hidden = false;
+        panel.textContent = "발급 중";
+        try {
+            const token = await issueToken(persona.personaKey);
+            renderTokenPanel(panel, token);
+            await copyText(token.accessToken);
+            setStatus(status, `${persona.personaKey} Access Token 복사 완료`, "success");
+        } catch (error) {
+            panel.textContent = error.message;
+            setStatus(status, error.message, "error");
+        }
+    }
+
+    async function createPersona() {
+        setStatus(modalStatus, "생성 중", "");
+        const payload = {
+            personaKey: document.querySelector("#personaKey").value.trim(),
+            nickname: document.querySelector("#nickname").value.trim(),
+            template: state.selectedTemplate
+        };
+        try {
+            const response = await requestJson("/dev/auth/personas", {
+                method: "POST",
+                body: JSON.stringify(payload)
+            });
+            setStatus(modalStatus, `${response.data.persona.personaKey} 생성 완료`, "success");
+            await loadPersonas();
+            const token = await issueToken(response.data.persona.personaKey);
+            renderTokenPanel(modalTokenPanel, token);
+            await copyText(token.accessToken);
+            setStatus(modalStatus, "Access Token 복사 완료", "success");
+        } catch (error) {
+            setStatus(modalStatus, error.message, "error");
+        }
+    }
+
+    async function issueToken(personaKey) {
+        const response = await requestJson("/dev/auth/token", {
+            method: "POST",
+            body: JSON.stringify({personaKey})
+        });
+        return response.data;
+    }
+
+    function selectRole(role) {
+        state.selectedRole = role;
+        state.selectedTemplate = null;
+        document.querySelectorAll("[data-role-choice]").forEach(button => {
+            button.classList.toggle("selected", button.dataset.roleChoice === role);
+        });
+        renderTemplateChoices(role);
+        syncCreateButton();
+    }
+
+    function renderTemplateChoices(role) {
+        templateField.hidden = false;
+        templateChoices.replaceChildren();
+        templatesByRole[role].forEach(([value, label]) => {
+            const button = document.createElement("button");
+            button.className = "choice";
+            button.type = "button";
+            button.textContent = label;
+            button.addEventListener("click", () => {
+                state.selectedTemplate = value;
+                [...templateChoices.children].forEach(child => child.classList.remove("selected"));
+                button.classList.add("selected");
+                syncCreateButton();
+            });
+            templateChoices.append(button);
+        });
+    }
+
+    function syncCreateButton() {
+        const personaKey = document.querySelector("#personaKey").value.trim();
+        const nickname = document.querySelector("#nickname").value.trim();
+        createButton.disabled = !(personaKey && nickname && state.selectedTemplate);
+    }
+
+    function renderTokenPanel(container, token) {
+        container.replaceChildren();
+        container.className = "token-panel";
+        container.hidden = false;
+        container.append(
+            createTokenField("Access Token", token.accessToken),
+            createTokenField("Refresh Token", token.refreshToken)
+        );
+    }
+
+    function createTokenField(label, value) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "token-field";
+        const labelElement = document.createElement("label");
+        labelElement.textContent = label;
+        const textarea = document.createElement("textarea");
+        textarea.readOnly = true;
+        textarea.value = value;
+        const button = document.createElement("button");
+        button.className = "button";
+        button.type = "button";
+        button.textContent = "복사";
+        button.addEventListener("click", async () => {
+            await copyText(value);
+            setStatus(status, `${label} 복사 완료`, "success");
+            setStatus(modalStatus, `${label} 복사 완료`, "success");
+        });
+        wrapper.append(labelElement, textarea, button);
+        return wrapper;
+    }
+
+    async function requestJson(url, options = {}) {
+        const response = await fetch(url, {
+            headers: {"Content-Type": "application/json"},
+            ...options
+        });
+        const payload = await response.json();
+        if (!response.ok || payload.success === false) {
+            throw new Error(payload.message || payload.code || "요청 실패");
+        }
+        return payload;
+    }
+
+    async function copyText(value) {
+        await navigator.clipboard.writeText(value);
+    }
+
+    function setStatus(element, message, kind) {
+        element.textContent = message;
+        element.className = `status ${kind || ""}`;
+    }
+
+    function resetCreateForm() {
+        createForm.reset();
+        state.selectedRole = null;
+        state.selectedTemplate = null;
+        modalTokenPanel.replaceChildren();
+        templateChoices.replaceChildren();
+        templateField.hidden = true;
+        document.querySelectorAll(".choice").forEach(button => button.classList.remove("selected"));
+        setStatus(modalStatus, "", "");
+        syncCreateButton();
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll("\"", "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    loadPersonas();
+</script>
+</body>
+</html>
