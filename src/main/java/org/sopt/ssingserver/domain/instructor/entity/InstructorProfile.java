@@ -66,4 +66,28 @@ public class InstructorProfile extends BaseTimeEntity {
     private InstructorApprovalStatus approvalStatus;
 
     private Instant approvedAt;
+
+    public static InstructorProfile create(
+            Member member,
+            String realName,
+            String phone,
+            Gender gender,
+            LocalDate birthDate,
+            String intro,
+            LocalDate careerStartDate,
+            InstructorApprovalStatus approvalStatus,
+            Instant approvedAt
+    ) {
+        InstructorProfile instructorProfile = new InstructorProfile();
+        instructorProfile.member = member;
+        instructorProfile.realName = realName;
+        instructorProfile.phone = phone;
+        instructorProfile.gender = gender;
+        instructorProfile.birthDate = birthDate;
+        instructorProfile.intro = intro;
+        instructorProfile.careerStartDate = careerStartDate;
+        instructorProfile.approvalStatus = approvalStatus;
+        instructorProfile.approvedAt = approvedAt;
+        return instructorProfile;
+    }
 }

@@ -40,12 +40,26 @@ public class Member extends BaseTimeEntity {
     private MemberStatus status;
 
     public static Member createOAuthMember(String nickname, String profileImageUrl) {
+        // 강사 앱으로 가입해도 승인 전까지는 소비자 권한으로 시작
+        return create(
+                nickname,
+                profileImageUrl,
+                MemberRole.CONSUMER,
+                MemberStatus.ACTIVE
+        );
+    }
+
+    public static Member create(
+            String nickname,
+            String profileImageUrl,
+            MemberRole role,
+            MemberStatus status
+    ) {
         Member member = new Member();
         member.nickname = nickname;
         member.profileImageUrl = profileImageUrl;
-        // 강사 앱으로 가입해도 승인 전까지는 소비자 권한으로 시작
-        member.role = MemberRole.CONSUMER;
-        member.status = MemberStatus.ACTIVE;
+        member.role = role;
+        member.status = status;
         return member;
     }
 }
