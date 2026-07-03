@@ -100,6 +100,31 @@ jobs:
           echo "::notice title=Docker 이미지 태그 생성 완료::커밋 고정 태그와 dev-latest 태그를 생성했습니다."
           echo "::endgroup::"
 
+      # dev 배포 시작 Slack 알림
+      - name: Slack 배포 시작 알림
+        continue-on-error: true
+        uses: slackapi/slack-github-action@v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            attachments:
+              - color: "#439FE0"
+                fallback: "🚀 SSING dev 배포 시작"
+                title: "🚀 SSING dev 배포 시작"
+                title_link: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                fields:
+                  - title: "실행자"
+                    value: "${{ github.actor }}"
+                    short: true
+                  - title: "커밋"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|커밋 보기>"
+                    short: true
+                  - title: "실행 내역"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 보기>"
+                mrkdwn_in:
+                  - fields
+
       # 프로젝트 Java 21 실행 환경
       - name: Java 21 실행 환경 준비
         uses: actions/setup-java@v4
@@ -372,6 +397,58 @@ jobs:
 
           echo "::notice title=애플리케이션 헬스체크 완료::/actuator/health 응답이 UP입니다."
           echo "::endgroup::"
+
+      # dev 배포 성공 Slack 알림
+      - name: Slack 배포 성공 알림
+        if: success()
+        continue-on-error: true
+        uses: slackapi/slack-github-action@v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            attachments:
+              - color: "good"
+                fallback: "✅ SSING dev 배포 성공"
+                title: "✅ SSING dev 배포 성공"
+                title_link: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                fields:
+                  - title: "실행자"
+                    value: "${{ github.actor }}"
+                    short: true
+                  - title: "커밋"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|커밋 보기>"
+                    short: true
+                  - title: "배포 결과"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 보기>"
+                mrkdwn_in:
+                  - fields
+
+      # dev 배포 실패 Slack 알림
+      - name: Slack 배포 실패 알림
+        if: failure()
+        continue-on-error: true
+        uses: slackapi/slack-github-action@v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            attachments:
+              - color: "danger"
+                fallback: "❌ SSING dev 배포 실패"
+                title: "❌ SSING dev 배포 실패"
+                title_link: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                fields:
+                  - title: "실행자"
+                    value: "${{ github.actor }}"
+                    short: true
+                  - title: "커밋"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|커밋 보기>"
+                    short: true
+                  - title: "실패 원인"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 확인>"
+                mrkdwn_in:
+                  - fields
 
       # 배포 결과 요약
       - name: 배포 결과 요약
