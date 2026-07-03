@@ -52,13 +52,10 @@ public class SecurityConfig {
                         // 커스텀 필터에서 직접 검증하지 않는 인증 API
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/v1/consumer/auth/kakao",
-                                "/api/v1/instructor/auth/kakao",
-                                "/api/v1/auth/refresh",
-                                "/api/v1/auth/logout"
+                                SecurityPublicPaths.publicPostAuthPaths()
                         )
                         .permitAll()
-                        .requestMatchers("/error").permitAll()
+                        .requestMatchers(SecurityPublicPaths.ERROR_PATH).permitAll()
                         // TODO: 관리자 권한 세분화 시 DB 현재 role/status/소유자 기준의 후속 인가 추가
                         .requestMatchers("/api/v1/admin/**").hasRole(MemberRole.ADMIN.name())
                         .requestMatchers("/api/v1/**").authenticated()

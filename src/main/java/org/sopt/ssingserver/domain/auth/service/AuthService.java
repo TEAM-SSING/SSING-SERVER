@@ -7,6 +7,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
+import org.hibernate.exception.ConstraintViolationException;
 import org.sopt.ssingserver.domain.auth.client.KakaoOAuthClient;
 import org.sopt.ssingserver.domain.auth.client.KakaoProfile;
 import org.sopt.ssingserver.domain.auth.client.KakaoTokenInfo;
@@ -45,6 +46,7 @@ public class AuthService {
     private static final String TOKEN_TYPE = "Bearer";
     private static final String REFRESH_TOKEN_PREFIX = "rt_";
     private static final String DEFAULT_NICKNAME_PREFIX = "스키어";
+    private static final String OAUTH_PROVIDER_USER_UNIQUE_CONSTRAINT = "uk_oauth_accounts_provider_user";
     private static final int REFRESH_TOKEN_BYTES = 32;
     private static final char[] HEX = "0123456789abcdef".toCharArray();
 
@@ -106,6 +108,9 @@ public class AuthService {
         try {
             return transactionTemplate.execute(status -> loginWithKakaoInTransaction(tokenInfo.providerUserId(), kakaoProfile));
         } catch (DataIntegrityViolationException exception) {
+            if (!isOAuthProviderUserConflict(exception)) {
+                throw exception;
+            }
             return recoverConcurrentLogin(tokenInfo.providerUserId(), exception);
         }
     }
@@ -126,6 +131,7 @@ public class AuthService {
             String providerUserId,
             DataIntegrityViolationException exception
     ) {
+        // 동시에 들어온 첫 로그인 중 하나가 oauth_accounts unique 제약에서 밀린 경우만 복구한다.
         return transactionTemplate.execute(status -> oauthAccountRepository.findByProviderAndProviderUserId(
                         OAuthProvider.KAKAO,
                         providerUserId
@@ -133,6 +139,22 @@ public class AuthService {
                 .map(OAuthAccount::getMember)
                 .map(this::issueLoginResult)
                 .orElseThrow(() -> exception));
+    }
+
+    private boolean isOAuthProviderUserConflict(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof ConstraintViolationException constraintViolationException
+                    && OAUTH_PROVIDER_USER_UNIQUE_CONSTRAINT.equals(constraintViolationException.getConstraintName())) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && message.contains(OAUTH_PROVIDER_USER_UNIQUE_CONSTRAINT)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private AuthLoginResult issueLoginResult(Member member) {
