@@ -1,12 +1,14 @@
 package org.sopt.ssingserver.domain.auth.service;
 
+import org.sopt.ssingserver.domain.auth.dto.result.IssuedAccessToken;
+import org.sopt.ssingserver.domain.auth.dto.result.IssuedAuthTokens;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProperties;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.springframework.stereotype.Service;
 
 @Service
-public class AuthTokenIssuer {
+public class AuthTokenIssueService {
 
     private static final String TOKEN_TYPE = "Bearer";
 
@@ -14,7 +16,7 @@ public class AuthTokenIssuer {
     private final AccessTokenProperties accessTokenProperties;
     private final RefreshTokenService refreshTokenService;
 
-    public AuthTokenIssuer(
+    public AuthTokenIssueService(
             AccessTokenProvider accessTokenProvider,
             AccessTokenProperties accessTokenProperties,
             RefreshTokenService refreshTokenService
@@ -27,7 +29,7 @@ public class AuthTokenIssuer {
     public IssuedAuthTokens issueTokens(Member member) {
         IssuedAccessToken accessToken = issueAccessToken(member);
         String refreshToken = refreshTokenService.issueRefreshToken(member);
-        return new IssuedAuthTokens(
+        return IssuedAuthTokens.of(
                 accessToken.accessToken(),
                 refreshToken,
                 accessToken.tokenType(),
@@ -36,7 +38,7 @@ public class AuthTokenIssuer {
     }
 
     public IssuedAccessToken issueAccessToken(Member member) {
-        return new IssuedAccessToken(
+        return IssuedAccessToken.of(
                 accessTokenProvider.createAccessToken(member.getId(), member.getRole()),
                 TOKEN_TYPE,
                 accessTokenProperties.accessTokenExpiration().toSeconds()

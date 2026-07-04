@@ -11,14 +11,13 @@ import org.sopt.ssingserver.domain.auth.dev.dto.response.CreateDevPersonaRespons
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevAuthTokenResponse;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaListResponse;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaResponse;
-import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaSnapshotResponse;
 import org.sopt.ssingserver.domain.auth.dev.entity.DevPersona;
 import org.sopt.ssingserver.domain.auth.dev.enums.DevPersonaTemplate;
 import org.sopt.ssingserver.domain.auth.dev.error.DevAuthErrorCode;
 import org.sopt.ssingserver.domain.auth.dev.repository.DevPersonaRepository;
 import org.sopt.ssingserver.domain.auth.dto.response.InstructorStatusResponse;
-import org.sopt.ssingserver.domain.auth.service.AuthTokenIssuer;
-import org.sopt.ssingserver.domain.auth.service.IssuedAuthTokens;
+import org.sopt.ssingserver.domain.auth.dto.result.IssuedAuthTokens;
+import org.sopt.ssingserver.domain.auth.service.AuthTokenIssueService;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
@@ -44,20 +43,20 @@ public class DevAuthService {
     private final DevPersonaRepository devPersonaRepository;
     private final MemberRepository memberRepository;
     private final InstructorProfileRepository instructorProfileRepository;
-    private final AuthTokenIssuer authTokenIssuer;
+    private final AuthTokenIssueService authTokenIssueService;
     private final Clock clock;
 
     public DevAuthService(
             DevPersonaRepository devPersonaRepository,
             MemberRepository memberRepository,
             InstructorProfileRepository instructorProfileRepository,
-            AuthTokenIssuer authTokenIssuer,
+            AuthTokenIssueService authTokenIssueService,
             Clock clock
     ) {
         this.devPersonaRepository = devPersonaRepository;
         this.memberRepository = memberRepository;
         this.instructorProfileRepository = instructorProfileRepository;
-        this.authTokenIssuer = authTokenIssuer;
+        this.authTokenIssueService = authTokenIssueService;
         this.clock = clock;
     }
 
@@ -69,7 +68,7 @@ public class DevAuthService {
                 .stream()
                 .map(devPersona -> toPersonaResponse(devPersona, approvalStatusByMemberId))
                 .toList();
-        return new DevPersonaListResponse(personas);
+        return DevPersonaListResponse.from(personas);
     }
 
     @Transactional
@@ -91,7 +90,7 @@ public class DevAuthService {
         ));
         createInstructorProfileIfNeeded(member, normalizedNickname, template);
         DevPersona devPersona = saveDevPersona(normalizedPersonaKey, member, template);
-        return new CreateDevPersonaResponse(toPersonaResponse(devPersona));
+        return CreateDevPersonaResponse.from(toPersonaResponse(devPersona));
     }
 
     @Transactional
@@ -99,15 +98,9 @@ public class DevAuthService {
         DevPersona devPersona = devPersonaRepository.findByPersonaKey(personaKey.trim())
                 .orElseThrow(() -> new BusinessException(DevAuthErrorCode.DEV_PERSONA_NOT_FOUND));
         // 개발용 상태 재현 목적: 정지 회원도 토큰 발급 후 보호 API의 인가 흐름 검증
-        IssuedAuthTokens tokens = authTokenIssuer.issueTokens(devPersona.getMember());
+        IssuedAuthTokens tokens = authTokenIssueService.issueTokens(devPersona.getMember());
         DevPersonaResponse persona = toPersonaResponse(devPersona);
-        return new DevAuthTokenResponse(
-                tokens.accessToken(),
-                tokens.refreshToken(),
-                tokens.tokenType(),
-                tokens.expiresIn(),
-                DevPersonaSnapshotResponse.from(persona)
-        );
+        return DevAuthTokenResponse.from(tokens, persona);
     }
 
     private void validatePersonaKeyNotExists(String personaKey) {
@@ -174,7 +167,7 @@ public class DevAuthService {
 
     private DevPersonaResponse toPersonaResponse(DevPersona devPersona) {
         Member member = devPersona.getMember();
-        return toPersonaResponse(devPersona, member, resolveInstructorStatus(member.getId()));
+        return toPersonaResponse(devPersona, resolveInstructorStatus(member.getId()));
     }
 
     private DevPersonaResponse toPersonaResponse(
@@ -182,28 +175,14 @@ public class DevAuthService {
             Map<Long, InstructorApprovalStatus> approvalStatusByMemberId
     ) {
         Member member = devPersona.getMember();
-        return toPersonaResponse(
-                devPersona,
-                member,
-                resolveInstructorStatus(member.getId(), approvalStatusByMemberId)
-        );
+        return toPersonaResponse(devPersona, resolveInstructorStatus(member.getId(), approvalStatusByMemberId));
     }
 
     private DevPersonaResponse toPersonaResponse(
             DevPersona devPersona,
-            Member member,
             InstructorStatusResponse instructorStatus
     ) {
-        DevPersonaTemplate template = devPersona.getTemplate();
-        return new DevPersonaResponse(
-                devPersona.getPersonaKey(),
-                member.getNickname(),
-                template,
-                member.getRole(),
-                member.getStatus(),
-                instructorStatus,
-                devPersona.getCreatedAt()
-        );
+        return DevPersonaResponse.from(devPersona, instructorStatus);
     }
 
     private InstructorStatusResponse resolveInstructorStatus(Long memberId) {

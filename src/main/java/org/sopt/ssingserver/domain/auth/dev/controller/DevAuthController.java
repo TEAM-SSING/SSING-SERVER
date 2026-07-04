@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.auth.dev.controller;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.auth.dev.dto.request.CreateDevPersonaRequest;
 import org.sopt.ssingserver.domain.auth.dev.dto.request.DevAuthTokenRequest;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.CreateDevPersonaResponse;
@@ -22,14 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 // TODO: production 배포 전 dev profile 오적용 대비용 2차 접근 제한(shared secret 또는 IP 제한) 추가
 @Profile({"local", "dev"})
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/dev/auth")
 public class DevAuthController {
 
     private final DevAuthService devAuthService;
-
-    public DevAuthController(DevAuthService devAuthService) {
-        this.devAuthService = devAuthService;
-    }
 
     @GetMapping("/personas")
     public ResponseEntity<BaseResponse<DevPersonaListResponse>> getPersonas() {

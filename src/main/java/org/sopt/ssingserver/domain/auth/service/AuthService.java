@@ -6,10 +6,12 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.sopt.ssingserver.domain.auth.client.KakaoOAuthClient;
 import org.sopt.ssingserver.domain.auth.client.KakaoProfile;
 import org.sopt.ssingserver.domain.auth.client.KakaoTokenInfo;
-import org.sopt.ssingserver.domain.auth.dto.response.AuthRefreshResponse;
 import org.sopt.ssingserver.domain.auth.dto.response.AuthLoginResult;
+import org.sopt.ssingserver.domain.auth.dto.response.AuthRefreshResponse;
 import org.sopt.ssingserver.domain.auth.dto.response.InstructorAuthLoginResult;
 import org.sopt.ssingserver.domain.auth.dto.response.InstructorStatusResponse;
+import org.sopt.ssingserver.domain.auth.dto.result.IssuedAccessToken;
+import org.sopt.ssingserver.domain.auth.dto.result.IssuedAuthTokens;
 import org.sopt.ssingserver.domain.auth.entity.OAuthAccount;
 import org.sopt.ssingserver.domain.auth.entity.RefreshToken;
 import org.sopt.ssingserver.domain.auth.enums.OAuthProvider;
@@ -38,7 +40,7 @@ public class AuthService {
     private final OAuthAccountRepository oauthAccountRepository;
     private final MemberRepository memberRepository;
     private final InstructorProfileRepository instructorProfileRepository;
-    private final AuthTokenIssuer authTokenIssuer;
+    private final AuthTokenIssueService authTokenIssueService;
     private final RefreshTokenService refreshTokenService;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
@@ -48,7 +50,7 @@ public class AuthService {
             OAuthAccountRepository oauthAccountRepository,
             MemberRepository memberRepository,
             InstructorProfileRepository instructorProfileRepository,
-            AuthTokenIssuer authTokenIssuer,
+            AuthTokenIssueService authTokenIssueService,
             RefreshTokenService refreshTokenService,
             PlatformTransactionManager transactionManager,
             Clock clock
@@ -57,7 +59,7 @@ public class AuthService {
         this.oauthAccountRepository = oauthAccountRepository;
         this.memberRepository = memberRepository;
         this.instructorProfileRepository = instructorProfileRepository;
-        this.authTokenIssuer = authTokenIssuer;
+        this.authTokenIssueService = authTokenIssueService;
         this.refreshTokenService = refreshTokenService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.clock = clock;
@@ -136,7 +138,7 @@ public class AuthService {
     private AuthLoginResult issueLoginResult(Member member) {
         validateActiveMember(member);
 
-        IssuedAuthTokens tokens = authTokenIssuer.issueTokens(member);
+        IssuedAuthTokens tokens = authTokenIssueService.issueTokens(member);
 
         return new AuthLoginResult(
                 tokens.accessToken(),
@@ -156,7 +158,7 @@ public class AuthService {
         Member member = refreshToken.getMember();
         validateActiveMember(member);
 
-        IssuedAccessToken accessToken = authTokenIssuer.issueAccessToken(member);
+        IssuedAccessToken accessToken = authTokenIssueService.issueAccessToken(member);
         return new AuthRefreshResponse(
                 accessToken.accessToken(),
                 accessToken.tokenType(),

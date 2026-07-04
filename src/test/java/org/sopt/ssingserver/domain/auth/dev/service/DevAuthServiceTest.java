@@ -27,8 +27,8 @@ import org.sopt.ssingserver.domain.auth.dev.enums.DevPersonaTemplate;
 import org.sopt.ssingserver.domain.auth.dev.error.DevAuthErrorCode;
 import org.sopt.ssingserver.domain.auth.dev.repository.DevPersonaRepository;
 import org.sopt.ssingserver.domain.auth.dto.response.InstructorStatusResponse;
-import org.sopt.ssingserver.domain.auth.service.AuthTokenIssuer;
-import org.sopt.ssingserver.domain.auth.service.IssuedAuthTokens;
+import org.sopt.ssingserver.domain.auth.dto.result.IssuedAuthTokens;
+import org.sopt.ssingserver.domain.auth.service.AuthTokenIssueService;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
@@ -59,7 +59,7 @@ class DevAuthServiceTest {
     private InstructorProfileRepository instructorProfileRepository;
 
     @Mock
-    private AuthTokenIssuer authTokenIssuer;
+    private AuthTokenIssueService authTokenIssueService;
 
     @Test
     void getPersonas는_목록_조회에서_강사상태를_memberId_목록으로_한번에_조회한다() {
@@ -129,7 +129,7 @@ class DevAuthServiceTest {
 
         // 중복 persona는 DB 계정을 새로 만들 필요가 없으므로 member 저장까지 진행하지 않는다.
         verifyNoInteractions(memberRepository);
-        verifyNoInteractions(authTokenIssuer);
+        verifyNoInteractions(authTokenIssueService);
     }
 
     @Test
@@ -148,7 +148,7 @@ class DevAuthServiceTest {
         // ADMIN 템플릿은 이번 개발 도구 범위에서 제외했으므로 저장 로직으로 넘어가면 안 된다.
         verifyNoInteractions(memberRepository);
         verify(devPersonaRepository, never()).saveAndFlush(any(DevPersona.class));
-        verifyNoInteractions(authTokenIssuer);
+        verifyNoInteractions(authTokenIssueService);
     }
 
     @Test
@@ -167,7 +167,7 @@ class DevAuthServiceTest {
         // template이 유효하지 않으면 회원 생성이나 persona 저장까지 진행하지 않는다.
         verifyNoInteractions(memberRepository);
         verifyNoInteractions(devPersonaRepository);
-        verifyNoInteractions(authTokenIssuer);
+        verifyNoInteractions(authTokenIssueService);
     }
 
     @Test
@@ -195,7 +195,7 @@ class DevAuthServiceTest {
                         .isSameAs(DevAuthErrorCode.DEV_PERSONA_ALREADY_EXISTS));
 
         // existsByPersonaKey 통과 이후 DB unique constraint에서 충돌해도 API 에러 코드는 동일해야 한다.
-        verifyNoInteractions(authTokenIssuer);
+        verifyNoInteractions(authTokenIssueService);
     }
 
     @Test
@@ -209,7 +209,7 @@ class DevAuthServiceTest {
                         .isSameAs(DevAuthErrorCode.DEV_PERSONA_NOT_FOUND));
 
         // 토큰 API는 기존 persona만 대상으로 하므로, 못 찾으면 토큰 발급기로 넘기지 않는다.
-        verifyNoInteractions(authTokenIssuer);
+        verifyNoInteractions(authTokenIssueService);
     }
 
     @Test
@@ -226,7 +226,7 @@ class DevAuthServiceTest {
                 member,
                 DevPersonaTemplate.SUSPENDED_CONSUMER
         );
-        IssuedAuthTokens issuedTokens = new IssuedAuthTokens(
+        IssuedAuthTokens issuedTokens = IssuedAuthTokens.of(
                 "access-token",
                 "refresh-token",
                 "Bearer",
@@ -234,7 +234,7 @@ class DevAuthServiceTest {
         );
 
         when(devPersonaRepository.findByPersonaKey("suspended-consumer")).thenReturn(Optional.of(devPersona));
-        when(authTokenIssuer.issueTokens(member)).thenReturn(issuedTokens);
+        when(authTokenIssueService.issueTokens(member)).thenReturn(issuedTokens);
         when(instructorProfileRepository.findByMemberId(isNull())).thenReturn(Optional.empty());
 
         DevAuthTokenResponse response = service.issueToken("suspended-consumer");
@@ -243,7 +243,7 @@ class DevAuthServiceTest {
         assertThat(response.refreshToken()).isEqualTo("refresh-token");
         assertThat(response.persona().personaKey()).isEqualTo("suspended-consumer");
         assertThat(response.persona().memberStatus()).isEqualTo(MemberStatus.SUSPENDED);
-        verify(authTokenIssuer).issueTokens(member);
+        verify(authTokenIssueService).issueTokens(member);
     }
 
     private DevAuthService createService() {
@@ -251,7 +251,7 @@ class DevAuthServiceTest {
                 devPersonaRepository,
                 memberRepository,
                 instructorProfileRepository,
-                authTokenIssuer,
+                authTokenIssueService,
                 FIXED_CLOCK
         );
     }
