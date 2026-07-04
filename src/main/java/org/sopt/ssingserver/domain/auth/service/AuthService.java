@@ -1,30 +1,21 @@
 package org.sopt.ssingserver.domain.auth.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HexFormat;
 import org.hibernate.exception.ConstraintViolationException;
 import org.sopt.ssingserver.domain.auth.client.KakaoOAuthClient;
 import org.sopt.ssingserver.domain.auth.client.KakaoProfile;
 import org.sopt.ssingserver.domain.auth.client.KakaoTokenInfo;
-import org.sopt.ssingserver.domain.auth.config.RefreshTokenProperties;
-import org.sopt.ssingserver.domain.auth.dto.response.AuthRefreshResponse;
 import org.sopt.ssingserver.domain.auth.dto.response.AuthLoginResult;
+import org.sopt.ssingserver.domain.auth.dto.response.AuthRefreshResponse;
 import org.sopt.ssingserver.domain.auth.dto.response.InstructorAuthLoginResult;
 import org.sopt.ssingserver.domain.auth.dto.response.InstructorStatusResponse;
+import org.sopt.ssingserver.domain.auth.dto.result.IssuedAccessToken;
+import org.sopt.ssingserver.domain.auth.dto.result.IssuedAuthTokens;
 import org.sopt.ssingserver.domain.auth.entity.OAuthAccount;
 import org.sopt.ssingserver.domain.auth.entity.RefreshToken;
 import org.sopt.ssingserver.domain.auth.enums.OAuthProvider;
-import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
 import org.sopt.ssingserver.domain.auth.repository.OAuthAccountRepository;
-import org.sopt.ssingserver.domain.auth.repository.RefreshTokenRepository;
-import org.sopt.ssingserver.domain.auth.token.AccessTokenProperties;
-import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.member.entity.Member;
@@ -42,46 +33,35 @@ import org.springframework.util.StringUtils;
 @Service
 public class AuthService {
 
-    private static final String TOKEN_TYPE = "Bearer";
-    private static final String REFRESH_TOKEN_PREFIX = "rt_";
     private static final String DEFAULT_NICKNAME_PREFIX = "스키어";
     private static final String OAUTH_PROVIDER_USER_UNIQUE_CONSTRAINT = "uk_oauth_accounts_provider_user";
-    private static final int REFRESH_TOKEN_BYTES = 32;
 
     private final KakaoOAuthClient kakaoOAuthClient;
     private final OAuthAccountRepository oauthAccountRepository;
     private final MemberRepository memberRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
     private final InstructorProfileRepository instructorProfileRepository;
-    private final AccessTokenProvider accessTokenProvider;
-    private final AccessTokenProperties accessTokenProperties;
-    private final RefreshTokenProperties refreshTokenProperties;
+    private final AuthTokenIssueService authTokenIssueService;
+    private final RefreshTokenService refreshTokenService;
     private final TransactionTemplate transactionTemplate;
-    private final SecureRandom secureRandom;
     private final Clock clock;
 
     public AuthService(
             KakaoOAuthClient kakaoOAuthClient,
             OAuthAccountRepository oauthAccountRepository,
             MemberRepository memberRepository,
-            RefreshTokenRepository refreshTokenRepository,
             InstructorProfileRepository instructorProfileRepository,
-            AccessTokenProvider accessTokenProvider,
-            AccessTokenProperties accessTokenProperties,
-            RefreshTokenProperties refreshTokenProperties,
+            AuthTokenIssueService authTokenIssueService,
+            RefreshTokenService refreshTokenService,
             PlatformTransactionManager transactionManager,
             Clock clock
     ) {
         this.kakaoOAuthClient = kakaoOAuthClient;
         this.oauthAccountRepository = oauthAccountRepository;
         this.memberRepository = memberRepository;
-        this.refreshTokenRepository = refreshTokenRepository;
         this.instructorProfileRepository = instructorProfileRepository;
-        this.accessTokenProvider = accessTokenProvider;
-        this.accessTokenProperties = accessTokenProperties;
-        this.refreshTokenProperties = refreshTokenProperties;
+        this.authTokenIssueService = authTokenIssueService;
+        this.refreshTokenService = refreshTokenService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-        this.secureRandom = new SecureRandom();
         this.clock = clock;
     }
 
@@ -95,49 +75,6 @@ public class AuthService {
                 loginResult,
                 resolveInstructorStatus(loginResult.memberId())
         );
-    }
-
-    @Transactional(readOnly = true)
-    public AuthRefreshResponse refreshAccessToken(String rawRefreshToken) {
-        if (!StringUtils.hasText(rawRefreshToken)) {
-            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
-
-        // Refresh Token 원문 미저장을 위한 hash 기반 조회
-        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))
-                .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN));
-
-        if (refreshToken.isRevoked()) {
-            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
-        if (refreshToken.isExpired(Instant.now(clock))) {
-            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_EXPIRED);
-        }
-
-        Member member = refreshToken.getMember();
-        validateActiveMember(member);
-
-        String accessToken = accessTokenProvider.createAccessToken(member.getId(), member.getRole());
-        return new AuthRefreshResponse(
-                accessToken,
-                TOKEN_TYPE,
-                accessTokenProperties.accessTokenExpiration().toSeconds()
-        );
-    }
-
-    @Transactional
-    public void logout(String rawRefreshToken) {
-        if (!StringUtils.hasText(rawRefreshToken)) {
-            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
-
-        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))
-                .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN));
-
-        // 중복 로그아웃 허용
-        if (!refreshToken.isRevoked()) {
-            refreshToken.revoke(Instant.now(clock));
-        }
     }
 
     private AuthLoginResult loginWithKakao(String kakaoAccessToken) {
@@ -201,19 +138,42 @@ public class AuthService {
     private AuthLoginResult issueLoginResult(Member member) {
         validateActiveMember(member);
 
-        String accessToken = accessTokenProvider.createAccessToken(member.getId(), member.getRole());
-        String refreshToken = issueRefreshToken(member);
+        IssuedAuthTokens tokens = authTokenIssueService.issueTokens(member);
 
         return new AuthLoginResult(
-                accessToken,
-                refreshToken,
-                TOKEN_TYPE,
-                accessTokenProperties.accessTokenExpiration().toSeconds(),
+                tokens.accessToken(),
+                tokens.refreshToken(),
+                tokens.tokenType(),
+                tokens.expiresIn(),
                 member.getId(),
                 member.getNickname(),
                 member.getRole(),
                 member.getStatus()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public AuthRefreshResponse refreshAccessToken(String rawRefreshToken) {
+        RefreshToken refreshToken = refreshTokenService.findValidRefreshToken(rawRefreshToken);
+        Member member = refreshToken.getMember();
+        validateActiveMember(member);
+
+        IssuedAccessToken accessToken = authTokenIssueService.issueAccessToken(member);
+        return new AuthRefreshResponse(
+                accessToken.accessToken(),
+                accessToken.tokenType(),
+                accessToken.expiresIn()
+        );
+    }
+
+    @Transactional
+    public void logout(String rawRefreshToken) {
+        RefreshToken refreshToken = refreshTokenService.findRefreshTokenForLogout(rawRefreshToken);
+
+        // 중복 로그아웃 허용
+        if (!refreshToken.isRevoked()) {
+            refreshToken.revoke(Instant.now(clock));
+        }
     }
 
     private Member findOrCreateMember(String providerUserId, KakaoProfile kakaoProfile) {
@@ -249,36 +209,6 @@ public class AuthService {
     private void validateActiveMember(Member member) {
         if (member.getStatus() != MemberStatus.ACTIVE) {
             throw new BusinessException(CommonErrorCode.FORBIDDEN);
-        }
-    }
-
-    private String issueRefreshToken(Member member) {
-        String rawToken = createOpaqueToken();
-        // DB 저장 전 Refresh Token hash 변환
-        String tokenHash = sha256Hex(rawToken);
-        RefreshToken refreshToken = RefreshToken.issue(
-                member,
-                tokenHash,
-                Instant.now(clock).plus(refreshTokenProperties.expiration())
-        );
-        refreshTokenRepository.save(refreshToken);
-        return rawToken;
-    }
-
-    private String createOpaqueToken() {
-        // 예측 불가능한 opaque Refresh Token 생성
-        byte[] bytes = new byte[REFRESH_TOKEN_BYTES];
-        secureRandom.nextBytes(bytes);
-        return REFRESH_TOKEN_PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    private String sha256Hex(String token) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 algorithm is unavailable.", exception);
         }
     }
 
