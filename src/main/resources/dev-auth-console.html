@@ -16,6 +16,7 @@
             --primary-dark: #004eeb;
             --danger: #d92d20;
             --success: #067647;
+            --warning: #b54708;
         }
 
         * {
@@ -102,6 +103,10 @@
 
         .status.error {
             color: var(--danger);
+        }
+
+        .status.warning {
+            color: var(--warning);
         }
 
         .persona-list {
@@ -420,8 +425,11 @@
         try {
             const token = await issueToken(persona.personaKey);
             renderTokenPanel(panel, token);
-            await copyText(token.accessToken);
-            setStatus(status, `${persona.personaKey} Access Token 복사 완료`, "success");
+            await copyAccessToken(
+                token.accessToken,
+                status,
+                `${persona.personaKey} Access Token 복사 완료`
+            );
         } catch (error) {
             panel.textContent = error.message;
             setStatus(status, error.message, "error");
@@ -444,8 +452,7 @@
             await loadPersonas();
             const token = await issueToken(response.data.persona.personaKey);
             renderTokenPanel(modalTokenPanel, token);
-            await copyText(token.accessToken);
-            setStatus(modalStatus, "Access Token 복사 완료", "success");
+            await copyAccessToken(token.accessToken, modalStatus, "Access Token 복사 완료");
         } catch (error) {
             setStatus(modalStatus, error.message, "error");
         }
@@ -516,9 +523,14 @@
         button.type = "button";
         button.textContent = "복사";
         button.addEventListener("click", async () => {
-            await copyText(value);
-            setStatus(status, `${label} 복사 완료`, "success");
-            setStatus(modalStatus, `${label} 복사 완료`, "success");
+            try {
+                await copyText(value);
+                setStatus(status, `${label} 복사 완료`, "success");
+                setStatus(modalStatus, `${label} 복사 완료`, "success");
+            } catch (error) {
+                setStatus(status, error.message, "warning");
+                setStatus(modalStatus, error.message, "warning");
+            }
         });
         wrapper.append(labelElement, textarea, button);
         return wrapper;
@@ -537,7 +549,24 @@
     }
 
     async function copyText(value) {
+        if (!navigator.clipboard?.writeText) {
+            throw new Error("이 브라우저에서는 클립보드 복사를 지원하지 않습니다.");
+        }
         await navigator.clipboard.writeText(value);
+    }
+
+    async function copyAccessToken(value, element, successMessage) {
+        try {
+            await copyText(value);
+            setStatus(element, successMessage, "success");
+        } catch (error) {
+            // 자동 복사 실패와 토큰 발급 성공의 분리
+            setStatus(
+                element,
+                `토큰 발급 완료. 자동 복사는 실패했습니다. ${error.message}`,
+                "warning"
+            );
+        }
     }
 
     function setStatus(element, message, kind) {
