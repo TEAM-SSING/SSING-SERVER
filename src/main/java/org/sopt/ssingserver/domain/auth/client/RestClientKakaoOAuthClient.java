@@ -21,7 +21,6 @@ import tools.jackson.databind.ObjectMapper;
 public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
 
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final int KAKAO_INVALID_PARAMETER_CODE = -2;
     private static final int KAKAO_INVALID_TOKEN_CODE = -401;
     private final RestClient restClient;
     private final KakaoOAuthProperties properties;
@@ -38,13 +37,6 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
                 .baseUrl(properties.baseUrl())
                 .requestFactory(createRequestFactory(properties))
                 .build();
-    }
-
-    private SimpleClientHttpRequestFactory createRequestFactory(KakaoOAuthProperties properties) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(properties.connectTimeout());
-        requestFactory.setReadTimeout(properties.readTimeout());
-        return requestFactory;
     }
 
     @Override
@@ -74,6 +66,13 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
                 resolveNickname(userMeResponse),
                 resolveProfileImageUrl(userMeResponse)
         );
+    }
+
+    private SimpleClientHttpRequestFactory createRequestFactory(KakaoOAuthProperties properties) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(properties.connectTimeout());
+        requestFactory.setReadTimeout(properties.readTimeout());
+        return requestFactory;
     }
 
     private String normalizeAppId(String appId) {
@@ -134,8 +133,7 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
             return false;
         }
 
-        return errorResponse.code() == KAKAO_INVALID_TOKEN_CODE
-                || errorResponse.code() == KAKAO_INVALID_PARAMETER_CODE;
+        return errorResponse.code() == KAKAO_INVALID_TOKEN_CODE;
     }
 
     private KakaoErrorResponse readKakaoErrorResponse(RestClientResponseException exception) {

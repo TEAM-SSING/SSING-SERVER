@@ -7,6 +7,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.HexFormat;
 import org.hibernate.exception.ConstraintViolationException;
 import org.sopt.ssingserver.domain.auth.client.KakaoOAuthClient;
 import org.sopt.ssingserver.domain.auth.client.KakaoProfile;
@@ -48,7 +49,6 @@ public class AuthService {
     private static final String DEFAULT_NICKNAME_PREFIX = "스키어";
     private static final String OAUTH_PROVIDER_USER_UNIQUE_CONSTRAINT = "uk_oauth_accounts_provider_user";
     private static final int REFRESH_TOKEN_BYTES = 32;
-    private static final char[] HEX = "0123456789abcdef".toCharArray();
 
     private final KakaoOAuthClient kakaoOAuthClient;
     private final OAuthAccountRepository oauthAccountRepository;
@@ -97,6 +97,55 @@ public class AuthService {
                 loginResult,
                 resolveInstructorStatus(loginResult.memberId())
         );
+    }
+
+    @Transactional(readOnly = true)
+    public AuthRefreshResponse refreshAccessToken(String rawRefreshToken) {
+        if (!StringUtils.hasText(rawRefreshToken)) {
+            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+
+        // Refresh Token 원문 미저장을 위한 hash 기반 조회
+        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN));
+
+        if (refreshToken.isRevoked()) {
+            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+        if (refreshToken.isExpired(Instant.now(clock))) {
+            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_EXPIRED);
+        }
+
+        Member member = refreshToken.getMember();
+        validateActiveMember(member);
+
+        String accessToken = accessTokenProvider.createAccessToken(member.getId(), member.getRole());
+        return new AuthRefreshResponse(
+                accessToken,
+                TOKEN_TYPE,
+                accessTokenProperties.accessTokenExpiration().toSeconds()
+        );
+    }
+
+    @Transactional
+    public void logout(String accessToken, String rawRefreshToken) {
+        // 로그아웃 전용 만료 Access Token 허용
+        AccessTokenClaims claims = parseAccessTokenForLogout(accessToken);
+        if (!StringUtils.hasText(rawRefreshToken)) {
+            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+
+        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN));
+
+        if (!refreshToken.getMember().getId().equals(claims.memberId())) {
+            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+
+        // 중복 로그아웃 허용
+        if (!refreshToken.isRevoked()) {
+            refreshToken.revoke(Instant.now(clock));
+        }
     }
 
     private AuthLoginResult loginWithKakao(String kakaoAccessToken) {
@@ -175,55 +224,6 @@ public class AuthService {
         );
     }
 
-    @Transactional(readOnly = true)
-    public AuthRefreshResponse refreshAccessToken(String rawRefreshToken) {
-        if (!StringUtils.hasText(rawRefreshToken)) {
-            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
-
-        // Refresh Token 원문 미저장을 위한 hash 기반 조회
-        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))
-                .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN));
-
-        if (refreshToken.isRevoked()) {
-            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
-        if (refreshToken.isExpired(Instant.now(clock))) {
-            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_EXPIRED);
-        }
-
-        Member member = refreshToken.getMember();
-        validateActiveMember(member);
-
-        String accessToken = accessTokenProvider.createAccessToken(member.getId(), member.getRole());
-        return new AuthRefreshResponse(
-                accessToken,
-                TOKEN_TYPE,
-                accessTokenProperties.accessTokenExpiration().toSeconds()
-        );
-    }
-
-    @Transactional
-    public void logout(String accessToken, String rawRefreshToken) {
-        // 로그아웃 전용 만료 Access Token 허용
-        AccessTokenClaims claims = parseAccessTokenForLogout(accessToken);
-        if (!StringUtils.hasText(rawRefreshToken)) {
-            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
-
-        RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))
-                .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN));
-
-        if (!refreshToken.getMember().getId().equals(claims.memberId())) {
-            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
-
-        // 중복 로그아웃 허용
-        if (!refreshToken.isRevoked()) {
-            refreshToken.revoke(Instant.now(clock));
-        }
-    }
-
     private AccessTokenClaims parseAccessTokenForLogout(String accessToken) {
         try {
             return accessTokenProvider.parseAccessTokenAllowExpired(accessToken);
@@ -292,13 +292,7 @@ public class AuthService {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            char[] hexChars = new char[hash.length * 2];
-            for (int i = 0; i < hash.length; i++) {
-                int value = hash[i] & 0xff;
-                hexChars[i * 2] = HEX[value >>> 4];
-                hexChars[i * 2 + 1] = HEX[value & 0x0f];
-            }
-            return new String(hexChars);
+            return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 algorithm is unavailable.", exception);
         }

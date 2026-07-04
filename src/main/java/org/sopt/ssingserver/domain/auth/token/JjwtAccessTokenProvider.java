@@ -56,15 +56,7 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
         }
 
         try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .requireIssuer(properties.issuer())
-                    .require(CLAIM_TOKEN_TYPE, ACCESS_TOKEN_TYPE)
-                    .clock(() -> Date.from(Instant.now(clock)))
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-
+            Claims claims = parseSignedClaims(token);
             return toAccessTokenClaims(claims);
         } catch (ExpiredJwtException exception) {
             // 만료 Access Token 에러 분기
@@ -82,15 +74,7 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
         }
 
         try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .requireIssuer(properties.issuer())
-                    .require(CLAIM_TOKEN_TYPE, ACCESS_TOKEN_TYPE)
-                    .clock(() -> Date.from(Instant.now(clock)))
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-
+            Claims claims = parseSignedClaims(token);
             return toAccessTokenClaims(claims);
         } catch (ExpiredJwtException exception) {
             // 로그아웃 전용 만료 Access Token 허용
@@ -98,6 +82,17 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
         } catch (JwtException | IllegalArgumentException exception) {
             throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN, exception);
         }
+    }
+
+    private Claims parseSignedClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(secretKey)
+                .requireIssuer(properties.issuer())
+                .require(CLAIM_TOKEN_TYPE, ACCESS_TOKEN_TYPE)
+                .clock(() -> Date.from(Instant.now(clock)))
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     private AccessTokenClaims toAccessTokenClaims(Claims claims) {
