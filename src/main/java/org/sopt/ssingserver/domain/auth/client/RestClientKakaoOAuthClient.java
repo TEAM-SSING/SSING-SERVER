@@ -42,12 +42,11 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
     @Override
     public KakaoTokenInfo validateAccessToken(String kakaoAccessToken) {
         KakaoTokenInfoResponse tokenInfoResponse = requestTokenInfo(kakaoAccessToken);
-        String expectedAppId = normalizeAppId(properties.appId());
-        String actualAppId = tokenInfoResponse == null ? null : normalizeAppId(tokenInfoResponse.appId());
+        Integer expectedAppId = properties.appId();
+        Integer actualAppId = tokenInfoResponse == null ? null : tokenInfoResponse.appId();
         // SSING 카카오 앱 식별자 검증
         if (tokenInfoResponse == null
                 || tokenInfoResponse.id() == null
-                || expectedAppId == null
                 || actualAppId == null
                 || !expectedAppId.equals(actualAppId)) {
             throw new BusinessException(AuthErrorCode.AUTH_INVALID_KAKAO_TOKEN);
@@ -73,13 +72,6 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
         requestFactory.setConnectTimeout(properties.connectTimeout());
         requestFactory.setReadTimeout(properties.readTimeout());
         return requestFactory;
-    }
-
-    private String normalizeAppId(String appId) {
-        if (!StringUtils.hasText(appId)) {
-            return null;
-        }
-        return appId.trim();
     }
 
     private KakaoTokenInfoResponse requestTokenInfo(String kakaoAccessToken) {
@@ -184,7 +176,7 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
     private record KakaoTokenInfoResponse(
             Long id,
             @JsonProperty("app_id")
-            String appId
+            Integer appId
     ) {
     }
 

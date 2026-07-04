@@ -7,6 +7,4 @@ public interface AccessTokenProvider {
     String createAccessToken(Long memberId, MemberRole role);
 
     AccessTokenClaims parseAccessToken(String token);
-
-    AccessTokenClaims parseAccessTokenAllowExpired(String token);
 }

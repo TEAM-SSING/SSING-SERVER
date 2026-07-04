@@ -67,23 +67,6 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
         }
     }
 
-    @Override
-    public AccessTokenClaims parseAccessTokenAllowExpired(String token) {
-        if (token == null || token.isBlank()) {
-            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
-
-        try {
-            Claims claims = parseSignedClaims(token);
-            return toAccessTokenClaims(claims);
-        } catch (ExpiredJwtException exception) {
-            // 로그아웃 전용 만료 Access Token 허용
-            return toAccessTokenClaims(exception.getClaims());
-        } catch (JwtException | IllegalArgumentException exception) {
-            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN, exception);
-        }
-    }
-
     private Claims parseSignedClaims(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)

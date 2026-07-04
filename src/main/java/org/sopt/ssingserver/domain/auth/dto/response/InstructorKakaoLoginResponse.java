@@ -11,6 +11,23 @@ public record InstructorKakaoLoginResponse(
         MemberResponse member
 ) {
 
+    public static InstructorKakaoLoginResponse from(InstructorAuthLoginResult result) {
+        AuthLoginResult loginResult = result.loginResult();
+        return new InstructorKakaoLoginResponse(
+                loginResult.accessToken(),
+                loginResult.refreshToken(),
+                loginResult.tokenType(),
+                loginResult.expiresIn(),
+                new MemberResponse(
+                        loginResult.memberId(),
+                        loginResult.nickname(),
+                        loginResult.role(),
+                        loginResult.memberStatus(),
+                        result.instructorStatus()
+                )
+        );
+    }
+
     public record MemberResponse(
             Long id,
             String nickname,

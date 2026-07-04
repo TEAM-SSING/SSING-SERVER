@@ -23,8 +23,6 @@ import org.sopt.ssingserver.domain.auth.enums.OAuthProvider;
 import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
 import org.sopt.ssingserver.domain.auth.repository.OAuthAccountRepository;
 import org.sopt.ssingserver.domain.auth.repository.RefreshTokenRepository;
-import org.sopt.ssingserver.domain.auth.token.AccessTokenClaims;
-import org.sopt.ssingserver.domain.auth.token.AccessTokenException;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProperties;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
@@ -128,19 +126,13 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(String accessToken, String rawRefreshToken) {
-        // 로그아웃 전용 만료 Access Token 허용
-        AccessTokenClaims claims = parseAccessTokenForLogout(accessToken);
+    public void logout(String rawRefreshToken) {
         if (!StringUtils.hasText(rawRefreshToken)) {
             throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
         }
 
         RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN));
-
-        if (!refreshToken.getMember().getId().equals(claims.memberId())) {
-            throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
-        }
 
         // 중복 로그아웃 허용
         if (!refreshToken.isRevoked()) {
@@ -222,14 +214,6 @@ public class AuthService {
                 member.getRole(),
                 member.getStatus()
         );
-    }
-
-    private AccessTokenClaims parseAccessTokenForLogout(String accessToken) {
-        try {
-            return accessTokenProvider.parseAccessTokenAllowExpired(accessToken);
-        } catch (AccessTokenException exception) {
-            throw new BusinessException(exception.getErrorCode(), exception);
-        }
     }
 
     private Member findOrCreateMember(String providerUserId, KakaoProfile kakaoProfile) {

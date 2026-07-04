@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.auth.controller;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.auth.dto.request.KakaoLoginRequest;
 import org.sopt.ssingserver.domain.auth.dto.response.AuthLoginResult;
 import org.sopt.ssingserver.domain.auth.dto.response.ConsumerKakaoLoginResponse;
@@ -15,32 +16,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/v1/consumer/auth")
 public class ConsumerAuthController {
 
     private final AuthService authService;
-
-    public ConsumerAuthController(AuthService authService) {
-        this.authService = authService;
-    }
 
     @PostMapping("/kakao")
     public ResponseEntity<BaseResponse<ConsumerKakaoLoginResponse>> loginWithKakao(
             @Valid @RequestBody KakaoLoginRequest request
     ) {
         AuthLoginResult result = authService.loginConsumerWithKakao(request.kakaoAccessToken());
-        ConsumerKakaoLoginResponse response = new ConsumerKakaoLoginResponse(
-                result.accessToken(),
-                result.refreshToken(),
-                result.tokenType(),
-                result.expiresIn(),
-                new ConsumerKakaoLoginResponse.MemberResponse(
-                        result.memberId(),
-                        result.nickname(),
-                        result.role(),
-                        result.memberStatus()
-                )
-        );
+        ConsumerKakaoLoginResponse response = ConsumerKakaoLoginResponse.from(result);
         return SuccessResponseFactory.success(AuthSuccessCode.AUTH_LOGIN_SUCCESS, response);
     }
 }

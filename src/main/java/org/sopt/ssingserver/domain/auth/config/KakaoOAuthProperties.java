@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "ssing.auth.kakao")
 public record KakaoOAuthProperties(
         String baseUrl,
-        String appId,
+        Integer appId,
         Duration connectTimeout,
         Duration readTimeout
 ) {
@@ -15,7 +15,7 @@ public record KakaoOAuthProperties(
         if (baseUrl == null || baseUrl.isBlank()) {
             baseUrl = "https://kapi.kakao.com";
         }
-        if (appId == null || appId.isBlank()) {
+        if (appId == null) {
             throw new IllegalArgumentException("Kakao app id must not be blank.");
         }
         if (connectTimeout == null) {
