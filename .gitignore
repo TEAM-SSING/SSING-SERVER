@@ -4,6 +4,7 @@
 .agents/
 AGENTS.md
 .worktrees/
+.ouroboros/
 
 ### Spring Boot local configuration ###
 HELP.md
