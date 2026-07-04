@@ -201,7 +201,8 @@ public class DevAuthService {
                 template,
                 member.getRole(),
                 member.getStatus(),
-                instructorStatus
+                instructorStatus,
+                devPersona.getCreatedAt()
         );
     }
 

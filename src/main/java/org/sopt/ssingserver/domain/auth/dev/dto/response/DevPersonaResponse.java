@@ -1,5 +1,6 @@
 package org.sopt.ssingserver.domain.auth.dev.dto.response;
 
+import java.time.Instant;
 import org.sopt.ssingserver.domain.auth.dev.enums.DevPersonaTemplate;
 import org.sopt.ssingserver.domain.auth.dto.response.InstructorStatusResponse;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
@@ -11,6 +12,7 @@ public record DevPersonaResponse(
         DevPersonaTemplate template,
         MemberRole role,
         MemberStatus memberStatus,
-        InstructorStatusResponse instructorStatus
+        InstructorStatusResponse instructorStatus,
+        Instant createdAt
 ) {
 }

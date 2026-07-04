@@ -66,6 +66,8 @@ class DevAuthServiceTest {
         DevAuthService service = createService();
         Member consumer = createMemberWithId(1L, "일반소비자", MemberRole.CONSUMER, MemberStatus.ACTIVE);
         Member instructor = createMemberWithId(2L, "승인강사", MemberRole.INSTRUCTOR, MemberStatus.ACTIVE);
+        Instant consumerCreatedAt = Instant.parse("2026-07-01T01:00:00Z");
+        Instant instructorCreatedAt = Instant.parse("2026-07-02T02:00:00Z");
         DevPersona consumerPersona = DevPersona.create(
                 "general-consumer",
                 consumer,
@@ -76,6 +78,8 @@ class DevAuthServiceTest {
                 instructor,
                 DevPersonaTemplate.INSTRUCTOR_APPROVED
         );
+        ReflectionTestUtils.setField(consumerPersona, "createdAt", consumerCreatedAt);
+        ReflectionTestUtils.setField(instructorPersona, "createdAt", instructorCreatedAt);
         InstructorProfile approvedProfile = InstructorProfile.create(
                 instructor,
                 "승인강사",
@@ -101,6 +105,9 @@ class DevAuthServiceTest {
         assertThat(response.personas())
                 .extracting(DevPersonaResponse::instructorStatus)
                 .containsExactly(InstructorStatusResponse.NONE, InstructorStatusResponse.APPROVED);
+        assertThat(response.personas())
+                .extracting(DevPersonaResponse::createdAt)
+                .containsExactly(consumerCreatedAt, instructorCreatedAt);
         // 목록 API는 화면에서 자주 호출되므로 persona 수만큼 강사 프로필을 조회하지 않는다.
         verify(instructorProfileRepository).findAllByMemberIdIn(List.of(1L, 2L));
         verify(instructorProfileRepository, never()).findByMemberId(any());

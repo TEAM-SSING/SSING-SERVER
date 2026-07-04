@@ -6,17 +6,54 @@
     <title>SSING Dev Auth Console</title>
     <style>
         :root {
-            color-scheme: light;
-            --bg: #f5f7fb;
-            --surface: #ffffff;
-            --line: #d9e1ec;
-            --text: #172033;
-            --muted: #667085;
-            --primary: #155eef;
-            --primary-dark: #004eeb;
-            --danger: #d92d20;
-            --success: #067647;
-            --warning: #b54708;
+            color-scheme: dark;
+            --bg: #0f141b;
+            --surface: #151b23;
+            --surface-raised: #1b2330;
+            --line: #2b3442;
+            --text: #eef2f7;
+            --muted: #9aa4b2;
+            --primary: #7aa2ff;
+            --primary-dark: #5d87f0;
+            --primary-soft: rgba(122, 162, 255, 0.14);
+            --brand-blue: #2C8BEF;
+            --mint: #8ee8d8;
+            --coral: #ffb199;
+            --sun: #f7d77a;
+            --snow: #dff6ff;
+            --danger: #ff8a80;
+            --success: #63d297;
+            --warning: #f5c56b;
+            --font-size-micro: 0.75rem;
+            --font-size-caption: 0.8125rem;
+            --font-size-body: 0.875rem;
+            --font-size-body-lg: 1rem;
+            --font-size-title-sm: 1.125rem;
+            --font-size-title-md: 1.375rem;
+            --line-height-micro: 1rem;
+            --line-height-caption: 1.125rem;
+            --line-height-body: 1.25rem;
+            --line-height-body-lg: 1.5rem;
+            --line-height-title-sm: 1.5rem;
+            --line-height-title-md: 1.75rem;
+            --font-weight-regular: 400;
+            --font-weight-medium: 500;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+            --type-page-title-size: var(--font-size-title-md);
+            --type-page-title-line: var(--line-height-title-md);
+            --type-modal-title-size: var(--font-size-title-sm);
+            --type-modal-title-line: var(--line-height-title-sm);
+            --type-body-size: var(--font-size-body);
+            --type-body-line: var(--line-height-body);
+            --type-control-size: var(--font-size-body);
+            --type-control-line: var(--line-height-body);
+            --type-caption-size: var(--font-size-caption);
+            --type-caption-line: var(--line-height-caption);
+            --type-micro-size: var(--font-size-micro);
+            --type-micro-line: var(--line-height-micro);
+            --persona-grid-columns: minmax(180px, 1.1fr) minmax(128px, 0.8fr) minmax(110px, 120px) minmax(58px, 72px) minmax(76px, 92px) minmax(82px, 96px) minmax(112px, 126px) minmax(64px, 72px);
+            --persona-grid-gap: 16px;
         }
 
         * {
@@ -25,37 +62,136 @@
 
         body {
             margin: 0;
-            background: var(--bg);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background:
+                linear-gradient(180deg, rgba(16, 24, 35, 0.96) 0%, rgba(12, 18, 26, 0.98) 58%, #0a0f15 100%),
+                var(--bg);
             color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: var(--type-body-size);
+            line-height: var(--type-body-line);
+            letter-spacing: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .snowfield-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+            --ill-snow: #f8fbff;
+            --ill-ice: #e7f3ff;
+            --ill-mist: #d8eaf7;
+            --ill-frost: #bfd7ea;
+            --ill-slate: #334155;
+            --ill-soft-navy: #1e3a5f;
+            --ill-penguin: #2f3a4a;
+            --ill-bear: #f5f8fa;
+            --ill-seal: #c8d3dc;
+            --ill-accent-sky: #7db7d9;
+            --ill-accent-mint: #a8dad6;
+            --ill-accent-blush: #ffb4a2;
+            --ill-accent-sun: #ffd166;
+        }
+
+        .snowfield-backdrop svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.5;
+        }
+
+        .snowfield-backdrop .backdrop-hill {
+            fill: rgba(231, 243, 255, 0.055);
+        }
+
+        .snowfield-backdrop .backdrop-track {
+            fill: none;
+            stroke: rgba(191, 215, 234, 0.13);
+            stroke-width: 2.2;
+            stroke-linecap: round;
+        }
+
+        .snowfield-backdrop .backdrop-dot {
+            fill: rgba(248, 251, 255, 0.13);
+        }
+
+        .snowfield-backdrop .backdrop-playmate {
+            opacity: 0.1;
+        }
+
+        .snowfield-backdrop .backdrop-primary {
+            opacity: 0.14;
+        }
+
+        .snowfield-backdrop .backdrop-faint {
+            opacity: 0.075;
         }
 
         button,
         input,
-        textarea {
+        textarea,
+        select {
             font: inherit;
         }
 
         header {
             display: flex;
+            position: relative;
+            z-index: 1;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-start;
             gap: 16px;
             padding: 24px;
             border-bottom: 1px solid var(--line);
-            background: var(--surface);
+            background: rgba(21, 27, 35, 0.84);
+            backdrop-filter: blur(16px);
+        }
+
+        .brand-lockup {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .ssing-brand {
+            display: block;
+            flex: 0 0 auto;
+            width: 38px;
+            height: 29px;
+            color: var(--brand-blue);
+        }
+
+        .ssing-brand path {
+            fill: currentColor;
         }
 
         h1 {
             margin: 0;
-            font-size: 22px;
-            line-height: 1.25;
+            font-size: var(--type-page-title-size);
+            line-height: var(--type-page-title-line);
+            font-weight: var(--font-weight-bold);
         }
 
         main {
-            max-width: 1080px;
+            position: relative;
+            z-index: 1;
+            max-width: 1180px;
             margin: 0 auto;
             padding: 24px;
+        }
+
+        .console-panel {
+            padding: 16px;
+            border: 1px solid rgba(151, 175, 203, 0.32);
+            border-radius: 12px;
+            background: rgba(14, 20, 29, 0.92);
+            box-shadow: 0 18px 64px rgba(4, 9, 15, 0.28);
+            backdrop-filter: blur(14px);
         }
 
         .button {
@@ -65,17 +201,63 @@
             background: var(--surface);
             color: var(--text);
             padding: 8px 14px;
+            font-size: var(--type-control-size);
+            line-height: var(--type-control-line);
+            font-weight: var(--font-weight-medium);
             cursor: pointer;
+        }
+
+        .button:hover {
+            border-color: #3d4a5c;
+            background: var(--surface-raised);
         }
 
         .button.primary {
             border-color: var(--primary);
             background: var(--primary);
-            color: #ffffff;
+            color: #09111f;
+            font-weight: var(--font-weight-bold);
         }
 
         .button.primary:hover {
             background: var(--primary-dark);
+        }
+
+        .button.copied {
+            border-color: rgba(99, 210, 151, 0.42);
+            color: var(--success);
+            background: rgba(99, 210, 151, 0.08);
+        }
+
+        .icon-button {
+            display: inline-grid;
+            place-items: center;
+            width: 36px;
+            min-width: 36px;
+            min-height: 36px;
+            border-radius: 8px;
+            padding: 0;
+            color: var(--muted);
+        }
+
+        .icon-button svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .modal-close {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .modal-close:hover {
+            color: var(--text);
+        }
+
+        .refresh-button {
+            width: 40px;
+            min-width: 40px;
+            min-height: 40px;
         }
 
         .button:disabled {
@@ -83,18 +265,69 @@
             opacity: 0.45;
         }
 
+        .button:focus-visible,
+        .choice:focus-visible,
+        .sort-header:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        select:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .toolbar-actions {
+            grid-area: actions;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
         .toolbar {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-areas:
+                "controls actions"
+                "meta meta";
+            align-items: center;
+            column-gap: 16px;
+            row-gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .toolbar-meta {
+            grid-area: meta;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            margin-bottom: 16px;
+            min-width: 0;
+        }
+
+        .toolbar-controls {
+            grid-area: controls;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        .toolbar-create {
+            min-width: 82px;
         }
 
         .status {
-            min-height: 24px;
+            min-height: 18px;
             color: var(--muted);
-            font-size: 14px;
+            font-size: var(--type-caption-size);
+            line-height: var(--type-caption-line);
+            text-align: right;
+        }
+
+        .summary {
+            color: var(--muted);
+            font-size: var(--type-caption-size);
+            line-height: var(--type-caption-line);
+            min-width: 0;
         }
 
         .status.success {
@@ -111,7 +344,82 @@
 
         .persona-list {
             display: grid;
-            gap: 12px;
+            gap: 10px;
+        }
+
+        .persona-list-header,
+        .persona-main {
+            display: grid;
+            grid-template-columns: var(--persona-grid-columns);
+            align-items: center;
+            column-gap: var(--persona-grid-gap);
+        }
+
+        .persona-list-header {
+            padding: 0 17px 4px;
+            color: var(--muted);
+            font-size: var(--type-micro-size);
+            line-height: var(--type-micro-line);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .persona-list-header > *,
+        .persona-main > * {
+            min-width: 0;
+        }
+
+        .column-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 24px;
+            min-width: 0;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .column-header:first-child,
+        .column-header:nth-child(2) {
+            justify-content: flex-start;
+            text-align: left;
+        }
+
+        .sort-header {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            width: 100%;
+            min-height: 24px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: inherit;
+            padding: 0;
+            font: inherit;
+            font-weight: inherit;
+            cursor: pointer;
+        }
+
+        .column-header:first-child .sort-header,
+        .column-header:nth-child(2) .sort-header {
+            justify-content: flex-start;
+        }
+
+        .sort-header:hover,
+        .sort-header.active {
+            color: var(--text);
+        }
+
+        .sort-arrow {
+            display: inline-block;
+            width: 10px;
+            color: var(--primary);
+            text-align: center;
+        }
+
+        .sort-header:not(.active) .sort-arrow {
+            opacity: 0;
         }
 
         .persona-row {
@@ -122,33 +430,148 @@
         }
 
         .persona-main {
-            display: grid;
-            grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(120px, max-content)) auto;
-            align-items: center;
-            gap: 12px;
             padding: 14px 16px;
         }
 
+        .persona-main > .button {
+            justify-self: stretch;
+            min-width: 0;
+            padding-inline: 10px;
+        }
+
         .persona-key {
-            font-weight: 700;
+            font-size: var(--type-body-size);
+            line-height: var(--type-body-line);
+            font-weight: var(--font-weight-bold);
+            overflow-wrap: anywhere;
+        }
+
+        .nickname {
+            color: #cdd6e4;
+            font-size: var(--type-body-size);
+            line-height: var(--type-body-line);
+            font-weight: var(--font-weight-medium);
+            overflow-wrap: anywhere;
+        }
+
+        .field-label-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .label-meta {
+            color: #b5c0cf;
+            font-size: var(--type-micro-size);
+            line-height: var(--type-micro-line);
+            font-weight: var(--font-weight-bold);
+            white-space: nowrap;
         }
 
         .cell {
             color: var(--muted);
-            font-size: 14px;
+            font-size: var(--type-body-size);
+            line-height: var(--type-body-line);
             white-space: nowrap;
+        }
+
+        .data-cell {
+            justify-self: center;
+            text-align: center;
+            color: #b8c2d0;
+            font-size: var(--type-body-size);
+            line-height: var(--type-body-line);
+            font-weight: var(--font-weight-medium);
+            white-space: nowrap;
+        }
+
+        .strong-cell {
+            justify-self: start;
+            text-align: left;
+            color: #dce5f0;
+            font-weight: var(--font-weight-bold);
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .created-at-cell {
+            color: #aeb8c6;
+        }
+
+        .empty-cell {
+            grid-column: 1 / -1;
+        }
+
+        .meta-cell {
+            display: grid;
+            justify-self: center;
+            gap: 2px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .meta-cell span {
+            color: var(--muted);
+            font-size: var(--type-micro-size);
+            line-height: var(--type-micro-line);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .meta-cell strong {
+            color: var(--text);
+            font-size: var(--type-caption-size);
+            line-height: var(--type-caption-line);
+            font-weight: var(--font-weight-semibold);
         }
 
         .badge {
             display: inline-flex;
             align-items: center;
+            justify-self: center;
+            max-width: 100%;
             min-height: 26px;
+            border: 1px solid var(--badge-border, transparent);
             border-radius: 999px;
-            background: #eef4ff;
-            color: #1849a9;
+            background: var(--badge-bg, var(--primary-soft));
+            color: var(--badge-text, var(--primary));
             padding: 3px 9px;
-            font-size: 13px;
-            font-weight: 600;
+            font-size: var(--type-caption-size);
+            line-height: var(--type-caption-line);
+            font-weight: var(--font-weight-semibold);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .template-badge--consumer-positive {
+            --badge-bg: rgba(142, 232, 216, 0.13);
+            --badge-border: rgba(142, 232, 216, 0.32);
+            --badge-text: #9ff0e1;
+        }
+
+        .template-badge--consumer-negative {
+            --badge-bg: rgba(255, 177, 153, 0.12);
+            --badge-border: rgba(255, 177, 153, 0.34);
+            --badge-text: #ffc0ad;
+        }
+
+        .template-badge--instructor-pending {
+            --badge-bg: rgba(247, 215, 122, 0.12);
+            --badge-border: rgba(247, 215, 122, 0.32);
+            --badge-text: #f6d982;
+        }
+
+        .template-badge--instructor-positive {
+            --badge-bg: linear-gradient(135deg, rgba(142, 232, 216, 0.11), rgba(122, 162, 255, 0.11));
+            --badge-border: rgba(122, 162, 255, 0.34);
+            --badge-text: #b9e7e6;
+        }
+
+        .template-badge--neutral {
+            --badge-bg: rgba(154, 164, 178, 0.12);
+            --badge-border: rgba(154, 164, 178, 0.28);
+            --badge-text: #c6ced8;
         }
 
         .token-panel {
@@ -156,7 +579,11 @@
             gap: 10px;
             padding: 14px 16px 16px;
             border-top: 1px solid var(--line);
-            background: #fbfcfe;
+            background: var(--surface-raised);
+        }
+
+        .token-panel[hidden] {
+            display: none;
         }
 
         .token-field {
@@ -169,8 +596,34 @@
         .token-field label {
             padding-top: 8px;
             color: var(--muted);
-            font-size: 14px;
-            font-weight: 600;
+            font-size: var(--type-body-size);
+            line-height: var(--type-body-line);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .token-field .button {
+            min-width: 82px;
+        }
+
+        .modal .token-panel {
+            gap: 6px;
+            padding: 8px 10px 10px;
+        }
+
+        .modal .token-field {
+            grid-template-columns: 104px 1fr auto;
+            gap: 8px;
+        }
+
+        .modal .token-field label {
+            padding-top: 6px;
+            font-size: var(--type-caption-size);
+            line-height: var(--type-caption-line);
+        }
+
+        .modal .token-field textarea {
+            min-height: 40px;
+            padding: 7px 8px;
         }
 
         textarea {
@@ -181,23 +634,31 @@
             border-radius: 8px;
             padding: 10px;
             color: var(--text);
-            background: #ffffff;
+            background: #0f141b;
         }
 
         dialog {
-            width: min(640px, calc(100vw - 32px));
+            width: min(760px, calc(100vw - 32px));
             border: 0;
             border-radius: 8px;
             padding: 0;
             box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+            background: transparent;
+            color: var(--text);
         }
 
         dialog::backdrop {
-            background: rgba(15, 23, 42, 0.44);
+            background: rgba(5, 10, 18, 0.72);
         }
 
         .modal {
-            padding: 20px;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background:
+                linear-gradient(145deg, rgba(142, 232, 216, 0.08), transparent 34%),
+                linear-gradient(315deg, rgba(255, 177, 153, 0.08), transparent 36%),
+                var(--surface);
         }
 
         .modal-header {
@@ -205,17 +666,24 @@
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 10px;
         }
 
         .modal-title {
             margin: 0;
-            font-size: 18px;
+            font-size: var(--type-modal-title-size);
+            line-height: var(--type-modal-title-line);
+            font-weight: var(--font-weight-semibold);
         }
 
         .form-grid {
             display: grid;
-            gap: 14px;
+            gap: 9px;
+        }
+
+        #modalTokenPanel:empty,
+        #modalStatus:empty {
+            display: none;
         }
 
         .field {
@@ -223,10 +691,35 @@
             gap: 6px;
         }
 
+        .field[hidden] {
+            display: none;
+        }
+
         .field label {
             color: var(--muted);
-            font-size: 14px;
-            font-weight: 600;
+            font-size: var(--type-caption-size);
+            line-height: var(--type-caption-line);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .field-help {
+            margin: -2px 0 0;
+            color: var(--muted);
+            font-size: var(--type-caption-size);
+            line-height: var(--type-caption-line);
+        }
+
+        .field-help-inline {
+            margin-left: auto;
+            min-width: 0;
+            overflow: hidden;
+            color: var(--muted);
+            font-size: var(--type-micro-size);
+            line-height: var(--type-micro-line);
+            font-weight: var(--font-weight-medium);
+            text-align: right;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         input {
@@ -234,34 +727,305 @@
             border: 1px solid var(--line);
             border-radius: 8px;
             padding: 8px 10px;
+            color: var(--text);
+            background: #0f141b;
+            font-size: var(--type-control-size);
+            line-height: var(--type-control-line);
+        }
+
+        select {
+            min-height: 40px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 34px 8px 10px;
+            color: var(--text);
+            background: var(--surface);
+            font-size: var(--type-control-size);
+            line-height: var(--type-control-line);
         }
 
         .choice-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        #roleChoices {
+            gap: 12px;
+        }
+
+        #templateChoices {
+            gap: 10px;
         }
 
         .choice {
+            position: relative;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: center;
+            gap: 12px;
+            min-height: 96px;
             border: 1px solid var(--line);
             border-radius: 8px;
-            background: var(--surface);
-            padding: 9px 12px;
+            background:
+                linear-gradient(135deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.008)),
+                var(--surface);
+            color: var(--text);
+            padding: 14px;
+            font-size: var(--type-control-size);
+            line-height: var(--type-control-line);
+            font-weight: var(--font-weight-medium);
             cursor: pointer;
+            text-align: left;
+            overflow: hidden;
+            transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+        }
+
+        .choice:hover {
+            border-color: rgba(122, 162, 255, 0.54);
+            transform: translateY(-1px);
+        }
+
+        .choice:focus-visible {
+            outline: 2px solid rgba(122, 162, 255, 0.72);
+            outline-offset: 2px;
         }
 
         .choice.selected {
             border-color: var(--primary);
-            background: #eef4ff;
-            color: #1849a9;
-            font-weight: 700;
+            background:
+                linear-gradient(135deg, rgba(122, 162, 255, 0.16), rgba(142, 232, 216, 0.06)),
+                var(--surface-raised);
+            color: var(--primary);
+            font-weight: var(--font-weight-bold);
+            box-shadow: inset 0 0 0 1px rgba(122, 162, 255, 0.28);
+        }
+
+        .role-card {
+            grid-template-columns: 1fr;
+            justify-items: center;
+            align-content: center;
+            gap: 6px;
+            min-height: 132px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .status-card {
+            min-height: 94px;
+        }
+
+        .choice-visual {
+            position: relative;
+            display: grid;
+            place-items: center;
+            width: 96px;
+            height: 76px;
+            border-radius: 999px;
+            background: radial-gradient(circle at 50% 42%, rgba(248, 251, 255, 0.16), rgba(206, 218, 229, 0.08) 58%, rgba(125, 183, 217, 0.03) 78%, transparent 82%);
+            overflow: visible;
+        }
+
+        .role-card .choice-visual {
+            width: min(80px, 100%);
+            height: 60px;
+            border-radius: 0;
+            background: transparent;
+            overflow: visible;
+        }
+
+        .role-card .choice-visual::before {
+            position: absolute;
+            inset: 4% -8% -8%;
+            border-radius: 999px;
+            background: radial-gradient(circle at 50% 45%, rgba(248, 251, 255, 0.24), rgba(214, 224, 234, 0.15) 58%, rgba(125, 183, 217, 0.04) 78%, transparent 84%);
+            content: "";
+        }
+
+        .role-card .choice-svg {
+            transform: scale(1.22);
+            transform-origin: center;
+        }
+
+        .status-card .choice-visual {
+            width: 60px;
+            height: 48px;
+        }
+
+        .status-card .choice-svg {
+            transform: scale(1.22);
+            transform-origin: center;
+        }
+
+        .illustration-symbols {
+            position: absolute;
+            width: 0;
+            height: 0;
+            overflow: hidden;
+        }
+
+        .choice-svg {
+            position: relative;
+            z-index: 1;
+            display: block;
+            width: 100%;
+            height: 100%;
+            --ill-snow: #f8fbff;
+            --ill-ice: #e7f3ff;
+            --ill-mist: #d8eaf7;
+            --ill-frost: #bfd7ea;
+            --ill-slate: #334155;
+            --ill-soft-navy: #1e3a5f;
+            --ill-penguin: #2f3a4a;
+            --ill-bear: #f5f8fa;
+            --ill-seal: #c8d3dc;
+            --ill-accent: #7db7d9;
+            --ill-accent-soft: rgba(125, 183, 217, 0.2);
+            --ill-accent-strong: #7db7d9;
+            --ill-accent-mint: #a8dad6;
+            --ill-accent-blush: #ffb4a2;
+            --ill-accent-sun: #ffd166;
+        }
+
+        .choice-svg.student-svg {
+            --ill-accent: #a8dad6;
+            --ill-accent-soft: rgba(168, 218, 214, 0.22);
+            --ill-accent-strong: #7db7d9;
+        }
+
+        .choice-svg.instructor-svg {
+            --ill-accent: #7db7d9;
+            --ill-accent-soft: rgba(125, 183, 217, 0.2);
+            --ill-accent-strong: #ffd166;
+        }
+
+        .choice-svg.status-active-svg {
+            --ill-accent: #a8dad6;
+            --ill-accent-soft: rgba(168, 218, 214, 0.2);
+            --ill-accent-strong: #7db7d9;
+        }
+
+        .choice-svg.status-suspended-svg {
+            --ill-accent: #ffb4a2;
+            --ill-accent-soft: rgba(255, 180, 162, 0.18);
+            --ill-accent-strong: #7db7d9;
+        }
+
+        .choice-svg.status-pending-svg {
+            --ill-accent: #ffd166;
+            --ill-accent-soft: rgba(255, 209, 102, 0.18);
+            --ill-accent-strong: #7db7d9;
+        }
+
+        .choice-svg.status-approved-svg {
+            --ill-accent: #a8dad6;
+            --ill-accent-soft: rgba(168, 218, 214, 0.22);
+            --ill-accent-strong: #7db7d9;
+        }
+
+        .choice-body {
+            display: grid;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .role-card .choice-body {
+            justify-items: center;
+            gap: 7px;
+            max-width: 270px;
+        }
+
+        .choice-title {
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.25;
+            font-weight: 800;
+        }
+
+        .role-card .choice-title {
+            font-size: 17px;
+            line-height: 1.3;
+        }
+
+        .choice-help {
+            color: var(--muted);
+            font-size: var(--type-micro-size);
+            line-height: 1.42;
+            font-weight: var(--font-weight-medium);
+        }
+
+        .role-card .choice-help {
+            font-size: var(--type-caption-size);
+            line-height: 1.45;
+        }
+
+        .choice-code {
+            color: var(--muted);
+            font-size: var(--type-micro-size);
+            line-height: var(--type-micro-line);
+            font-weight: var(--font-weight-semibold);
+            letter-spacing: 0;
+        }
+
+        .choice-check {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: grid;
+            place-items: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            background: rgba(122, 162, 255, 0.2);
+            color: var(--primary);
+            opacity: 0;
+            transform: scale(0.86);
+            transition: opacity 140ms ease, transform 140ms ease;
+        }
+
+        .choice.selected .choice-check {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .choice-check svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .segmented {
+            display: inline-flex;
+            gap: 2px;
+            padding: 3px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #111821;
+        }
+
+        .segmented button {
+            min-height: 34px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--muted);
+            padding: 6px 10px;
+            font-size: var(--type-control-size);
+            line-height: var(--type-control-line);
+            font-weight: var(--font-weight-medium);
+            cursor: pointer;
+        }
+
+        .segmented button.selected {
+            background: var(--surface-raised);
+            color: var(--text);
+            box-shadow: inset 0 0 0 1px var(--line);
         }
 
         .modal-actions {
             display: flex;
             justify-content: flex-end;
             gap: 8px;
-            margin-top: 18px;
+            margin-top: 10px;
         }
 
         @media (max-width: 860px) {
@@ -270,55 +1034,363 @@
                 padding: 16px;
             }
 
+            header {
+                align-items: flex-start;
+                flex-wrap: wrap;
+            }
+
+            header .button {
+                width: 100%;
+            }
+
+            .persona-list-header {
+                display: none;
+            }
+
             .persona-main {
                 grid-template-columns: 1fr;
                 align-items: stretch;
             }
 
+            .persona-main > .button {
+                justify-self: stretch;
+            }
+
+            .toolbar {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "controls"
+                    "actions"
+                    "meta";
+            }
+
+            .toolbar-controls,
+            .toolbar-meta,
+            .toolbar-actions {
+                width: 100%;
+            }
+
+            .toolbar-meta {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .status {
+                text-align: left;
+            }
+
+            .toolbar-create {
+                flex: 1;
+            }
+
+            .segmented {
+                min-width: 0;
+                width: 100%;
+            }
+
+            .segmented button {
+                flex: 1;
+                min-width: 0;
+            }
+
             .token-field {
                 grid-template-columns: 1fr;
+            }
+
+            .choice-row {
+                grid-template-columns: 1fr;
+            }
+
+            .role-card {
+                min-height: 124px;
+                padding: 10px;
+                gap: 6px;
+            }
+
+            .role-card .choice-visual {
+                width: 74px;
+                height: 56px;
+            }
+
+            .role-card .choice-title {
+                font-size: 16px;
             }
         }
     </style>
 </head>
 <body>
+<!-- Arctic Ski Lodge Console inline SVG system. -->
+<svg class="illustration-symbols" aria-hidden="true" focusable="false">
+    <symbol id="illustration-instructor" viewBox="0 0 160 120">
+        <g id="instructor-snow-base">
+            <path d="M31 92c17-9 79-10 99 0-17 9-81 10-99 0Z" fill="var(--ill-ice)"/>
+        </g>
+        <g id="instructor-bear" fill="var(--ill-bear)" stroke="var(--ill-frost)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="78" cy="69" rx="31" ry="25"/>
+            <circle cx="78" cy="45" r="22"/>
+            <circle cx="61" cy="34" r="8"/>
+            <circle cx="95" cy="34" r="8"/>
+            <ellipse cx="50" cy="72" rx="10" ry="13" transform="rotate(18 50 72)"/>
+            <ellipse cx="106" cy="72" rx="10" ry="13" transform="rotate(-18 106 72)"/>
+        </g>
+        <g id="instructor-face">
+            <circle cx="70" cy="45" r="2" fill="var(--ill-slate)"/>
+            <circle cx="86" cy="45" r="2" fill="var(--ill-slate)"/>
+            <ellipse cx="78" cy="53" rx="4.8" ry="3.5" fill="var(--ill-slate)"/>
+            <path d="M75 59c2.2 1.8 4.4 1.8 6.6 0" fill="none" stroke="var(--ill-slate)" stroke-width="1.8" stroke-linecap="round"/>
+        </g>
+        <g id="instructor-guide-symbol" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M116 33 104 91" stroke="var(--ill-accent-strong)" stroke-width="3"/>
+            <path d="M111 35h18l-6 9h-14Z" fill="var(--ill-accent-soft)" stroke="var(--ill-accent-strong)" stroke-width="2"/>
+        </g>
+    </symbol>
+    <symbol id="illustration-student" viewBox="0 0 160 120">
+        <g id="student-ski-track">
+            <path d="M40 96c24 7 57 7 82-1" fill="none" stroke="var(--ill-accent)" stroke-width="3" stroke-linecap="round"/>
+        </g>
+        <g id="student-penguin">
+            <ellipse cx="80" cy="66" rx="29" ry="33" fill="var(--ill-penguin)"/>
+            <circle cx="80" cy="40" r="20" fill="var(--ill-penguin)"/>
+            <ellipse cx="80" cy="69" rx="17" ry="23" fill="var(--ill-snow)"/>
+            <ellipse cx="56" cy="68" rx="9" ry="18" fill="var(--ill-penguin)" transform="rotate(17 56 68)"/>
+            <ellipse cx="104" cy="68" rx="9" ry="18" fill="var(--ill-penguin)" transform="rotate(-17 104 68)"/>
+            <circle cx="72" cy="39" r="2.2" fill="var(--ill-snow)"/>
+            <circle cx="88" cy="39" r="2.2" fill="var(--ill-snow)"/>
+            <path d="M80 47.5 74.2 51.2 80 54.5 85.8 51.2Z" fill="var(--ill-accent-blush)"/>
+            <ellipse cx="68" cy="91" rx="6" ry="3.4" fill="var(--ill-accent-blush)"/>
+            <ellipse cx="92" cy="91" rx="6" ry="3.4" fill="var(--ill-accent-blush)"/>
+            <path d="M53 95c9 2.2 20 2.2 31 0M76 95c10 2.2 22 2.2 32 0" fill="none" stroke="var(--ill-accent-strong)" stroke-width="2.8" stroke-linecap="round"/>
+        </g>
+        <g id="student-sparkle" stroke="var(--ill-accent-strong)" stroke-width="2" stroke-linecap="round">
+            <path d="M114 40v8M110 44h8"/>
+        </g>
+    </symbol>
+    <symbol id="illustration-instructor-pending" viewBox="0 0 160 120">
+        <g id="pending-snow-base">
+            <path d="M37 92c16-7 69-8 88 0-18 8-70 8-88 0Z" fill="var(--ill-ice)"/>
+        </g>
+        <g id="pending-fox">
+            <ellipse cx="78" cy="69" rx="27" ry="22" fill="var(--ill-accent-blush)"/>
+            <path d="M54 47 64 25l11 18c-7 1-14 2-21 4Z" fill="var(--ill-accent-blush)"/>
+            <path d="M103 47 93 25 82 43c7 1 14 2 21 4Z" fill="var(--ill-accent-blush)"/>
+            <circle cx="78" cy="50" r="24" fill="var(--ill-accent-blush)"/>
+            <path d="M55 50c10 21 35 21 46 0-8 7-38 7-46 0Z" fill="var(--ill-snow)"/>
+            <ellipse cx="112" cy="72" rx="15" ry="30" fill="var(--ill-accent-blush)" transform="rotate(-58 112 72)"/>
+            <ellipse cx="122" cy="62" rx="7" ry="13" fill="var(--ill-snow)" transform="rotate(-58 122 62)"/>
+            <circle cx="70" cy="47" r="2" fill="var(--ill-slate)"/>
+            <circle cx="86" cy="47" r="2" fill="var(--ill-slate)"/>
+            <ellipse cx="78" cy="55" rx="4.4" ry="3" fill="var(--ill-slate)"/>
+        </g>
+        <g id="pending-clock-badge">
+            <circle cx="116" cy="36" r="13" fill="var(--ill-ice)" stroke="var(--ill-accent-strong)" stroke-width="2.4"/>
+            <path d="M116 29v7l5 3" fill="none" stroke="var(--ill-soft-navy)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+    </symbol>
+    <symbol id="illustration-instructor-approved" viewBox="0 0 160 120">
+        <g id="approved-soft-blob">
+            <circle cx="78" cy="62" r="43" fill="var(--ill-ice)"/>
+        </g>
+        <g id="approved-bear" fill="var(--ill-bear)" stroke="var(--ill-frost)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="77" cy="72" rx="29" ry="23"/>
+            <circle cx="77" cy="49" r="21"/>
+            <circle cx="61" cy="38" r="7.5"/>
+            <circle cx="93" cy="38" r="7.5"/>
+            <ellipse cx="51" cy="74" rx="9" ry="12" transform="rotate(18 51 74)"/>
+            <ellipse cx="103" cy="74" rx="9" ry="12" transform="rotate(-18 103 74)"/>
+        </g>
+        <g id="approved-face">
+            <circle cx="70" cy="49" r="2" fill="var(--ill-slate)"/>
+            <circle cx="84" cy="49" r="2" fill="var(--ill-slate)"/>
+            <ellipse cx="77" cy="57" rx="4.5" ry="3.2" fill="var(--ill-slate)"/>
+            <path d="M74 63c2 1.6 4.1 1.6 6.2 0" fill="none" stroke="var(--ill-slate)" stroke-width="1.8" stroke-linecap="round"/>
+        </g>
+        <g id="approved-check-badge">
+            <circle cx="116" cy="40" r="14" fill="var(--ill-accent-soft)" stroke="var(--ill-accent-strong)" stroke-width="2.3"/>
+            <path d="M110 40.5 115 45l9-10" fill="none" stroke="var(--ill-soft-navy)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+    </symbol>
+    <symbol id="illustration-student-suspended" viewBox="0 0 160 120">
+        <g id="suspended-snow-barrier">
+            <path d="M38 94h84" fill="none" stroke="var(--ill-frost)" stroke-width="4" stroke-linecap="round"/>
+        </g>
+        <g id="suspended-seal">
+            <ellipse cx="77" cy="72" rx="36" ry="22" fill="var(--ill-seal)"/>
+            <circle cx="55" cy="60" r="18" fill="var(--ill-seal)"/>
+            <ellipse cx="104" cy="79" rx="17" ry="9" fill="var(--ill-seal)" transform="rotate(-12 104 79)"/>
+            <ellipse cx="73" cy="87" rx="14" ry="6" fill="var(--ill-mist)" transform="rotate(-16 73 87)"/>
+            <circle cx="49" cy="57" r="2" fill="var(--ill-slate)"/>
+            <circle cx="61" cy="57" r="2" fill="var(--ill-slate)"/>
+            <ellipse cx="55" cy="64" rx="4" ry="2.7" fill="var(--ill-slate)"/>
+            <path d="M51 70c2.6 1.7 5.3 1.7 8 0" fill="none" stroke="var(--ill-slate)" stroke-width="1.8" stroke-linecap="round"/>
+        </g>
+        <g id="suspended-pause-badge">
+            <circle cx="116" cy="39" r="14" fill="var(--ill-ice)" stroke="var(--ill-accent-strong)" stroke-width="2.3"/>
+            <path d="M112 34v10M120 34v10" stroke="var(--ill-soft-navy)" stroke-width="3" stroke-linecap="round"/>
+        </g>
+    </symbol>
+    <symbol id="illustration-bg-penguin-play" viewBox="0 0 180 120">
+        <g id="background-penguin-track">
+            <path d="M20 94c31 12 73 11 126-3" fill="none" stroke="var(--ill-accent-mint)" stroke-width="4" stroke-linecap="round"/>
+            <path d="M42 100c25 7 63 6 104-5" fill="none" stroke="var(--ill-ice)" stroke-width="3" stroke-linecap="round"/>
+        </g>
+        <g id="background-penguin-mascot">
+            <ellipse cx="80" cy="68" rx="25" ry="29" fill="var(--ill-penguin)"/>
+            <circle cx="80" cy="44" r="17" fill="var(--ill-penguin)"/>
+            <ellipse cx="80" cy="70" rx="14" ry="19" fill="var(--ill-snow)"/>
+            <ellipse cx="61" cy="70" rx="7" ry="14" fill="var(--ill-penguin)" transform="rotate(18 61 70)"/>
+            <ellipse cx="99" cy="70" rx="7" ry="14" fill="var(--ill-penguin)" transform="rotate(-18 99 70)"/>
+            <circle cx="73" cy="43" r="2" fill="var(--ill-snow)"/>
+            <circle cx="87" cy="43" r="2" fill="var(--ill-snow)"/>
+            <path d="M80 50 75 53l5 3 5-3Z" fill="var(--ill-accent-blush)"/>
+            <ellipse cx="69" cy="92" rx="6" ry="3" fill="var(--ill-accent-blush)"/>
+            <ellipse cx="91" cy="92" rx="6" ry="3" fill="var(--ill-accent-blush)"/>
+        </g>
+        <g id="background-penguin-spark" stroke="var(--ill-accent-sun)" stroke-width="2" stroke-linecap="round">
+            <path d="M121 43v7M117.5 46.5h7"/>
+        </g>
+    </symbol>
+    <symbol id="illustration-bg-bear-guide" viewBox="0 0 180 120">
+        <g id="background-bear-snow">
+            <path d="M38 96c22-10 82-11 111 0H38Z" fill="var(--ill-ice)"/>
+        </g>
+        <g id="background-bear-mascot" fill="var(--ill-bear)" stroke="var(--ill-frost)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="82" cy="73" rx="29" ry="23"/>
+            <circle cx="82" cy="51" r="20"/>
+            <circle cx="67" cy="40" r="7"/>
+            <circle cx="97" cy="40" r="7"/>
+            <ellipse cx="57" cy="76" rx="8" ry="11" transform="rotate(18 57 76)"/>
+            <ellipse cx="107" cy="76" rx="8" ry="11" transform="rotate(-18 107 76)"/>
+        </g>
+        <g id="background-bear-face">
+            <circle cx="75" cy="51" r="2" fill="var(--ill-slate)"/>
+            <circle cx="89" cy="51" r="2" fill="var(--ill-slate)"/>
+            <ellipse cx="82" cy="58" rx="4.2" ry="3" fill="var(--ill-slate)"/>
+            <path d="M79 64c2 1.4 4 1.4 6 0" fill="none" stroke="var(--ill-slate)" stroke-width="1.6" stroke-linecap="round"/>
+        </g>
+        <g id="background-bear-pole" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M123 37 112 93" fill="none" stroke="var(--ill-accent-sun)" stroke-width="3"/>
+            <path d="M118 40h17l-6 8h-13Z" fill="var(--ill-ice)" stroke="var(--ill-accent-sky)" stroke-width="2"/>
+        </g>
+    </symbol>
+    <symbol id="illustration-bg-fox-peek" viewBox="0 0 160 120">
+        <g id="background-fox-snow">
+            <path d="M28 96c21-11 82-12 104 0H28Z" fill="var(--ill-ice)"/>
+        </g>
+        <g id="background-fox-mascot">
+            <path d="M58 61 66 40l12 17c-7 1-14 2-20 4Z" fill="var(--ill-accent-blush)"/>
+            <path d="M103 61 94 40 83 57c7 1 14 2 20 4Z" fill="var(--ill-accent-blush)"/>
+            <circle cx="80" cy="66" r="24" fill="var(--ill-accent-blush)"/>
+            <path d="M58 67c10 17 34 17 44 0-10 6-34 6-44 0Z" fill="var(--ill-snow)"/>
+            <circle cx="72" cy="63" r="2" fill="var(--ill-slate)"/>
+            <circle cx="88" cy="63" r="2" fill="var(--ill-slate)"/>
+            <ellipse cx="80" cy="70" rx="4" ry="2.8" fill="var(--ill-slate)"/>
+        </g>
+        <g id="background-fox-track">
+            <path d="M104 93c14-4 26-4 38 1" fill="none" stroke="var(--ill-accent-sky)" stroke-width="3" stroke-linecap="round"/>
+        </g>
+    </symbol>
+    <symbol id="illustration-bg-seal-peek" viewBox="0 0 160 120">
+        <g id="background-seal-peek">
+            <path d="M26 97c20-13 82-14 108 0H26Z" fill="var(--ill-ice)"/>
+            <ellipse cx="81" cy="74" rx="35" ry="21" fill="var(--ill-seal)"/>
+            <circle cx="60" cy="63" r="17" fill="var(--ill-seal)"/>
+            <circle cx="54" cy="60" r="2" fill="var(--ill-slate)"/>
+            <circle cx="66" cy="60" r="2" fill="var(--ill-slate)"/>
+            <ellipse cx="60" cy="67" rx="4" ry="2.8" fill="var(--ill-slate)"/>
+            <path d="M73 83c11 3 23 3 36 0" fill="none" stroke="var(--ill-mist)" stroke-width="4" stroke-linecap="round"/>
+        </g>
+    </symbol>
+</svg>
+<div class="snowfield-backdrop" aria-hidden="true">
+    <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+        <path class="backdrop-hill" d="M0 746c180-57 359-57 538 0 161 51 335 50 522-4 166-48 293-42 380 16v142H0Z"/>
+        <path class="backdrop-hill" d="M1084 132c114-30 232-22 356 24V0h-356Z"/>
+        <path class="backdrop-track" d="M1264 190c-54 48-54 96 0 144s54 96 2 144"/>
+        <path class="backdrop-track" d="M1326 190c-50 48-50 95 2 142s51 94 0 142"/>
+        <path class="backdrop-track" d="M72 818c119-55 240-55 362 0 117 53 239 52 366-2"/>
+        <circle class="backdrop-dot" cx="124" cy="186" r="2.5"/>
+        <circle class="backdrop-dot" cx="204" cy="254" r="1.8"/>
+        <circle class="backdrop-dot" cx="333" cy="147" r="2.2"/>
+        <circle class="backdrop-dot" cx="934" cy="232" r="1.8"/>
+        <circle class="backdrop-dot" cx="1214" cy="570" r="2.4"/>
+        <circle class="backdrop-dot" cx="1326" cy="628" r="1.8"/>
+        <use class="backdrop-playmate backdrop-primary" href="#illustration-bg-penguin-play" x="26" y="690" width="190" height="126"/>
+        <use class="backdrop-playmate" href="#illustration-bg-seal-peek" x="166" y="736" width="148" height="111"/>
+        <use class="backdrop-playmate" href="#illustration-bg-fox-peek" x="1300" y="126" width="132" height="99"/>
+        <use class="backdrop-playmate backdrop-faint" href="#illustration-bg-bear-guide" x="1126" y="672" width="184" height="123"/>
+    </svg>
+</div>
 <header>
-    <h1>SSING Dev Auth Console</h1>
-    <button class="button primary" id="openCreateModal">유저 생성</button>
+    <div class="brand-lockup">
+        <svg class="ssing-brand" data-node-id="273:2055" viewBox="0 0 167.15 125.969" role="img" aria-label="SSING" focusable="false">
+            <path d="M69.5152 0.0796113C74.9546 -1.77272 118.099 29.2313 125.503 37.5591C132.906 45.8872 136.607 61.8414 126.89 69.023C116.248 76.8882 106.34 72.0164 89.8736 65.3208L99.6636 90.6861L119.03 104.952C124.207 108.765 125.313 116.053 121.5 121.23C117.686 126.407 110.397 127.513 105.22 123.7L4.73884 49.687C-0.438354 45.8736 -1.5443 38.5849 2.26911 33.4077C6.08252 28.2306 13.3712 27.1246 18.5484 30.938L35.1451 43.1626C32.8573 35.9301 32.4514 32.1907 37.1256 28.3042C46.9695 22.5445 68.7621 32.3985 94.5006 39.4097C76.681 19.7301 63.3769 2.17411 69.5152 0.0796113ZM150.955 22.7495C159.899 22.7497 167.15 30 167.15 38.9439C167.15 47.8879 159.899 55.139 150.955 55.1392C142.011 55.1391 134.76 47.8879 134.76 38.9439C134.76 29.9999 142.011 22.7496 150.955 22.7495Z"/>
+        </svg>
+        <h1>SSING Dev Auth Console</h1>
+    </div>
 </header>
 <main>
-    <div class="toolbar">
-        <div class="status" id="status"></div>
-        <button class="button" id="refreshPersonas">새로고침</button>
-    </div>
-    <section class="persona-list" id="personaList"></section>
+    <section class="console-panel">
+        <div class="toolbar">
+            <div class="toolbar-actions">
+                <button class="button icon-button refresh-button" id="refreshPersonas" type="button" aria-label="새로고침">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M19 8a7 7 0 1 0 1 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M19 4v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <button class="button primary toolbar-create" id="openCreateModal" type="button">유저 생성</button>
+            </div>
+            <div class="toolbar-controls">
+                <div class="segmented" aria-label="구분 필터">
+                    <button class="selected" type="button" data-role-filter="all">전체</button>
+                    <button type="button" data-role-filter="CONSUMER">강습생</button>
+                    <button type="button" data-role-filter="INSTRUCTOR">강사</button>
+                </div>
+            </div>
+            <div class="toolbar-meta">
+                <div class="summary" id="summary"></div>
+                <div class="status" id="status"></div>
+            </div>
+        </div>
+        <section class="persona-list" id="personaList"></section>
+    </section>
 </main>
 
 <dialog id="createDialog">
     <form class="modal" method="dialog" id="createForm">
         <div class="modal-header">
             <h2 class="modal-title">유저 생성</h2>
-            <button class="button" type="button" id="closeCreateModal">닫기</button>
+            <button class="button icon-button modal-close" type="button" id="closeCreateModal" aria-label="닫기">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
         </div>
         <div class="form-grid">
             <div class="field">
-                <label for="personaKey">personaKey</label>
-                <input id="personaKey" name="personaKey" autocomplete="off" required>
+                <div class="field-label-row">
+                    <label for="personaKey">페르소나 키</label>
+                    <span class="label-meta">토큰 식별자</span>
+                    <span class="field-help-inline" id="personaKeyHelp">토큰 발급 요청에서 개발용 유저를 구분하는 고유 키입니다.</span>
+                </div>
+                <input id="personaKey" name="personaKey" autocomplete="off" placeholder="예: consumer-matching-A" aria-describedby="personaKeyHelp" required>
             </div>
             <div class="field">
-                <label for="nickname">nickname</label>
-                <input id="nickname" name="nickname" autocomplete="off" required>
+                <div class="field-label-row">
+                    <label for="nickname">닉네임</label>
+                    <span class="label-meta">사용자 표시 이름</span>
+                    <span class="field-help-inline" id="nicknameHelp">앱 화면과 인증 응답에서 사람이 알아볼 표시 이름입니다.</span>
+                </div>
+                <input id="nickname" name="nickname" autocomplete="off" placeholder="예: 매칭 강습생 A" aria-describedby="nicknameHelp" required>
             </div>
             <div class="field">
                 <label>구분</label>
-                <div class="choice-row" id="roleChoices">
-                    <button class="choice" type="button" data-role-choice="consumer">소비자</button>
-                    <button class="choice" type="button" data-role-choice="instructor">강사</button>
-                </div>
+                <div class="choice-row" id="roleChoices" role="radiogroup" aria-label="유저 구분"></div>
             </div>
             <div class="field" id="templateField" hidden>
                 <label>상태</label>
-                <div class="choice-row" id="templateChoices"></div>
+                <div class="choice-row status-choice-row" id="templateChoices" role="radiogroup" aria-label="유저 상태"></div>
             </div>
             <div id="modalTokenPanel"></div>
             <div class="status" id="modalStatus"></div>
@@ -332,8 +1404,8 @@
 <script>
     const templatesByRole = {
         consumer: [
-            ["GENERAL_CONSUMER", "일반 소비자"],
-            ["SUSPENDED_CONSUMER", "정지된 소비자"]
+            ["GENERAL_CONSUMER", "일반 강습생"],
+            ["SUSPENDED_CONSUMER", "정지된 강습생"]
         ],
         instructor: [
             ["INSTRUCTOR_PENDING", "심사 중 강사"],
@@ -341,21 +1413,106 @@
         ]
     };
 
+    const roleOptions = [
+        {
+            value: "consumer",
+            title: "강습생",
+            description: "수업을 신청하고 강습생 토큰을 받는 사용자"
+        },
+        {
+            value: "instructor",
+            title: "강사",
+            description: "수업을 관리하고 강사 권한 토큰을 받는 사용자"
+        }
+    ];
+    const templateDescriptions = {
+        GENERAL_CONSUMER: "가입 완료 상태로 바로 토큰 테스트",
+        SUSPENDED_CONSUMER: "정지 회원 제한 흐름 확인",
+        INSTRUCTOR_PENDING: "승인 전 제한 흐름 확인",
+        INSTRUCTOR_APPROVED: "강사 권한 흐름 바로 확인"
+    };
+    const roleArtwork = {
+        consumer: createSvgArtwork("illustration-student", "student-svg"),
+        instructor: createSvgArtwork("illustration-instructor", "instructor-svg")
+    };
+    const statusArtwork = {
+        GENERAL_CONSUMER: createSvgArtwork("illustration-student", "status-active-svg"),
+        SUSPENDED_CONSUMER: createSvgArtwork("illustration-student-suspended", "status-suspended-svg"),
+        INSTRUCTOR_PENDING: createSvgArtwork("illustration-instructor-pending", "status-pending-svg"),
+        INSTRUCTOR_APPROVED: createSvgArtwork("illustration-instructor-approved", "status-approved-svg")
+    };
+    const templateBadgeClasses = {
+        GENERAL_CONSUMER: "template-badge--consumer-positive",
+        SUSPENDED_CONSUMER: "template-badge--consumer-negative",
+        INSTRUCTOR_PENDING: "template-badge--instructor-pending",
+        INSTRUCTOR_APPROVED: "template-badge--instructor-positive"
+    };
+
+    const templateLabels = Object.values(templatesByRole)
+        .flat()
+        .reduce((labels, [value, label]) => ({...labels, [value]: label}), {});
+    const roleLabels = {
+        CONSUMER: "강습생",
+        INSTRUCTOR: "강사"
+    };
+    const memberStatusLabels = {
+        ACTIVE: "활성 회원",
+        SUSPENDED: "정지 회원"
+    };
+    const instructorStatusLabels = {
+        NONE: "해당 없음",
+        PENDING: "심사 중",
+        APPROVED: "승인 완료",
+        REJECTED: "반려",
+        SUSPENDED: "정지"
+    };
+    const createdAtFormatter = new Intl.DateTimeFormat("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+    });
+    const defaultSortDirections = {
+        personaKey: "asc",
+        nickname: "asc",
+        template: "asc",
+        role: "asc",
+        memberStatus: "asc",
+        instructorStatus: "asc",
+        createdAt: "desc"
+    };
+    const sortDirectionLabels = {
+        asc: "오름차순",
+        desc: "내림차순"
+    };
+
     const state = {
         personas: [],
+        issuedTokensByPersonaKey: new Map(),
+        expandedTokenPanelKeys: new Set(),
+        roleFilter: "all",
+        sortKey: "createdAt",
+        sortDirection: "desc",
+        isCreating: false,
+        createCompleted: false,
         selectedRole: null,
         selectedTemplate: null
     };
 
     const status = document.querySelector("#status");
+    const summary = document.querySelector("#summary");
     const modalStatus = document.querySelector("#modalStatus");
     const personaList = document.querySelector("#personaList");
     const dialog = document.querySelector("#createDialog");
     const createForm = document.querySelector("#createForm");
     const createButton = document.querySelector("#createPersonaButton");
+    const roleChoices = document.querySelector("#roleChoices");
     const templateField = document.querySelector("#templateField");
     const templateChoices = document.querySelector("#templateChoices");
     const modalTokenPanel = document.querySelector("#modalTokenPanel");
+
+    renderRoleChoices();
 
     document.querySelector("#openCreateModal").addEventListener("click", () => {
         resetCreateForm();
@@ -364,8 +1521,21 @@
     document.querySelector("#closeCreateModal").addEventListener("click", () => dialog.close());
     document.querySelector("#refreshPersonas").addEventListener("click", loadPersonas);
 
-    document.querySelectorAll("[data-role-choice]").forEach(button => {
-        button.addEventListener("click", () => selectRole(button.dataset.roleChoice));
+    roleChoices.addEventListener("click", event => {
+        const button = event.target.closest("[data-role-choice]");
+        if (button) {
+            selectRole(button.dataset.roleChoice);
+        }
+    });
+    roleChoices.addEventListener("keydown", event => {
+        handleChoiceKeydown(event, "[data-role-choice]", button => selectRole(button.dataset.roleChoice));
+    });
+    templateChoices.addEventListener("keydown", event => {
+        handleChoiceKeydown(event, "[data-template-choice]", selectTemplate);
+    });
+
+    document.querySelectorAll("[data-role-filter]").forEach(button => {
+        button.addEventListener("click", () => selectRoleFilter(button.dataset.roleFilter));
     });
 
     createForm.addEventListener("input", syncCreateButton);
@@ -380,51 +1550,162 @@
             const response = await requestJson("/dev/auth/personas");
             state.personas = response.data.personas;
             renderPersonas();
-            setStatus(status, `${state.personas.length}명`, "success");
+            setStatus(status, "", "");
         } catch (error) {
+            updateSummary([]);
             setStatus(status, error.message, "error");
         }
     }
 
     function renderPersonas() {
+        const visiblePersonas = getVisiblePersonas();
+        updateSummary(visiblePersonas);
         personaList.replaceChildren();
-        if (state.personas.length === 0) {
+        if (visiblePersonas.length === 0) {
             const empty = document.createElement("div");
             empty.className = "persona-row";
-            empty.innerHTML = `<div class="persona-main"><span class="cell">생성된 유저가 없습니다.</span></div>`;
+            const message = state.personas.length === 0
+                ? "생성된 유저가 없습니다."
+                : "필터에 맞는 유저가 없습니다.";
+            empty.innerHTML = `<div class="persona-main"><span class="cell empty-cell">${message}</span></div>`;
             personaList.append(empty);
             return;
         }
 
-        state.personas.forEach(persona => {
+        personaList.append(createPersonaListHeader());
+        visiblePersonas.forEach(persona => {
             const row = document.createElement("article");
             row.className = "persona-row";
             row.innerHTML = `
                 <div class="persona-main">
-                    <div>
-                        <div class="persona-key">${escapeHtml(persona.personaKey)}</div>
-                        <div class="cell">${escapeHtml(persona.nickname)}</div>
-                    </div>
-                    <span class="badge">${persona.template}</span>
-                    <span class="cell">${persona.role}</span>
-                    <span class="cell">${persona.memberStatus}</span>
-                    <span class="cell">${persona.instructorStatus}</span>
-                    <button class="button primary" type="button">토큰 발급/복사</button>
+                    <span class="persona-key data-cell strong-cell">${escapeHtml(persona.personaKey)}</span>
+                    <span class="nickname data-cell strong-cell">${escapeHtml(persona.nickname)}</span>
+                    <span class="badge template-badge ${templateBadgeClass(persona.template)}">${escapeHtml(formatTemplate(persona.template))}</span>
+                    <span class="data-cell">${escapeHtml(formatRole(persona.role))}</span>
+                    <span class="data-cell">${escapeHtml(formatMemberStatus(persona.memberStatus))}</span>
+                    <span class="data-cell">${escapeHtml(formatInstructorStatus(persona.instructorStatus))}</span>
+                    <span class="data-cell created-at-cell">${escapeHtml(formatCreatedAt(persona.createdAt))}</span>
+                    <button class="button primary" type="button" data-issue-token data-toggle-token-panel="false" aria-label="${escapeHtml(persona.personaKey)} 토큰 발급">발급</button>
                 </div>
                 <div class="token-panel" hidden></div>
             `;
-            row.querySelector("button").addEventListener("click", () => issueTokenForRow(persona, row));
+            row.querySelector("[data-issue-token]").addEventListener("click", () => issueTokenForRow(persona, row));
+            const issuedToken = state.issuedTokensByPersonaKey.get(persona.personaKey);
+            if (issuedToken) {
+                const collapsed = !state.expandedTokenPanelKeys.has(persona.personaKey);
+                renderTokenPanel(row.querySelector(".token-panel"), issuedToken, collapsed);
+                syncTokenButtonState(row, persona);
+            }
             personaList.append(row);
         });
     }
 
+    function createPersonaListHeader() {
+        const header = document.createElement("div");
+        header.className = "persona-list-header";
+        header.setAttribute("role", "row");
+        header.innerHTML = `
+            <span class="column-header" role="columnheader" aria-sort="none" data-sort-cell="personaKey">
+                <button class="sort-header" type="button" data-sort-key="personaKey">
+                    <span>페르소나</span>
+                    <span class="sort-arrow" aria-hidden="true"></span>
+                </button>
+            </span>
+            <span class="column-header" role="columnheader" aria-sort="none" data-sort-cell="nickname">
+                <button class="sort-header" type="button" data-sort-key="nickname">
+                    <span>닉네임</span>
+                    <span class="sort-arrow" aria-hidden="true"></span>
+                </button>
+            </span>
+            <span class="column-header" role="columnheader" aria-sort="none" data-sort-cell="template">
+                <button class="sort-header" type="button" data-sort-key="template">
+                    <span>상태 템플릿</span>
+                    <span class="sort-arrow" aria-hidden="true"></span>
+                </button>
+            </span>
+            <span class="column-header" role="columnheader" aria-sort="none" data-sort-cell="role">
+                <button class="sort-header" type="button" data-sort-key="role">
+                    <span>구분</span>
+                    <span class="sort-arrow" aria-hidden="true"></span>
+                </button>
+            </span>
+            <span class="column-header" role="columnheader" aria-sort="none" data-sort-cell="memberStatus">
+                <button class="sort-header" type="button" data-sort-key="memberStatus">
+                    <span>회원 상태</span>
+                    <span class="sort-arrow" aria-hidden="true"></span>
+                </button>
+            </span>
+            <span class="column-header" role="columnheader" aria-sort="none" data-sort-cell="instructorStatus">
+                <button class="sort-header" type="button" data-sort-key="instructorStatus">
+                    <span>강사 승인</span>
+                    <span class="sort-arrow" aria-hidden="true"></span>
+                </button>
+            </span>
+            <span class="column-header" role="columnheader" aria-sort="none" data-sort-cell="createdAt">
+                <button class="sort-header" type="button" data-sort-key="createdAt">
+                    <span>생성 일시</span>
+                    <span class="sort-arrow" aria-hidden="true"></span>
+                </button>
+            </span>
+            <span class="column-header token-column-header" role="columnheader">토큰</span>
+        `;
+        header.querySelectorAll("[data-sort-key]").forEach(button => {
+            syncSortHeader(button);
+            button.addEventListener("click", () => selectSortColumn(button.dataset.sortKey));
+        });
+        return header;
+    }
+
+    function selectSortColumn(sortKey) {
+        if (state.sortKey === sortKey) {
+            state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
+        } else {
+            state.sortKey = sortKey;
+            state.sortDirection = defaultSortDirections[sortKey] || "asc";
+        }
+        renderPersonas();
+    }
+
+    function syncSortHeader(button) {
+        const sortKey = button.dataset.sortKey;
+        const headerCell = button.closest("[role='columnheader']");
+        const active = state.sortKey === sortKey;
+        const directionLabel = sortDirectionLabels[state.sortDirection];
+        const nextDirection = active
+            ? (state.sortDirection === "asc" ? "desc" : "asc")
+            : (defaultSortDirections[sortKey] || "asc");
+        const nextDirectionLabel = sortDirectionLabels[nextDirection];
+
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-label", active
+            ? `${button.textContent.trim()} ${directionLabel} 정렬됨. 클릭하면 ${nextDirectionLabel}으로 변경`
+            : `${button.textContent.trim()} ${nextDirectionLabel} 정렬`);
+        headerCell.setAttribute("aria-sort", active
+            ? (state.sortDirection === "asc" ? "ascending" : "descending")
+            : "none");
+        button.querySelector(".sort-arrow").textContent = active
+            ? (state.sortDirection === "asc" ? "↑" : "↓")
+            : "↑";
+    }
+
     async function issueTokenForRow(persona, row) {
         const panel = row.querySelector(".token-panel");
+        const issueButton = row.querySelector("[data-issue-token]");
+        if (state.issuedTokensByPersonaKey.has(persona.personaKey)) {
+            toggleTokenPanel(row, persona);
+            return;
+        }
+
         panel.hidden = false;
         panel.textContent = "발급 중";
+        issueButton.disabled = true;
+        issueButton.textContent = "발급 중";
         try {
             const token = await issueToken(persona.personaKey);
+            rememberIssuedToken(persona.personaKey, token);
+            state.expandedTokenPanelKeys.add(persona.personaKey);
             renderTokenPanel(panel, token);
+            syncTokenButtonState(row, persona);
             await copyAccessToken(
                 token.accessToken,
                 status,
@@ -433,10 +1714,55 @@
         } catch (error) {
             panel.textContent = error.message;
             setStatus(status, error.message, "error");
+        } finally {
+            issueButton.disabled = false;
+            syncTokenButtonState(row, persona);
         }
     }
 
+    function toggleTokenPanel(row, persona) {
+        const panel = row.querySelector(".token-panel");
+        const issuedToken = state.issuedTokensByPersonaKey.get(persona.personaKey);
+        if (!issuedToken) {
+            return;
+        }
+
+        if (panel.hidden) {
+            state.expandedTokenPanelKeys.add(persona.personaKey);
+            renderTokenPanel(panel, issuedToken);
+        } else {
+            state.expandedTokenPanelKeys.delete(persona.personaKey);
+            panel.hidden = true;
+        }
+        syncTokenButtonState(row, persona);
+    }
+
+    function syncTokenButtonState(row, persona) {
+        const button = row.querySelector("[data-issue-token]");
+        const panel = row.querySelector(".token-panel");
+        const hasIssuedToken = state.issuedTokensByPersonaKey.has(persona.personaKey);
+
+        button.dataset.toggleTokenPanel = String(hasIssuedToken);
+        button.classList.toggle("primary", !hasIssuedToken);
+        button.setAttribute("aria-expanded", String(hasIssuedToken && !panel.hidden));
+        if (!hasIssuedToken) {
+            button.textContent = "발급";
+            button.setAttribute("aria-label", `${persona.personaKey} 토큰 발급`);
+            return;
+        }
+        if (panel.hidden) {
+            button.textContent = "보기";
+            button.setAttribute("aria-label", `${persona.personaKey} 발급된 토큰 보기`);
+            return;
+        }
+        button.textContent = "접기";
+        button.setAttribute("aria-label", `${persona.personaKey} 발급된 토큰 접기`);
+    }
+
     async function createPersona() {
+        state.isCreating = true;
+        state.createCompleted = false;
+        syncCreateButton();
         setStatus(modalStatus, "생성 중", "");
         const payload = {
             personaKey: document.querySelector("#personaKey").value.trim(),
@@ -448,13 +1774,20 @@
                 method: "POST",
                 body: JSON.stringify(payload)
             });
-            setStatus(modalStatus, `${response.data.persona.personaKey} 생성 완료`, "success");
+            const personaKey = response.data.persona.personaKey;
+            const token = await issueToken(personaKey);
+            rememberIssuedToken(personaKey, token);
             await loadPersonas();
-            const token = await issueToken(response.data.persona.personaKey);
             renderTokenPanel(modalTokenPanel, token);
+            state.createCompleted = true;
+            setStatus(modalStatus, `${personaKey} 생성 완료`, "success");
             await copyAccessToken(token.accessToken, modalStatus, "Access Token 복사 완료");
         } catch (error) {
+            state.createCompleted = false;
             setStatus(modalStatus, error.message, "error");
+        } finally {
+            state.isCreating = false;
+            syncCreateButton();
         }
     }
 
@@ -466,11 +1799,157 @@
         return response.data;
     }
 
+    function selectRoleFilter(roleFilter) {
+        state.roleFilter = roleFilter;
+        document.querySelectorAll("[data-role-filter]").forEach(button => {
+            button.classList.toggle("selected", button.dataset.roleFilter === roleFilter);
+        });
+        renderPersonas();
+    }
+
+    function getVisiblePersonas() {
+        return state.personas
+            .filter(persona => state.roleFilter === "all" || persona.role === state.roleFilter)
+            .sort(resolveSortComparator());
+    }
+
+    function resolveSortComparator() {
+        return (left, right) => compareBySortColumn(left, right) || compareText(left.personaKey, right.personaKey);
+    }
+
+    function compareBySortColumn(left, right) {
+        if (state.sortKey === "createdAt") {
+            return compareCreatedAt(left, right, state.sortDirection);
+        }
+
+        const direction = state.sortDirection === "asc" ? 1 : -1;
+        return direction * compareText(getSortValue(left, state.sortKey), getSortValue(right, state.sortKey));
+    }
+
+    function getSortValue(persona, sortKey) {
+        if (sortKey === "template") {
+            return formatTemplate(persona.template);
+        }
+        if (sortKey === "nickname") {
+            return persona.nickname;
+        }
+        if (sortKey === "role") {
+            return formatRole(persona.role);
+        }
+        if (sortKey === "memberStatus") {
+            return formatMemberStatus(persona.memberStatus);
+        }
+        if (sortKey === "instructorStatus") {
+            return formatInstructorStatus(persona.instructorStatus);
+        }
+        return persona.personaKey;
+    }
+
+    function compareCreatedAt(left, right, direction) {
+        const leftTime = toTimestamp(left.createdAt);
+        const rightTime = toTimestamp(right.createdAt);
+        if (leftTime === rightTime) {
+            return 0;
+        }
+        if (leftTime === null) {
+            return 1;
+        }
+        if (rightTime === null) {
+            return -1;
+        }
+        return direction === "asc" ? leftTime - rightTime : rightTime - leftTime;
+    }
+
+    function compareText(left, right) {
+        return String(left || "").localeCompare(String(right || ""), "ko-KR");
+    }
+
+    function toTimestamp(value) {
+        const timestamp = new Date(value).getTime();
+        return Number.isNaN(timestamp) ? null : timestamp;
+    }
+
+    function updateSummary(visiblePersonas) {
+        const consumerCount = state.personas.filter(persona => persona.role === "CONSUMER").length;
+        const instructorCount = state.personas.filter(persona => persona.role === "INSTRUCTOR").length;
+        summary.textContent = `전체 ${state.personas.length}명 · 표시 ${visiblePersonas.length}명 · 강습생 ${consumerCount}명 · 강사 ${instructorCount}명`;
+    }
+
+    function formatTemplate(template) {
+        return templateLabels[template] || template;
+    }
+
+    function templateBadgeClass(template) {
+        return templateBadgeClasses[template] || "template-badge--neutral";
+    }
+
+    function formatRole(role) {
+        return roleLabels[role] || role;
+    }
+
+    function formatMemberStatus(memberStatus) {
+        return memberStatusLabels[memberStatus] || memberStatus;
+    }
+
+    function formatInstructorStatus(instructorStatus) {
+        return instructorStatusLabels[instructorStatus] || instructorStatus;
+    }
+
+    function formatCreatedAt(value) {
+        const timestamp = toTimestamp(value);
+        if (timestamp === null) {
+            return "-";
+        }
+        return createdAtFormatter.format(new Date(timestamp));
+    }
+
+    function renderRoleChoices() {
+        roleChoices.replaceChildren();
+        roleOptions.forEach(option => {
+            const button = document.createElement("button");
+            button.className = "choice role-card";
+            button.type = "button";
+            button.setAttribute("role", "radio");
+            button.dataset.roleChoice = option.value;
+            button.setAttribute("aria-checked", "false");
+            button.innerHTML = createChoiceMarkup({
+                artwork: roleArtwork[option.value],
+                title: option.title,
+                description: option.description
+            });
+            roleChoices.append(button);
+        });
+    }
+
+    function createChoiceMarkup({artwork, title, description}) {
+        return `
+            <span class="choice-visual">${artwork}</span>
+            <span class="choice-body">
+                <span class="choice-title">${escapeHtml(title)}</span>
+                <span class="choice-help">${escapeHtml(description)}</span>
+            </span>
+            <span class="choice-check" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 12.5L10.5 16L17 8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                </svg>
+            </span>
+        `;
+    }
+
+    function createSvgArtwork(symbolId, className) {
+        return `
+            <svg class="choice-svg ${className}" viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+                <use href="#${symbolId}" width="160" height="120"></use>
+            </svg>
+        `;
+    }
+
     function selectRole(role) {
         state.selectedRole = role;
         state.selectedTemplate = null;
         document.querySelectorAll("[data-role-choice]").forEach(button => {
-            button.classList.toggle("selected", button.dataset.roleChoice === role);
+            const selected = button.dataset.roleChoice === role;
+            updateChoiceSelection(button, selected);
         });
         renderTemplateChoices(role);
         syncCreateButton();
@@ -481,29 +1960,93 @@
         templateChoices.replaceChildren();
         templatesByRole[role].forEach(([value, label]) => {
             const button = document.createElement("button");
-            button.className = "choice";
+            button.className = "choice status-card";
             button.type = "button";
-            button.textContent = label;
-            button.addEventListener("click", () => {
-                state.selectedTemplate = value;
-                [...templateChoices.children].forEach(child => child.classList.remove("selected"));
-                button.classList.add("selected");
-                syncCreateButton();
+            button.setAttribute("role", "radio");
+            button.dataset.templateChoice = value;
+            button.setAttribute("aria-checked", "false");
+            button.innerHTML = createChoiceMarkup({
+                artwork: statusArtwork[value],
+                title: label,
+                description: templateDescriptions[value]
             });
+            button.addEventListener("click", () => selectTemplate(button));
             templateChoices.append(button);
         });
     }
 
+    function selectTemplate(button) {
+        state.selectedTemplate = button.dataset.templateChoice;
+        [...templateChoices.children].forEach(child => {
+            updateChoiceSelection(child, child === button);
+        });
+        syncCreateButton();
+    }
+
+    function updateChoiceSelection(button, selected) {
+        button.classList.toggle("selected", selected);
+        button.setAttribute("aria-checked", String(selected));
+        button.tabIndex = selected ? 0 : -1;
+    }
+
+    function handleChoiceKeydown(event, selector, select) {
+        const buttons = [...event.currentTarget.querySelectorAll(selector)];
+        const current = event.target.closest(selector);
+        const currentIndex = buttons.indexOf(current);
+
+        if (currentIndex < 0) {
+            return;
+        }
+
+        if (event.key === " " || event.key === "Enter") {
+            event.preventDefault();
+            select(current);
+            return;
+        }
+
+        const direction = {
+            ArrowRight: 1,
+            ArrowDown: 1,
+            ArrowLeft: -1,
+            ArrowUp: -1
+        }[event.key];
+
+        if (!direction) {
+            return;
+        }
+
+        event.preventDefault();
+        const next = buttons[(currentIndex + direction + buttons.length) % buttons.length];
+        next.focus();
+        select(next);
+    }
+
     function syncCreateButton() {
+        if (state.isCreating) {
+            createButton.textContent = "생성 중";
+            createButton.disabled = true;
+            return;
+        }
+        if (state.createCompleted) {
+            createButton.textContent = "생성 완료";
+            createButton.disabled = true;
+            return;
+        }
         const personaKey = document.querySelector("#personaKey").value.trim();
         const nickname = document.querySelector("#nickname").value.trim();
+        createButton.textContent = "유저 생성";
         createButton.disabled = !(personaKey && nickname && state.selectedTemplate);
     }
 
-    function renderTokenPanel(container, token) {
+    function rememberIssuedToken(personaKey, token) {
+        state.issuedTokensByPersonaKey.set(personaKey, token);
+        state.expandedTokenPanelKeys.add(personaKey);
+    }
+
+    function renderTokenPanel(container, token, collapsed = false) {
         container.replaceChildren();
         container.className = "token-panel";
-        container.hidden = false;
+        container.hidden = collapsed;
         container.append(
             createTokenField("Access Token", token.accessToken),
             createTokenField("Refresh Token", token.refreshToken)
@@ -521,10 +2064,12 @@
         const button = document.createElement("button");
         button.className = "button";
         button.type = "button";
+        button.dataset.copyTokenButton = "true";
         button.textContent = "복사";
         button.addEventListener("click", async () => {
             try {
                 await copyText(value);
+                markCopyButtonCopied(button);
                 setStatus(status, `${label} 복사 완료`, "success");
                 setStatus(modalStatus, `${label} 복사 완료`, "success");
             } catch (error) {
@@ -534,6 +2079,19 @@
         });
         wrapper.append(labelElement, textarea, button);
         return wrapper;
+    }
+
+    function markCopyButtonCopied(button) {
+        resetCopyButtons();
+        button.textContent = "복사 완료";
+        button.classList.add("copied");
+    }
+
+    function resetCopyButtons() {
+        document.querySelectorAll("[data-copy-token-button]").forEach(button => {
+            button.textContent = "복사";
+            button.classList.remove("copied");
+        });
     }
 
     async function requestJson(url, options = {}) {
@@ -576,12 +2134,18 @@
 
     function resetCreateForm() {
         createForm.reset();
+        state.isCreating = false;
+        state.createCompleted = false;
         state.selectedRole = null;
         state.selectedTemplate = null;
         modalTokenPanel.replaceChildren();
         templateChoices.replaceChildren();
         templateField.hidden = true;
-        document.querySelectorAll(".choice").forEach(button => button.classList.remove("selected"));
+        document.querySelectorAll(".choice").forEach(button => {
+            button.classList.remove("selected");
+            button.setAttribute("aria-checked", "false");
+            button.tabIndex = 0;
+        });
         setStatus(modalStatus, "", "");
         syncCreateButton();
     }
