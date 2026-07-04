@@ -28,7 +28,7 @@ public enum DevPersonaTemplate {
 
     public static DevPersonaTemplate from(String value) {
         try {
-            return DevPersonaTemplate.valueOf(value);
+            return DevPersonaTemplate.valueOf(value.trim());
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw new BusinessException(DevAuthErrorCode.DEV_PERSONA_INVALID_TEMPLATE, exception);
         }

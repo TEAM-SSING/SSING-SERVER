@@ -1,5 +1,6 @@
 package org.sopt.ssingserver.domain.auth.dev.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -41,21 +42,25 @@ public class DevAuthService {
     private final MemberRepository memberRepository;
     private final InstructorProfileRepository instructorProfileRepository;
     private final AuthTokenIssuer authTokenIssuer;
+    private final Clock clock;
 
     public DevAuthService(
             DevPersonaRepository devPersonaRepository,
             MemberRepository memberRepository,
             InstructorProfileRepository instructorProfileRepository,
-            AuthTokenIssuer authTokenIssuer
+            AuthTokenIssuer authTokenIssuer,
+            Clock clock
     ) {
         this.devPersonaRepository = devPersonaRepository;
         this.memberRepository = memberRepository;
         this.instructorProfileRepository = instructorProfileRepository;
         this.authTokenIssuer = authTokenIssuer;
+        this.clock = clock;
     }
 
     public DevPersonaListResponse getPersonas() {
-        List<DevPersonaResponse> personas = devPersonaRepository.findAll()
+        // TODO: 개발용 persona가 많아지면 InstructorProfile 일괄 조회로 N+1 쿼리 축소
+        List<DevPersonaResponse> personas = devPersonaRepository.findAllByOrderByCreatedAtAsc()
                 .stream()
                 .map(this::toPersonaResponse)
                 .toList();
@@ -70,32 +75,25 @@ public class DevAuthService {
     ) {
         String normalizedPersonaKey = personaKey.trim();
         String normalizedNickname = nickname.trim();
-        DevPersonaTemplate template = DevPersonaTemplate.from(templateValue.trim());
+        DevPersonaTemplate template = DevPersonaTemplate.from(templateValue);
         validatePersonaKeyNotExists(normalizedPersonaKey);
 
-        try {
-            Member member = memberRepository.save(Member.create(
-                    normalizedNickname,
-                    null,
-                    template.memberRole(),
-                    template.memberStatus()
-            ));
-            createInstructorProfileIfNeeded(member, normalizedNickname, template);
-            DevPersona devPersona = devPersonaRepository.save(DevPersona.create(
-                    normalizedPersonaKey,
-                    member,
-                    template
-            ));
-            return new CreateDevPersonaResponse(toPersonaResponse(devPersona));
-        } catch (DataIntegrityViolationException exception) {
-            throw new BusinessException(DevAuthErrorCode.DEV_PERSONA_ALREADY_EXISTS, exception);
-        }
+        Member member = memberRepository.save(Member.create(
+                normalizedNickname,
+                null,
+                template.memberRole(),
+                template.memberStatus()
+        ));
+        createInstructorProfileIfNeeded(member, normalizedNickname, template);
+        DevPersona devPersona = saveDevPersona(normalizedPersonaKey, member, template);
+        return new CreateDevPersonaResponse(toPersonaResponse(devPersona));
     }
 
     @Transactional
     public DevAuthTokenResponse issueToken(String personaKey) {
         DevPersona devPersona = devPersonaRepository.findByPersonaKey(personaKey.trim())
                 .orElseThrow(() -> new BusinessException(DevAuthErrorCode.DEV_PERSONA_NOT_FOUND));
+        // 개발용 상태 재현 목적: 정지 회원도 토큰 발급 후 보호 API의 인가 흐름 검증
         IssuedAuthTokens tokens = authTokenIssuer.issueTokens(devPersona.getMember());
         DevPersonaResponse persona = toPersonaResponse(devPersona);
         return new DevAuthTokenResponse(
@@ -110,6 +108,23 @@ public class DevAuthService {
     private void validatePersonaKeyNotExists(String personaKey) {
         if (devPersonaRepository.existsByPersonaKey(personaKey)) {
             throw new BusinessException(DevAuthErrorCode.DEV_PERSONA_ALREADY_EXISTS);
+        }
+    }
+
+    private DevPersona saveDevPersona(
+            String personaKey,
+            Member member,
+            DevPersonaTemplate template
+    ) {
+        try {
+            // 사전 조회와 DB 저장 사이의 동시 생성 경쟁 조건 보정
+            return devPersonaRepository.saveAndFlush(DevPersona.create(
+                    personaKey,
+                    member,
+                    template
+            ));
+        } catch (DataIntegrityViolationException exception) {
+            throw new BusinessException(DevAuthErrorCode.DEV_PERSONA_ALREADY_EXISTS, exception);
         }
     }
 
@@ -147,7 +162,7 @@ public class DevAuthService {
 
     private Instant resolveApprovedAt(InstructorApprovalStatus approvalStatus) {
         if (approvalStatus == InstructorApprovalStatus.APPROVED) {
-            return Instant.now();
+            return clock.instant();
         }
         return null;
     }

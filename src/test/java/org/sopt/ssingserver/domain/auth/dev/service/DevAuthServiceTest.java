@@ -9,6 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,9 +30,15 @@ import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class DevAuthServiceTest {
+
+    private static final Clock FIXED_CLOCK = Clock.fixed(
+            Instant.parse("2026-07-04T00:00:00Z"),
+            ZoneOffset.UTC
+    );
 
     @Mock
     private DevPersonaRepository devPersonaRepository;
@@ -77,7 +86,54 @@ class DevAuthServiceTest {
 
         // ADMIN 템플릿은 이번 개발 도구 범위에서 제외했으므로 저장 로직으로 넘어가면 안 된다.
         verifyNoInteractions(memberRepository);
-        verify(devPersonaRepository, never()).save(any(DevPersona.class));
+        verify(devPersonaRepository, never()).saveAndFlush(any(DevPersona.class));
+        verifyNoInteractions(authTokenIssuer);
+    }
+
+    @Test
+    void createPersona는_template이_null이어도_NPE가_아니라_INVALID_TEMPLATE_오류를_던진다() {
+        DevAuthService service = createService();
+
+        assertThatThrownBy(() -> service.createPersona(
+                "null-template-user",
+                "템플릿없음",
+                null
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isSameAs(DevAuthErrorCode.DEV_PERSONA_INVALID_TEMPLATE));
+
+        // template이 유효하지 않으면 회원 생성이나 persona 저장까지 진행하지 않는다.
+        verifyNoInteractions(memberRepository);
+        verifyNoInteractions(devPersonaRepository);
+        verifyNoInteractions(authTokenIssuer);
+    }
+
+    @Test
+    void createPersona는_동시에_같은_personaKey가_저장되면_중복_오류로_변환한다() {
+        DevAuthService service = createService();
+        Member member = Member.create(
+                "동시생성",
+                null,
+                MemberRole.CONSUMER,
+                MemberStatus.ACTIVE
+        );
+
+        when(devPersonaRepository.existsByPersonaKey("race-user")).thenReturn(false);
+        when(memberRepository.save(any(Member.class))).thenReturn(member);
+        when(devPersonaRepository.saveAndFlush(any(DevPersona.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate personaKey"));
+
+        assertThatThrownBy(() -> service.createPersona(
+                "race-user",
+                "동시생성",
+                "GENERAL_CONSUMER"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isSameAs(DevAuthErrorCode.DEV_PERSONA_ALREADY_EXISTS));
+
+        // existsByPersonaKey 통과 이후 DB unique constraint에서 충돌해도 API 에러 코드는 동일해야 한다.
         verifyNoInteractions(authTokenIssuer);
     }
 
@@ -134,7 +190,8 @@ class DevAuthServiceTest {
                 devPersonaRepository,
                 memberRepository,
                 instructorProfileRepository,
-                authTokenIssuer
+                authTokenIssuer,
+                FIXED_CLOCK
         );
     }
 }
