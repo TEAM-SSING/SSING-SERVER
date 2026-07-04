@@ -5,6 +5,7 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
+import org.sopt.ssingserver.domain.notification.dto.request.DeleteFcmTokenRequest;
 import org.sopt.ssingserver.domain.notification.dto.request.RegisterFcmTokenRequest;
 import org.sopt.ssingserver.domain.notification.entity.FcmToken;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
@@ -21,10 +22,7 @@ public class FcmTokenService {
     private final Clock clock;
 
     @Transactional
-    public void registerOrUpdate(
-            Long memberId,
-            RegisterFcmTokenRequest request
-    ) {
+    public void registerOrUpdate(Long memberId, RegisterFcmTokenRequest request) {
         Member member = memberRepository.getReferenceById(memberId);
         Instant registeredAt = clock.instant();
 
@@ -44,5 +42,10 @@ public class FcmTokenService {
                                 registeredAt
                         ))
                 );
+    }
+
+    @Transactional
+    public void unregister(Long memberId, DeleteFcmTokenRequest request) {
+        fcmTokenRepository.deleteByMemberIdAndToken(memberId, request.fcmToken());
     }
 }

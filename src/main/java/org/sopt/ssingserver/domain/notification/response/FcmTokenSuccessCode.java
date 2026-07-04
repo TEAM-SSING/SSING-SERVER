@@ -9,7 +9,8 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum FcmTokenSuccessCode implements SuccessCode {
 
-    FCM_TOKEN_REGISTERED_OR_UPDATED(HttpStatus.NO_CONTENT, "FCM token 등록 또는 수정에 성공했습니다.");
+    FCM_TOKEN_REGISTERED_OR_UPDATED(HttpStatus.NO_CONTENT, "FCM token 등록 또는 수정에 성공했습니다."),
+    FCM_TOKEN_DELETED(HttpStatus.NO_CONTENT, "FCM token 삭제에 성공했습니다.");
 
     private final HttpStatus status;
     private final String message;

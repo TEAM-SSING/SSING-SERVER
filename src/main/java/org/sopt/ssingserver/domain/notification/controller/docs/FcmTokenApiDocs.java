@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.sopt.ssingserver.domain.notification.dto.request.DeleteFcmTokenRequest;
 import org.sopt.ssingserver.domain.notification.dto.request.RegisterFcmTokenRequest;
 import org.sopt.ssingserver.global.security.AuthenticatedMember;
 import org.springframework.http.ResponseEntity;
@@ -24,5 +25,17 @@ public interface FcmTokenApiDocs {
             @Parameter(hidden = true)
             AuthenticatedMember authenticatedMember,
             @Valid @RequestBody RegisterFcmTokenRequest request
+    );
+
+    @Operation(
+            summary = "FCM 토큰 삭제",
+            description = "현재 회원에게 등록된 FCM registration token을 삭제합니다.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponse(responseCode = "204", description = "FCM 토큰 삭제 성공")
+    ResponseEntity<Void> unregister(
+            @Parameter(hidden = true)
+            AuthenticatedMember authenticatedMember,
+            @Valid @RequestBody DeleteFcmTokenRequest request
     );
 }
