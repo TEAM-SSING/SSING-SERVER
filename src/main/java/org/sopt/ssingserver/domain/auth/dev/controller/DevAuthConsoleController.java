@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+// TODO: production 배포 전 dev profile 오적용 대비용 2차 접근 제한(shared secret 또는 IP 제한) 추가
 @Profile({"local", "dev"})
 @RestController
 @RequestMapping("/dev/auth")

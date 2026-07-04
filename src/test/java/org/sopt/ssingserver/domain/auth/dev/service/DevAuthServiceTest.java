@@ -11,26 +11,35 @@ import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevAuthTokenResponse;
+import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaListResponse;
+import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaResponse;
 import org.sopt.ssingserver.domain.auth.dev.entity.DevPersona;
 import org.sopt.ssingserver.domain.auth.dev.enums.DevPersonaTemplate;
 import org.sopt.ssingserver.domain.auth.dev.error.DevAuthErrorCode;
 import org.sopt.ssingserver.domain.auth.dev.repository.DevPersonaRepository;
+import org.sopt.ssingserver.domain.auth.dto.response.InstructorStatusResponse;
 import org.sopt.ssingserver.domain.auth.service.AuthTokenIssuer;
 import org.sopt.ssingserver.domain.auth.service.IssuedAuthTokens;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
+import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.member.entity.Member;
+import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class DevAuthServiceTest {
@@ -51,6 +60,51 @@ class DevAuthServiceTest {
 
     @Mock
     private AuthTokenIssuer authTokenIssuer;
+
+    @Test
+    void getPersonas는_목록_조회에서_강사상태를_memberId_목록으로_한번에_조회한다() {
+        DevAuthService service = createService();
+        Member consumer = createMemberWithId(1L, "일반소비자", MemberRole.CONSUMER, MemberStatus.ACTIVE);
+        Member instructor = createMemberWithId(2L, "승인강사", MemberRole.INSTRUCTOR, MemberStatus.ACTIVE);
+        DevPersona consumerPersona = DevPersona.create(
+                "general-consumer",
+                consumer,
+                DevPersonaTemplate.GENERAL_CONSUMER
+        );
+        DevPersona instructorPersona = DevPersona.create(
+                "approved-instructor",
+                instructor,
+                DevPersonaTemplate.INSTRUCTOR_APPROVED
+        );
+        InstructorProfile approvedProfile = InstructorProfile.create(
+                instructor,
+                "승인강사",
+                "010-0000-0000",
+                Gender.MALE,
+                LocalDate.of(2000, 1, 1),
+                "테스트 강사 프로필",
+                LocalDate.of(2020, 1, 1),
+                InstructorApprovalStatus.APPROVED,
+                FIXED_CLOCK.instant()
+        );
+
+        when(devPersonaRepository.findAllByOrderByCreatedAtAsc())
+                .thenReturn(List.of(consumerPersona, instructorPersona));
+        when(instructorProfileRepository.findAllByMemberIdIn(List.of(1L, 2L)))
+                .thenReturn(List.of(approvedProfile));
+
+        DevPersonaListResponse response = service.getPersonas();
+
+        assertThat(response.personas())
+                .extracting(DevPersonaResponse::personaKey)
+                .containsExactly("general-consumer", "approved-instructor");
+        assertThat(response.personas())
+                .extracting(DevPersonaResponse::instructorStatus)
+                .containsExactly(InstructorStatusResponse.NONE, InstructorStatusResponse.APPROVED);
+        // 목록 API는 화면에서 자주 호출되므로 persona 수만큼 강사 프로필을 조회하지 않는다.
+        verify(instructorProfileRepository).findAllByMemberIdIn(List.of(1L, 2L));
+        verify(instructorProfileRepository, never()).findByMemberId(any());
+    }
 
     @Test
     void createPersona는_이미_있는_personaKey면_회원을_만들지_않고_중복_오류를_던진다() {
@@ -193,5 +247,21 @@ class DevAuthServiceTest {
                 authTokenIssuer,
                 FIXED_CLOCK
         );
+    }
+
+    private Member createMemberWithId(
+            Long id,
+            String nickname,
+            MemberRole role,
+            MemberStatus status
+    ) {
+        Member member = Member.create(
+                nickname,
+                null,
+                role,
+                status
+        );
+        ReflectionTestUtils.setField(member, "id", id);
+        return member;
     }
 }

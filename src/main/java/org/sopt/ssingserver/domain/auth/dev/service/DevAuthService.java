@@ -4,6 +4,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.CreateDevPersonaResponse;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevAuthTokenResponse;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.DevPersonaListResponse;
@@ -59,10 +62,12 @@ public class DevAuthService {
     }
 
     public DevPersonaListResponse getPersonas() {
-        // TODO: 개발용 persona가 많아지면 InstructorProfile 일괄 조회로 N+1 쿼리 축소
-        List<DevPersonaResponse> personas = devPersonaRepository.findAllByOrderByCreatedAtAsc()
+        List<DevPersona> devPersonas = devPersonaRepository.findAllByOrderByCreatedAtAsc();
+        // 목록 화면 N+1 방지를 위한 강사 상태 일괄 조회
+        Map<Long, InstructorApprovalStatus> approvalStatusByMemberId = findApprovalStatusByMemberId(devPersonas);
+        List<DevPersonaResponse> personas = devPersonas
                 .stream()
-                .map(this::toPersonaResponse)
+                .map(devPersona -> toPersonaResponse(devPersona, approvalStatusByMemberId))
                 .toList();
         return new DevPersonaListResponse(personas);
     }
@@ -169,6 +174,26 @@ public class DevAuthService {
 
     private DevPersonaResponse toPersonaResponse(DevPersona devPersona) {
         Member member = devPersona.getMember();
+        return toPersonaResponse(devPersona, member, resolveInstructorStatus(member.getId()));
+    }
+
+    private DevPersonaResponse toPersonaResponse(
+            DevPersona devPersona,
+            Map<Long, InstructorApprovalStatus> approvalStatusByMemberId
+    ) {
+        Member member = devPersona.getMember();
+        return toPersonaResponse(
+                devPersona,
+                member,
+                resolveInstructorStatus(member.getId(), approvalStatusByMemberId)
+        );
+    }
+
+    private DevPersonaResponse toPersonaResponse(
+            DevPersona devPersona,
+            Member member,
+            InstructorStatusResponse instructorStatus
+    ) {
         DevPersonaTemplate template = devPersona.getTemplate();
         return new DevPersonaResponse(
                 devPersona.getPersonaKey(),
@@ -176,7 +201,7 @@ public class DevAuthService {
                 template,
                 member.getRole(),
                 member.getStatus(),
-                resolveInstructorStatus(member.getId())
+                instructorStatus
         );
     }
 
@@ -185,5 +210,36 @@ public class DevAuthService {
                 .map(InstructorProfile::getApprovalStatus)
                 .map(InstructorStatusResponse::from)
                 .orElse(InstructorStatusResponse.NONE);
+    }
+
+    private Map<Long, InstructorApprovalStatus> findApprovalStatusByMemberId(List<DevPersona> devPersonas) {
+        List<Long> memberIds = devPersonas.stream()
+                .map(DevPersona::getMember)
+                .map(Member::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (memberIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return instructorProfileRepository.findAllByMemberIdIn(memberIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        instructorProfile -> instructorProfile.getMember().getId(),
+                        InstructorProfile::getApprovalStatus
+                ));
+    }
+
+    private InstructorStatusResponse resolveInstructorStatus(
+            Long memberId,
+            Map<Long, InstructorApprovalStatus> approvalStatusByMemberId
+    ) {
+        InstructorApprovalStatus approvalStatus = approvalStatusByMemberId.get(memberId);
+        if (approvalStatus == null) {
+            return InstructorStatusResponse.NONE;
+        }
+        return InstructorStatusResponse.from(approvalStatus);
     }
 }
