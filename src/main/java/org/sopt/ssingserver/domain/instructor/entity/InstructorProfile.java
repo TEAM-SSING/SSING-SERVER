@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.time.LocalDate;
 import lombok.AccessLevel;
@@ -23,7 +24,13 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 
 @Getter
 @Entity
-@Table(name = "instructor_profiles")
+@Table(
+        name = "instructor_profiles",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_instructor_profiles_member",
+                columnNames = "member_id"
+        )
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class InstructorProfile extends BaseTimeEntity {
 

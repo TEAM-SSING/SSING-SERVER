@@ -37,7 +37,7 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
         Instant issuedAt = Instant.now(clock);
         Instant expiresAt = issuedAt.plus(properties.accessTokenExpiration());
 
-        // Access Token 최소 claim
+        // Access Token 최소 claim 구성
         return Jwts.builder()
                 .issuer(properties.issuer())
                 .subject(String.valueOf(memberId))
@@ -56,28 +56,54 @@ public class JjwtAccessTokenProvider implements AccessTokenProvider {
         }
 
         try {
-            // JJWT 내부 구현 경계
-            Claims claims = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .requireIssuer(properties.issuer())
-                    .require(CLAIM_TOKEN_TYPE, ACCESS_TOKEN_TYPE)
-                    .clock(() -> Date.from(Instant.now(clock)))
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-
-            return new AccessTokenClaims(
-                    readMemberId(claims),
-                    readRole(claims),
-                    readIssuedAt(claims),
-                    readExpiresAt(claims)
-            );
+            Claims claims = parseSignedClaims(token);
+            return toAccessTokenClaims(claims);
         } catch (ExpiredJwtException exception) {
             // 만료 Access Token 에러 분기
             throw new AccessTokenException(AuthErrorCode.AUTH_TOKEN_EXPIRED, exception);
         } catch (JwtException | IllegalArgumentException exception) {
             // JJWT 예외의 서비스 에러 코드 변환
             throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN, exception);
+        }
+    }
+
+    private Claims parseSignedClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(secretKey)
+                .requireIssuer(properties.issuer())
+                .require(CLAIM_TOKEN_TYPE, ACCESS_TOKEN_TYPE)
+                .clock(() -> Date.from(Instant.now(clock)))
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+
+    private AccessTokenClaims toAccessTokenClaims(Claims claims) {
+        try {
+            validateClaims(claims);
+            return new AccessTokenClaims(
+                    readMemberId(claims),
+                    readRole(claims),
+                    readIssuedAt(claims),
+                    readExpiresAt(claims)
+            );
+        } catch (AccessTokenException exception) {
+            throw exception;
+        } catch (IllegalArgumentException exception) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN, exception);
+        }
+    }
+
+    private void validateClaims(Claims claims) {
+        if (claims == null) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+        if (!properties.issuer().equals(claims.getIssuer())) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN);
+        }
+        String tokenType = claims.get(CLAIM_TOKEN_TYPE, String.class);
+        if (!ACCESS_TOKEN_TYPE.equals(tokenType)) {
+            throw new AccessTokenException(AuthErrorCode.AUTH_INVALID_TOKEN);
         }
     }
 
