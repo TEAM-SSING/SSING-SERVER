@@ -3,6 +3,7 @@ package org.sopt.ssingserver.domain.notification.dto.request;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.sopt.ssingserver.domain.notification.enums.ClientApp;
 import org.sopt.ssingserver.domain.notification.enums.ClientPlatform;
 
@@ -17,6 +18,7 @@ public record RegisterFcmTokenRequest(
 
         @Schema(description = "FCM registration token", example = "fcm_token_xxx")
         @NotBlank(message = "FCM token은 필수입니다.")
+        @Size(max = 512, message = "FCM token은 512자를 초과할 수 없습니다.")
         String fcmToken
 ) {
 }
