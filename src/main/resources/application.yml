@@ -24,3 +24,9 @@ ssing:
       app-id: ${SSING_KAKAO_APP_ID:}
       connect-timeout: PT2S
       read-timeout: PT3S
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

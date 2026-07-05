@@ -60,7 +60,9 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
-        return errorResponseFactory.error(CommonErrorCode.BAD_REQUEST, request);
+        return ValidationErrorMapper.from(exception)
+                .map(errors -> errorResponseFactory.validationError(errors, request))
+                .orElseGet(() -> errorResponseFactory.error(CommonErrorCode.BAD_REQUEST, request));
     }
 
     // 필수 @RequestParam 누락
