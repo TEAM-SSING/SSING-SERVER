@@ -1,9 +1,14 @@
 package org.sopt.ssingserver.global.error;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.core.MethodParameter;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.validation.method.ParameterErrors;
@@ -13,12 +18,16 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.exc.InvalidFormatException;
 
-// Spring validation 예외를 정책 응답 형식(errors: { field: message })으로 변환한다.
+// 요청 입력 오류를 정책 응답 형식(errors: { field: message })으로 변환한다.
 final class ValidationErrorMapper {
 
     private static final String DEFAULT_VALIDATION_MESSAGE = "요청 값이 올바르지 않습니다.";
+    private static final String DEFAULT_FIELD = "request";
     private static final String REQUIRED_PARAMETER_MESSAGE = "필수 요청 파라미터가 누락되었습니다.";
+    private static final String UNSUPPORTED_ENUM_MESSAGE = "지원하지 않는 값입니다. 허용 값: %s";
 
     private ValidationErrorMapper() {
     }
@@ -60,6 +69,51 @@ final class ValidationErrorMapper {
 
     static Map<String, String> from(MissingServletRequestParameterException exception) {
         return Map.of(exception.getParameterName(), REQUIRED_PARAMETER_MESSAGE);
+    }
+
+    static Optional<Map<String, String>> from(HttpMessageNotReadableException exception) {
+        InvalidFormatException invalidFormatException = findInvalidFormatException(exception);
+        if (invalidFormatException == null) {
+            return Optional.empty();
+        }
+
+        Class<?> targetType = invalidFormatException.getTargetType();
+        if (targetType == null || !targetType.isEnum()) {
+            return Optional.empty();
+        }
+
+        String field = resolveField(invalidFormatException);
+        String allowedValues = resolveAllowedValues(targetType);
+        return Optional.of(Map.of(
+                field,
+                UNSUPPORTED_ENUM_MESSAGE.formatted(allowedValues)
+        ));
+    }
+
+    private static InvalidFormatException findInvalidFormatException(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof InvalidFormatException invalidFormatException) {
+                return invalidFormatException;
+            }
+            current = current.getCause();
+        }
+        return null;
+    }
+
+    private static String resolveField(InvalidFormatException exception) {
+        String field = exception.getPath()
+                .stream()
+                .map(JacksonException.Reference::getPropertyName)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining("."));
+        return field.isBlank() ? DEFAULT_FIELD : field;
+    }
+
+    private static String resolveAllowedValues(Class<?> enumType) {
+        return Arrays.stream(enumType.getEnumConstants())
+                .map(enumConstant -> ((Enum<?>) enumConstant).name())
+                .collect(Collectors.joining(", "));
     }
 
     private static String resolveParameterName(MethodParameter methodParameter) {
