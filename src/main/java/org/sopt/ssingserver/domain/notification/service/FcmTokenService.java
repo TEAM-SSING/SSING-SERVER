@@ -2,7 +2,6 @@ package org.sopt.ssingserver.domain.notification.service;
 
 import java.time.Clock;
 import java.time.Instant;
-import org.hibernate.exception.ConstraintViolationException;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.domain.notification.dto.request.DeleteFcmTokenRequest;
@@ -17,8 +16,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class FcmTokenService {
-
-    private static final String FCM_TOKEN_UNIQUE_CONSTRAINT = "uk_fcm_tokens_token";
 
     private final FcmTokenRepository fcmTokenRepository;
     private final MemberRepository memberRepository;
@@ -43,9 +40,6 @@ public class FcmTokenService {
                     status -> registerOrUpdateInTransaction(memberId, request)
             );
         } catch (DataIntegrityViolationException exception) {
-            if (!isFcmTokenUniqueConflict(exception)) {
-                throw exception;
-            }
             updateAfterConflict(memberId, request, exception);
         }
     }
@@ -78,7 +72,7 @@ public class FcmTokenService {
                 );
     }
 
-    // Unique 충돌로 실패한 트랜잭션과 분리하여 기존 토큰 정보를 수정
+    // 무결성 오류로 실패한 트랜잭션과 분리하여 동일 토큰이 존재하면 등록 정보를 수정
     private void updateAfterConflict(
             Long memberId,
             RegisterFcmTokenRequest request,
@@ -96,22 +90,5 @@ public class FcmTokenService {
                     clock.instant()
             );
         });
-    }
-
-    // 예외 원인 체인에서 FCM 토큰 Unique 제약 위반 여부를 확인
-    private boolean isFcmTokenUniqueConflict(Throwable exception) {
-        Throwable current = exception;
-        while (current != null) {
-            if (current instanceof ConstraintViolationException constraintViolationException
-                    && FCM_TOKEN_UNIQUE_CONSTRAINT.equals(constraintViolationException.getConstraintName())) {
-                return true;
-            }
-            String message = current.getMessage();
-            if (message != null && message.contains(FCM_TOKEN_UNIQUE_CONSTRAINT)) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
     }
 }
