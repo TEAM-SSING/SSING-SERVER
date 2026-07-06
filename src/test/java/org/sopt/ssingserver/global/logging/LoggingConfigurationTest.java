@@ -24,8 +24,25 @@ class LoggingConfigurationTest {
         assertThat(logback).containsOnlyOnce("%highlight(%-5level)");
         assertThat(logback).containsOnlyOnce("%cyan(%logger{36})");
         assertThat(logback).containsOnlyOnce("%kvp");
-        assertThat(logback).contains("<root level=\"INFO\">");
-        assertThat(logback).contains("<root level=\"WARN\">");
+        String localProfile = springProfileBlock(logback, "local");
+        String testProfile = springProfileBlock(logback, "test");
+
+        assertThat(localProfile).contains("<root level=\"INFO\">");
+        assertThat(localProfile).doesNotContain("<root level=\"WARN\">");
+        assertThat(testProfile).contains("<root level=\"WARN\">");
+        assertThat(testProfile).doesNotContain("<root level=\"INFO\">");
         assertThat(logback).doesNotContain("<springProfile name=\"!test\">");
+    }
+
+    private static String springProfileBlock(String logback, String profileName) {
+        String openingTag = "<springProfile name=\"" + profileName + "\">";
+        int startIndex = logback.indexOf(openingTag);
+        assertThat(startIndex).isNotNegative();
+
+        int contentStartIndex = startIndex + openingTag.length();
+        int endIndex = logback.indexOf("</springProfile>", contentStartIndex);
+        assertThat(endIndex).isNotNegative();
+
+        return logback.substring(contentStartIndex, endIndex);
     }
 }
