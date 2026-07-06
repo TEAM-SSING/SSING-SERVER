@@ -3,21 +3,30 @@
     <springProperty name="APP_NAME" source="spring.application.name" defaultValue="ssing-server"/>
     <springProperty name="ENV" source="spring.profiles.active" defaultValue="local"/>
 
-    <!-- 테스트 로그는 실패 원인 확인에 필요한 최소 수준만 남긴다. -->
-    <springProfile name="test">
-        <appender name="CONSOLE_TEXT" class="ch.qos.logback.core.ConsoleAppender">
+    <!-- local/test 로그는 개발자가 바로 읽기 쉬운 텍스트 형식으로 출력한다. -->
+    <springProfile name="local | test">
+        <appender name="CONSOLE_PRETTY" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
-                <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} request_id=%X{request_id:-} - %msg%n</pattern>
+                <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) request_id=%X{request_id:-} - %msg %kvp%n%ex</pattern>
             </encoder>
         </appender>
+    </springProfile>
 
-        <root level="WARN">
-            <appender-ref ref="CONSOLE_TEXT"/>
+    <springProfile name="local">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_PRETTY"/>
         </root>
     </springProfile>
 
-    <!-- local/dev/prod는 운영 정책에 맞춰 JSON 구조화 로그를 사용한다. -->
-    <springProfile name="!test">
+    <!-- test 로그는 local과 같은 읽기 쉬운 형식을 쓰되, 노이즈를 줄이기 위해 WARN 이상만 남긴다. -->
+    <springProfile name="test">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE_PRETTY"/>
+        </root>
+    </springProfile>
+
+    <!-- dev/prod는 운영 정책에 맞춰 JSON 구조화 로그를 사용한다. -->
+    <springProfile name="dev | prod">
         <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
                 <providers>
