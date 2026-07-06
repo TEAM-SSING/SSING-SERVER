@@ -1057,100 +1057,6 @@
                 width: 100%;
             }
 
-            .persona-list-header {
-                display: none;
-            }
-
-            .persona-main {
-                --persona-action-width: 72px;
-                --persona-column-gap: 10px;
-                --persona-identity-pad-right: 4px;
-                --persona-row-pad-x: 14px;
-                grid-template-columns: minmax(0, 1fr) var(--persona-action-width);
-                grid-template-areas:
-                    "identity token-action"
-                    "meta meta";
-                align-items: stretch;
-                gap: 8px var(--persona-column-gap);
-                padding: 14px var(--persona-row-pad-x);
-            }
-
-            .persona-main > .button {
-                justify-self: stretch;
-            }
-
-            .persona-identity {
-                grid-area: identity;
-                display: grid;
-                align-content: start;
-                gap: 2px;
-                min-width: 0;
-                padding-right: var(--persona-identity-pad-right);
-            }
-
-            .persona-meta-grid {
-                grid-area: meta;
-                display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 8px 10px;
-                min-width: 0;
-            }
-
-            .persona-main > .token-action {
-                grid-area: token-action;
-                align-self: start;
-                justify-self: end;
-                width: var(--persona-action-width);
-                min-width: 0;
-                max-width: var(--persona-action-width);
-                padding-inline: 10px;
-            }
-
-            .persona-key,
-            .nickname {
-                justify-self: start;
-                text-align: left;
-                white-space: normal;
-            }
-
-            .strong-cell {
-                overflow: visible;
-                text-overflow: clip;
-            }
-
-            .persona-main [data-label] {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                justify-self: stretch;
-                gap: 8px;
-                min-width: 0;
-                min-height: 32px;
-                border: 1px solid rgba(151, 175, 203, 0.18);
-                border-radius: 8px;
-                padding: 6px 8px;
-                text-align: right;
-                white-space: normal;
-            }
-
-            .persona-main [data-label]::before {
-                flex: 0 0 auto;
-                color: var(--muted);
-                font-size: var(--type-micro-size);
-                line-height: var(--type-micro-line);
-                font-weight: var(--font-weight-semibold);
-                content: attr(data-label);
-            }
-
-            .persona-main .template-cell {
-                grid-column: 1 / -1;
-                max-width: none;
-            }
-
-            .empty-cell {
-                grid-column: 1 / -1;
-            }
-
             .toolbar {
                 grid-template-columns: 1fr;
                 grid-template-areas:
@@ -1189,14 +1095,6 @@
                 min-width: 0;
             }
 
-            .token-field {
-                grid-template-columns: minmax(0, 1fr) auto;
-                grid-template-areas:
-                    "token-label token-label"
-                    "token-value token-copy";
-                gap: 7px 8px;
-            }
-
             .modal .token-field {
                 grid-template-columns: minmax(0, 1fr) auto;
                 grid-template-areas:
@@ -1204,17 +1102,17 @@
                     "token-value token-copy";
             }
 
-            .token-field label {
+            .modal .token-field label {
                 grid-area: token-label;
                 padding-top: 0;
             }
 
-            .token-field textarea {
+            .modal .token-field textarea {
                 grid-area: token-value;
                 min-height: 64px;
             }
 
-            .token-field .button {
+            .modal .token-field .button {
                 grid-area: token-copy;
                 align-self: stretch;
                 min-width: 64px;
@@ -1350,6 +1248,32 @@
             }
         }
 
+        @container persona-row (max-width: 960px) {
+            .token-field {
+                grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-areas:
+                    "token-label token-label"
+                    "token-value token-copy";
+                gap: 7px 8px;
+            }
+
+            .token-field label {
+                grid-area: token-label;
+                padding-top: 0;
+            }
+
+            .token-field textarea {
+                grid-area: token-value;
+                min-height: 64px;
+            }
+
+            .token-field .button {
+                grid-area: token-copy;
+                align-self: stretch;
+                min-width: 64px;
+            }
+        }
+
         @container persona-row (max-width: 400px) {
             .persona-main {
                 --persona-column-gap: 4px;
@@ -1363,30 +1287,6 @@
         }
 
         @container persona-row (max-width: 340px) {
-            .persona-main {
-                --persona-action-width: 64px;
-                --persona-column-gap: 4px;
-                --persona-row-pad-x: 8px;
-            }
-
-            .persona-main > .token-action {
-                padding-inline: 6px;
-            }
-        }
-
-        @media (max-width: 460px) {
-            .persona-main {
-                --persona-column-gap: 4px;
-                --persona-identity-pad-right: 0px;
-                --persona-row-pad-x: 8px;
-            }
-
-            .persona-main > .token-action {
-                padding-inline: 6px;
-            }
-        }
-
-        @media (max-width: 400px) {
             .persona-main {
                 --persona-action-width: 64px;
                 --persona-column-gap: 4px;
@@ -1854,6 +1754,11 @@
 
         personaList.append(createPersonaListHeader());
         visiblePersonas.forEach(persona => {
+            const templateLabel = formatTemplate(persona.template);
+            const roleLabel = formatRole(persona.role);
+            const memberStatusLabel = formatMemberStatus(persona.memberStatus);
+            const instructorStatusLabel = formatInstructorStatus(persona.instructorStatus);
+            const createdAtLabel = formatCreatedAt(persona.createdAt);
             const row = document.createElement("article");
             row.className = "persona-row";
             row.innerHTML = `
@@ -1863,11 +1768,11 @@
                         <span class="nickname data-cell strong-cell">${escapeHtml(persona.nickname)}</span>
                     </div>
                     <div class="persona-meta-grid">
-                        <span class="badge template-badge template-cell ${templateBadgeClass(persona.template)}" data-label="상태">${escapeHtml(formatTemplate(persona.template))}</span>
-                        <span class="data-cell role-cell" data-label="구분">${escapeHtml(formatRole(persona.role))}</span>
-                        <span class="data-cell member-status-cell" data-label="회원 상태">${escapeHtml(formatMemberStatus(persona.memberStatus))}</span>
-                        <span class="data-cell instructor-status-cell" data-label="강사 승인">${escapeHtml(formatInstructorStatus(persona.instructorStatus))}</span>
-                        <span class="data-cell created-at-cell" data-label="생성 일시">${escapeHtml(formatCreatedAt(persona.createdAt))}</span>
+                        <span class="badge template-badge template-cell ${templateBadgeClass(persona.template)}" data-label="상태" aria-label="상태: ${escapeHtml(templateLabel)}">${escapeHtml(templateLabel)}</span>
+                        <span class="data-cell role-cell" data-label="구분" aria-label="구분: ${escapeHtml(roleLabel)}">${escapeHtml(roleLabel)}</span>
+                        <span class="data-cell member-status-cell" data-label="회원 상태" aria-label="회원 상태: ${escapeHtml(memberStatusLabel)}">${escapeHtml(memberStatusLabel)}</span>
+                        <span class="data-cell instructor-status-cell" data-label="강사 승인" aria-label="강사 승인: ${escapeHtml(instructorStatusLabel)}">${escapeHtml(instructorStatusLabel)}</span>
+                        <span class="data-cell created-at-cell" data-label="생성 일시" aria-label="생성 일시: ${escapeHtml(createdAtLabel)}">${escapeHtml(createdAtLabel)}</span>
                     </div>
                     <button class="button primary token-action" type="button" data-issue-token data-toggle-token-panel="false" aria-label="${escapeHtml(persona.personaKey)} 토큰 발급">발급</button>
                 </div>
