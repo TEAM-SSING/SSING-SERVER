@@ -29,8 +29,10 @@ class LoggingConfigurationTest {
 
         assertThat(localProfile).contains("<root level=\"INFO\">");
         assertThat(localProfile).doesNotContain("<root level=\"WARN\">");
+        assertThat(localProfile).contains("<appender-ref ref=\"CONSOLE_PRETTY\"/>");
         assertThat(testProfile).contains("<root level=\"WARN\">");
         assertThat(testProfile).doesNotContain("<root level=\"INFO\">");
+        assertThat(testProfile).contains("<appender-ref ref=\"CONSOLE_PRETTY\"/>");
         assertThat(logback).doesNotContain("<springProfile name=\"!test\">");
     }
 
