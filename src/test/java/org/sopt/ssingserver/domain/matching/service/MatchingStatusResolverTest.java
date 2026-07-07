@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.matching.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
@@ -18,6 +19,8 @@ import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
+import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class MatchingStatusResolverTest {
@@ -139,6 +142,21 @@ class MatchingStatusResolverTest {
         );
 
         assertThat(status).isSameAs(MatchingStatus.NO_AVAILABLE_INSTRUCTOR);
+    }
+
+    @Test
+    void 명시되지_않은_상태_조합은_기본_FAILED로_숨기지_않고_오류로_드러낸다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        matchingRequest.expireByInstructorTimeout();
+
+        assertThatThrownBy(() -> resolver.resolve(
+                matchingRequest,
+                Optional.empty(),
+                Optional.empty()
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isSameAs(CommonErrorCode.INTERNAL_ERROR));
     }
 
     private MatchingRequest matchingRequest(

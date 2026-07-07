@@ -7,6 +7,8 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
+import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.stereotype.Component;
 
 // DB 상태와 주변 객체 존재 여부 조합 기반 앱 표시 matchingStatus 계산
@@ -23,6 +25,11 @@ public class MatchingStatusResolver {
         if (matchingRequest.getStatus() == MatchingRequestStatus.FAILED
                 && matchingRequest.getStatusReason() == MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR) {
             return MatchingStatus.NO_AVAILABLE_INSTRUCTOR;
+        }
+
+        // 기타 실패 요청의 앱 일반 실패 상태 표시
+        if (matchingRequest.getStatus() == MatchingRequestStatus.FAILED) {
+            return MatchingStatus.FAILED;
         }
 
         // 소비자 취소 등 요청 자체 종료 상태의 그룹/제안보다 우선 표시
@@ -63,6 +70,7 @@ public class MatchingStatusResolver {
             return MatchingStatus.WAITING_FOR_TEAM;
         }
 
-        return MatchingStatus.FAILED;
+        // 정의되지 않은 상태 조합의 조용한 FAILED 치환 방지
+        throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
     }
 }
