@@ -80,7 +80,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_후보가_없어도_만료전이면_REQUESTED_SEARCHING을_유지한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
         when(instructorMatchingSettingRepository.findExposedCandidates(
@@ -88,7 +88,7 @@ class MatchingSearchServiceTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
-                120,
+                matchingRequest.getRequestedDurationMinutes(),
                 true
         )).thenReturn(List.of());
 
@@ -106,7 +106,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_만료된_REQUESTED_요청을_NO_AVAILABLE_INSTRUCTOR로_최종_실패시킨다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, 120, Instant.parse("2026-07-06T23:59:59Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-06T23:59:59Z"));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
 
@@ -131,7 +131,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_만료_실패_이벤트도_트랜잭션_커밋후에_발행한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, 120, Instant.parse("2026-07-06T23:59:59Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-06T23:59:59Z"));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
         TransactionSynchronizationManager.initSynchronization();
@@ -175,7 +175,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_요청인원이_강사최대인원보다_적어도_수용가능하면_강사제안을_생성한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
         InstructorMatchingSetting setting = instructorMatchingSetting(3);
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
@@ -184,7 +184,7 @@ class MatchingSearchServiceTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
-                120,
+                matchingRequest.getRequestedDurationMinutes(),
                 true
         )).thenReturn(List.of(setting));
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
@@ -217,7 +217,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_팀정원이_맞으면_그룹을_노출하고_강사제안을_생성한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
         InstructorMatchingSetting setting = instructorMatchingSetting(2);
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
@@ -226,7 +226,7 @@ class MatchingSearchServiceTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
-                120,
+                matchingRequest.getRequestedDurationMinutes(),
                 true
         )).thenReturn(List.of(setting));
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
@@ -254,7 +254,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_트랜잭션_동기화가_있으면_제안생성_이벤트를_커밋후에_발행한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
         InstructorMatchingSetting setting = instructorMatchingSetting(2);
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
@@ -263,7 +263,7 @@ class MatchingSearchServiceTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
-                120,
+                matchingRequest.getRequestedDurationMinutes(),
                 true
         )).thenReturn(List.of(setting));
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
@@ -309,7 +309,7 @@ class MatchingSearchServiceTest {
     private MatchingRequest matchingRequest(
             Long id,
             int headcount,
-            int requestedDurationMinutes,
+            List<Integer> requestedDurationMinutes,
             Instant expiresAt
     ) {
         MatchingRequest matchingRequest = MatchingRequest.create(
@@ -359,7 +359,8 @@ class MatchingSearchServiceTest {
             constructor.setAccessible(true);
             Resort resort = constructor.newInstance();
             ReflectionTestUtils.setField(resort, "code", "HIGH1");
-            ReflectionTestUtils.setField(resort, "name", "하이원");
+            ReflectionTestUtils.setField(resort, "name", "하이원리조트");
+            ReflectionTestUtils.setField(resort, "displayName", "하이원");
             return resort;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);

@@ -1,6 +1,8 @@
 package org.sopt.ssingserver.domain.matching.entity;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -11,7 +13,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,8 +60,18 @@ public class MatchingRequest extends BaseTimeEntity {
     @Column(nullable = false)
     private int headcount;
 
-    @Column(nullable = false)
-    private int requestedDurationMinutes;
+    // 최종 API의 소비자 희망 수업 시간 목록 저장용 별도 테이블
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+            name = "matching_requests_requested_duration_minutes",
+            joinColumns = @JoinColumn(name = "matching_request_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_matching_requests_duration_minutes",
+                    columnNames = {"matching_request_id", "duration_minutes"}
+            )
+    )
+    @Column(name = "duration_minutes", nullable = false)
+    private Set<Integer> requestedDurationMinutes = new LinkedHashSet<>();
 
     @Column(nullable = false)
     private boolean isEquipmentReady;
@@ -80,7 +97,7 @@ public class MatchingRequest extends BaseTimeEntity {
             Sport sport,
             LessonLevel lessonLevel,
             int headcount,
-            int requestedDurationMinutes,
+            Collection<Integer> requestedDurationMinutes,
             boolean isEquipmentReady,
             Instant expiresAt
     ) {
@@ -90,11 +107,16 @@ public class MatchingRequest extends BaseTimeEntity {
         matchingRequest.sport = sport;
         matchingRequest.lessonLevel = lessonLevel;
         matchingRequest.headcount = headcount;
-        matchingRequest.requestedDurationMinutes = requestedDurationMinutes;
+        matchingRequest.replaceRequestedDurationMinutes(requestedDurationMinutes);
         matchingRequest.isEquipmentReady = isEquipmentReady;
         matchingRequest.status = MatchingRequestStatus.REQUESTED;
         matchingRequest.expiresAt = expiresAt;
         return matchingRequest;
+    }
+
+    // 후보 조회와 API 응답에서 사용할 소비자 희망 시간 읽기 전용 view 반환
+    public Set<Integer> getRequestedDurationMinutes() {
+        return Collections.unmodifiableSet(requestedDurationMinutes);
     }
 
     // 현재 시각 기준 탐색 만료 시각 도달 여부와 5분 SEARCHING 종료 여부 판단
@@ -161,5 +183,24 @@ public class MatchingRequest extends BaseTimeEntity {
     ) {
         this.status = status;
         this.statusReason = statusReason;
+    }
+
+    // 강사 availableDurationMinutes와 교집합 비교할 희망 시간 목록 양수 검증
+    private void replaceRequestedDurationMinutes(Collection<Integer> requestedDurationMinutes) {
+        if (requestedDurationMinutes == null || requestedDurationMinutes.isEmpty()) {
+            throw new IllegalArgumentException("requestedDurationMinutes must not be empty.");
+        }
+
+        // 같은 시간 중복 전송 시 하나의 선택값 저장을 위한 Set 정규화
+        LinkedHashSet<Integer> nextRequestedDurationMinutes = new LinkedHashSet<>();
+        for (Integer durationMinutes : requestedDurationMinutes) {
+            if (durationMinutes == null || durationMinutes <= 0) {
+                throw new IllegalArgumentException("requestedDurationMinutes must contain positive minutes.");
+            }
+            nextRequestedDurationMinutes.add(durationMinutes);
+        }
+
+        this.requestedDurationMinutes.clear();
+        this.requestedDurationMinutes.addAll(nextRequestedDurationMinutes);
     }
 }

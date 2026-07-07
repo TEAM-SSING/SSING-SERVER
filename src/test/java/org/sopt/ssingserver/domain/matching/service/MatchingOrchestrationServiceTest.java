@@ -91,7 +91,8 @@ class MatchingOrchestrationServiceTest {
         verify(matchingRequestRepository).save(matchingRequestCaptor.capture());
         assertThat(matchingRequestCaptor.getValue().getMember()).isSameAs(member);
         assertThat(matchingRequestCaptor.getValue().getResort()).isSameAs(resort);
-        assertThat(matchingRequestCaptor.getValue().getRequestedDurationMinutes()).isEqualTo(120);
+        assertThat(matchingRequestCaptor.getValue().getRequestedDurationMinutes())
+                .containsExactly(120, 180);
         assertThat(matchingRequestCaptor.getValue().getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         verify(matchingRequestParticipantRepository).saveAll(any());
         verify(matchingSearchTriggerService).triggerSearch(10L);
@@ -203,7 +204,7 @@ class MatchingOrchestrationServiceTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 headcount,
-                120,
+                List.of(120, 180),
                 true,
                 participants
         );
@@ -219,7 +220,8 @@ class MatchingOrchestrationServiceTest {
             constructor.setAccessible(true);
             Resort resort = constructor.newInstance();
             ReflectionTestUtils.setField(resort, "code", "HIGH1");
-            ReflectionTestUtils.setField(resort, "name", "하이원");
+            ReflectionTestUtils.setField(resort, "name", "하이원리조트");
+            ReflectionTestUtils.setField(resort, "displayName", "하이원");
             return resort;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);

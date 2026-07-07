@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
@@ -68,7 +69,7 @@ class MatchingRequestGroupItemTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 1,
-                120,
+                List.of(120),
                 true,
                 Instant.parse("2026-07-07T00:10:00Z")
         );
@@ -80,7 +81,8 @@ class MatchingRequestGroupItemTest {
             constructor.setAccessible(true);
             Resort resort = constructor.newInstance();
             ReflectionTestUtils.setField(resort, "code", "HIGH1");
-            ReflectionTestUtils.setField(resort, "name", "하이원");
+            ReflectionTestUtils.setField(resort, "name", "하이원리조트");
+            ReflectionTestUtils.setField(resort, "displayName", "하이원");
             return resort;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);

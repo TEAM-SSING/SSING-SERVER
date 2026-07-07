@@ -16,16 +16,17 @@ public record MatchingCreationCommand(
         LessonLevel lessonLevel,
         // 매칭 요청 총 인원, 참여자 목록 수 검증과 강사 수용 가능 인원 비교 기준
         int headcount,
-        // 강사 노출 시간 조건과 비교할 희망 수업 시간
-        int requestedDurationMinutes,
+        // 강사 노출 시간 조건과 교집합으로 비교할 희망 수업 시간 목록
+        List<Integer> requestedDurationMinutes,
         // 장비 준비 여부 조건, 강사 노출 조건의 장비 포함 가능 여부 비교 기준
         boolean isEquipmentReady,
         // 요청 참여자별 나이/성별 저장값, headcount와 같은 인원 기준 유지 대상
         List<MatchingParticipantCommand> participants
 ) {
 
-    // 외부 참여자 목록 수정으로 인한 저장 기준 변경 방지용 불변 복사
+    // 외부 목록 수정으로 인한 희망 시간/참여자 저장 기준 변경 방지용 불변 복사
     public MatchingCreationCommand {
+        requestedDurationMinutes = List.copyOf(requestedDurationMinutes);
         participants = List.copyOf(participants);
     }
 
@@ -36,7 +37,7 @@ public record MatchingCreationCommand(
             Sport sport,
             LessonLevel lessonLevel,
             int headcount,
-            int requestedDurationMinutes,
+            List<Integer> requestedDurationMinutes,
             boolean isEquipmentReady,
             List<MatchingParticipantCommand> participants
     ) {

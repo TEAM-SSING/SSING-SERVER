@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
@@ -139,7 +140,7 @@ class MatchingStatusResolverTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 headcount,
-                requestedDurationMinutes,
+                List.of(requestedDurationMinutes),
                 true,
                 expiresAt
         );
@@ -161,7 +162,8 @@ class MatchingStatusResolverTest {
             constructor.setAccessible(true);
             Resort resort = constructor.newInstance();
             ReflectionTestUtils.setField(resort, "code", "HIGH1");
-            ReflectionTestUtils.setField(resort, "name", "하이원");
+            ReflectionTestUtils.setField(resort, "name", "하이원리조트");
+            ReflectionTestUtils.setField(resort, "displayName", "하이원");
             return resort;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);

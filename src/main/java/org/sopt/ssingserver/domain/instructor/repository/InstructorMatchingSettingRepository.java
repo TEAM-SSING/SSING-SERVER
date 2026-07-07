@@ -1,5 +1,6 @@
 package org.sopt.ssingserver.domain.instructor.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
@@ -25,7 +26,7 @@ public interface InstructorMatchingSettingRepository extends JpaRepository<Instr
             where setting.instructorProfile.resort = :resort
               and setting.sport = :sport
               and lessonLevel = :lessonLevel
-              and availableDurationMinutes = :requestedDurationMinutes
+              and availableDurationMinutes in :requestedDurationMinutes
               and setting.maxHeadcount >= :headcount
               and setting.isEquipmentReady = :isEquipmentReady
               and setting.isExposed = true
@@ -36,7 +37,7 @@ public interface InstructorMatchingSettingRepository extends JpaRepository<Instr
             @Param("sport") Sport sport,
             @Param("lessonLevel") LessonLevel lessonLevel,
             @Param("headcount") int headcount,
-            @Param("requestedDurationMinutes") int requestedDurationMinutes,
+            @Param("requestedDurationMinutes") Collection<Integer> requestedDurationMinutes,
             @Param("isEquipmentReady") boolean isEquipmentReady
     );
 }
