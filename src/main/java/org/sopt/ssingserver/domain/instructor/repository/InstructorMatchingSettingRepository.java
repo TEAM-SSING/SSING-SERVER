@@ -18,7 +18,7 @@ public interface InstructorMatchingSettingRepository extends JpaRepository<Instr
             select distinct setting
             from InstructorMatchingSetting setting
             join setting.lessonLevels lessonLevel
-            where setting.resort = :resort
+            where setting.instructorProfile.resort = :resort
               and setting.sport = :sport
               and lessonLevel = :lessonLevel
               and setting.maxHeadcount >= :headcount
