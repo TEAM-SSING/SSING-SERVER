@@ -10,4 +10,30 @@ public record CurrentMember(
         MemberStatus memberStatus,
         InstructorApprovalStatus instructorApprovalStatus
 ) {
+
+    public boolean isActive() {
+        return memberStatus == MemberStatus.ACTIVE;
+    }
+
+    public boolean isActiveConsumer() {
+        return isActive()
+                && role == MemberRole.CONSUMER;
+    }
+
+    public boolean isPendingInstructor() {
+        return isActive()
+                && role == MemberRole.CONSUMER
+                && instructorApprovalStatus == InstructorApprovalStatus.PENDING;
+    }
+
+    public boolean isApprovedInstructor() {
+        return isActive()
+                && role == MemberRole.INSTRUCTOR
+                && instructorApprovalStatus == InstructorApprovalStatus.APPROVED;
+    }
+
+    public boolean isActiveAdmin() {
+        return isActive()
+                && role == MemberRole.ADMIN;
+    }
 }
