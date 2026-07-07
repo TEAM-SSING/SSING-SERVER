@@ -121,7 +121,19 @@ public class MatchingRequest extends BaseTimeEntity {
         updateStatus(MatchingRequestStatus.FAILED, MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR);
     }
 
-    public void expire(MatchingRequestStatusReason statusReason) {
+    public void expireByInstructorTimeout() {
+        expireWithReason(MatchingRequestStatusReason.INSTRUCTOR_TIMEOUT);
+    }
+
+    public void expireByConfirmationTimeout() {
+        expireWithReason(MatchingRequestStatusReason.CONFIRMATION_TIMEOUT);
+    }
+
+    public void expireByPaymentTimeout() {
+        expireWithReason(MatchingRequestStatusReason.PAYMENT_TIMEOUT);
+    }
+
+    private void expireWithReason(MatchingRequestStatusReason statusReason) {
         updateStatus(MatchingRequestStatus.EXPIRED, statusReason);
     }
 

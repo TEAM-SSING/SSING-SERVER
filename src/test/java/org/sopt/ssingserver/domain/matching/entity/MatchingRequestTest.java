@@ -78,21 +78,38 @@ class MatchingRequestTest {
 
     @Test
     void 상태변경_메서드는_의도에_맞는_요청상태를_저장한다() {
-        MatchingRequest matchingRequest = matchingRequest();
+        MatchingRequest groupedRequest = matchingRequest();
+        MatchingRequest confirmedRequest = matchingRequest();
+        MatchingRequest completedRequest = matchingRequest();
 
-        matchingRequest.markGrouped();
-        assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.GROUPED);
+        groupedRequest.markGrouped();
+        confirmedRequest.confirm();
+        completedRequest.complete();
 
-        matchingRequest.confirm();
-        assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.CONFIRMED);
+        assertThat(groupedRequest.getStatus()).isSameAs(MatchingRequestStatus.GROUPED);
+        assertThat(confirmedRequest.getStatus()).isSameAs(MatchingRequestStatus.CONFIRMED);
+        assertThat(completedRequest.getStatus()).isSameAs(MatchingRequestStatus.COMPLETED);
+    }
 
-        matchingRequest.complete();
-        assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.COMPLETED);
+    @Test
+    void 만료_메서드는_타임아웃_사유별로_EXPIRED와_사유를_저장한다() {
+        MatchingRequest instructorTimeoutRequest = matchingRequest();
+        MatchingRequest confirmationTimeoutRequest = matchingRequest();
+        MatchingRequest paymentTimeoutRequest = matchingRequest();
 
-        matchingRequest.expire(MatchingRequestStatusReason.CONFIRMATION_TIMEOUT);
-        assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.EXPIRED);
-        assertThat(matchingRequest.getStatusReason())
+        instructorTimeoutRequest.expireByInstructorTimeout();
+        confirmationTimeoutRequest.expireByConfirmationTimeout();
+        paymentTimeoutRequest.expireByPaymentTimeout();
+
+        assertThat(instructorTimeoutRequest.getStatus()).isSameAs(MatchingRequestStatus.EXPIRED);
+        assertThat(instructorTimeoutRequest.getStatusReason())
+                .isSameAs(MatchingRequestStatusReason.INSTRUCTOR_TIMEOUT);
+        assertThat(confirmationTimeoutRequest.getStatus()).isSameAs(MatchingRequestStatus.EXPIRED);
+        assertThat(confirmationTimeoutRequest.getStatusReason())
                 .isSameAs(MatchingRequestStatusReason.CONFIRMATION_TIMEOUT);
+        assertThat(paymentTimeoutRequest.getStatus()).isSameAs(MatchingRequestStatus.EXPIRED);
+        assertThat(paymentTimeoutRequest.getStatusReason())
+                .isSameAs(MatchingRequestStatusReason.PAYMENT_TIMEOUT);
     }
 
     private MatchingRequest matchingRequest() {
