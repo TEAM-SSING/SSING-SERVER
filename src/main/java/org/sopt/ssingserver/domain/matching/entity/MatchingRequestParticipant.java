@@ -37,4 +37,16 @@ public class MatchingRequestParticipant extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Gender gender;
+
+    public static MatchingRequestParticipant create(
+            MatchingRequest matchingRequest,
+            int age,
+            Gender gender
+    ) {
+        MatchingRequestParticipant participant = new MatchingRequestParticipant();
+        participant.matchingRequest = matchingRequest;
+        participant.age = age;
+        participant.gender = gender;
+        return participant;
+    }
 }

@@ -27,4 +27,46 @@ public class MatchingRequestGroup extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)
     private MatchingRequestGroupStatus status;
+
+    public static MatchingRequestGroup createCandidate() {
+        MatchingRequestGroup matchingRequestGroup = new MatchingRequestGroup();
+        matchingRequestGroup.status = MatchingRequestGroupStatus.CANDIDATE;
+        return matchingRequestGroup;
+    }
+
+    public void expose() {
+        this.status = MatchingRequestGroupStatus.EXPOSED;
+    }
+
+    public void markInstructorAccepted() {
+        this.status = MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED;
+    }
+
+    public void markConsumerAccepted() {
+        this.status = MatchingRequestGroupStatus.CONSUMER_ACCEPTED;
+    }
+
+    public void markPaymentPending() {
+        this.status = MatchingRequestGroupStatus.PAYMENT_PENDING;
+    }
+
+    public void markPaymentExpired() {
+        this.status = MatchingRequestGroupStatus.PAYMENT_EXPIRED;
+    }
+
+    public void confirm() {
+        this.status = MatchingRequestGroupStatus.CONFIRMED;
+    }
+
+    public void lose() {
+        this.status = MatchingRequestGroupStatus.LOST;
+    }
+
+    public void cancel() {
+        this.status = MatchingRequestGroupStatus.CANCELED;
+    }
+
+    public void expire() {
+        this.status = MatchingRequestGroupStatus.EXPIRED;
+    }
 }

@@ -48,4 +48,40 @@ public class MatchingRequestGroupItem extends BaseTimeEntity {
     private MatchingRequestGroupItemStatus status;
 
     private Instant respondedAt;
+
+    public static MatchingRequestGroupItem createNotRequested(
+            MatchingRequest matchingRequest,
+            MatchingRequestGroup matchingRequestGroup
+    ) {
+        MatchingRequestGroupItem item = new MatchingRequestGroupItem();
+        item.matchingRequest = matchingRequest;
+        item.matchingRequestGroup = matchingRequestGroup;
+        item.status = MatchingRequestGroupItemStatus.NOT_REQUESTED;
+        return item;
+    }
+
+    public void requestConfirmation() {
+        this.status = MatchingRequestGroupItemStatus.PENDING;
+    }
+
+    public void accept(Instant respondedAt) {
+        respond(MatchingRequestGroupItemStatus.ACCEPTED, respondedAt);
+    }
+
+    public void reject(Instant respondedAt) {
+        respond(MatchingRequestGroupItemStatus.REJECTED, respondedAt);
+    }
+
+    public void cancel() {
+        this.status = MatchingRequestGroupItemStatus.CANCELED;
+    }
+
+    public void expire() {
+        this.status = MatchingRequestGroupItemStatus.EXPIRED;
+    }
+
+    private void respond(MatchingRequestGroupItemStatus status, Instant respondedAt) {
+        this.status = status;
+        this.respondedAt = respondedAt;
+    }
 }

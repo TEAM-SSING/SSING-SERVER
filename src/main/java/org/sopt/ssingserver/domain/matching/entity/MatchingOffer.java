@@ -52,4 +52,38 @@ public class MatchingOffer extends BaseTimeEntity {
     private Instant exposedAt;
 
     private Instant respondedAt;
+
+    public static MatchingOffer create(
+            InstructorProfile instructorProfile,
+            MatchingRequestGroup matchingRequestGroup,
+            Instant exposedAt
+    ) {
+        MatchingOffer matchingOffer = new MatchingOffer();
+        matchingOffer.instructorProfile = instructorProfile;
+        matchingOffer.matchingRequestGroup = matchingRequestGroup;
+        matchingOffer.status = MatchingOfferStatus.OFFERED;
+        matchingOffer.exposedAt = exposedAt;
+        return matchingOffer;
+    }
+
+    public void accept(Instant respondedAt) {
+        respond(MatchingOfferStatus.ACCEPTED, respondedAt);
+    }
+
+    public void reject(Instant respondedAt) {
+        respond(MatchingOfferStatus.REJECTED, respondedAt);
+    }
+
+    public void cancel() {
+        this.status = MatchingOfferStatus.CANCELED;
+    }
+
+    public void expire() {
+        this.status = MatchingOfferStatus.EXPIRED;
+    }
+
+    private void respond(MatchingOfferStatus status, Instant respondedAt) {
+        this.status = status;
+        this.respondedAt = respondedAt;
+    }
 }

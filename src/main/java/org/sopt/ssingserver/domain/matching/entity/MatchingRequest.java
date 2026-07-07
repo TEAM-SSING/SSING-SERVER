@@ -69,5 +69,67 @@ public class MatchingRequest extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     private MatchingOffer matchingOffer;
 
+    // 요청, 최종 확인, 결제처럼 현재 진행 단계에서 앱이 참고할 만료 시각
     private Instant expiresAt;
+
+    public static MatchingRequest create(
+            Member member,
+            Resort resort,
+            Sport sport,
+            LessonLevel lessonLevel,
+            int headcount,
+            int durationMinutes,
+            boolean isEquipmentReady,
+            Instant expiresAt
+    ) {
+        MatchingRequest matchingRequest = new MatchingRequest();
+        matchingRequest.member = member;
+        matchingRequest.resort = resort;
+        matchingRequest.sport = sport;
+        matchingRequest.lessonLevel = lessonLevel;
+        matchingRequest.headcount = headcount;
+        matchingRequest.durationMinutes = durationMinutes;
+        matchingRequest.isEquipmentReady = isEquipmentReady;
+        matchingRequest.status = MatchingRequestStatus.REQUESTED;
+        matchingRequest.expiresAt = expiresAt;
+        return matchingRequest;
+    }
+
+    public void markGrouped() {
+        updateStatus(MatchingRequestStatus.GROUPED, null);
+    }
+
+    public void markMatched(MatchingOffer matchingOffer, Instant expiresAt) {
+        this.matchingOffer = matchingOffer;
+        this.expiresAt = expiresAt;
+        updateStatus(MatchingRequestStatus.MATCHED, null);
+    }
+
+    public void confirm() {
+        updateStatus(MatchingRequestStatus.CONFIRMED, null);
+    }
+
+    public void complete() {
+        updateStatus(MatchingRequestStatus.COMPLETED, null);
+    }
+
+    public void cancelByConsumer() {
+        updateStatus(MatchingRequestStatus.CANCELED, MatchingRequestStatusReason.CONSUMER_CANCELED);
+    }
+
+    public void failNoAvailableInstructor() {
+        updateStatus(MatchingRequestStatus.FAILED, MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR);
+    }
+
+    public void expire(MatchingRequestStatusReason statusReason) {
+        updateStatus(MatchingRequestStatus.EXPIRED, statusReason);
+    }
+
+    private void updateStatus(
+            MatchingRequestStatus status,
+            MatchingRequestStatusReason statusReason
+    ) {
+        this.status = status;
+        this.statusReason = statusReason;
+    }
 }
