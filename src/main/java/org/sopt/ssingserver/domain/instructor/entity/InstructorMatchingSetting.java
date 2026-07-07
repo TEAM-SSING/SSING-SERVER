@@ -101,11 +101,15 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
         this.maxHeadcount = maxHeadcount;
         this.isEquipmentReady = isEquipmentReady;
         // 조건 저장 API는 저장과 동시에 즉시 노출을 시작한다.
+        startExposure();
+    }
+
+    public void startExposure() {
         this.isExposed = true;
     }
 
-    public void updateExposure(boolean isExposed) {
-        this.isExposed = isExposed;
+    public void stopExposure() {
+        this.isExposed = false;
     }
 
     private void replaceLessonLevels(Collection<LessonLevel> lessonLevels) {

@@ -51,7 +51,7 @@ class InstructorMatchingSettingTest {
                 3,
                 true
         );
-        setting.updateExposure(false);
+        setting.stopExposure();
 
         setting.updateConditions(
                 Sport.SKI,
