@@ -29,7 +29,7 @@ class MatchingRequestTest {
         assertThat(matchingRequest.getSport()).isSameAs(Sport.SNOWBOARD);
         assertThat(matchingRequest.getLessonLevel()).isSameAs(LessonLevel.FIRST_TIME);
         assertThat(matchingRequest.getHeadcount()).isEqualTo(2);
-        assertThat(matchingRequest.getDurationMinutes()).isEqualTo(120);
+        assertThat(matchingRequest.getRequestedDurationMinutes()).isEqualTo(120);
         assertThat(matchingRequest.isEquipmentReady()).isTrue();
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         assertThat(matchingRequest.getStatusReason()).isNull();

@@ -59,7 +59,7 @@ class InstructorMatchingSettingTest {
                 List.of(LessonLevel.INTERMEDIATE, LessonLevel.CERTIFIED),
                 List.of(240),
                 5,
-                false
+                true
         );
 
         assertThat(setting.getLessonLevels())
@@ -70,7 +70,7 @@ class InstructorMatchingSettingTest {
         assertThat(setting.getAvailableDurationMinutes()).containsExactly(240);
         assertThat(setting.supportsDurationMinutes(180)).isFalse();
         assertThat(setting.getMaxHeadcount()).isEqualTo(5);
-        assertThat(setting.isEquipmentReady()).isFalse();
+        assertThat(setting.isEquipmentReady()).isTrue();
         assertThat(setting.isExposed()).isTrue();
     }
 
@@ -158,6 +158,34 @@ class InstructorMatchingSettingTest {
                 .hasMessage("availableDurationMinutes must not contain null.");
     }
 
+    @Test
+    void create는_availableDurationMinutes에_양수가_아닌_값이_있으면_생성하지_않는다() {
+        assertThatThrownBy(() -> InstructorMatchingSetting.create(
+                instructorProfile(),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120, 0),
+                3,
+                true
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("availableDurationMinutes must contain positive minutes.");
+    }
+
+    @Test
+    void create는_equipmentReady가_false이면_생성하지_않는다() {
+        assertThatThrownBy(() -> InstructorMatchingSetting.create(
+                instructorProfile(),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120),
+                3,
+                false
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("isEquipmentReady must be true to start exposure.");
+    }
+
     private InstructorProfile instructorProfile() {
         Member member = Member.create(
                 "승인강사",
@@ -177,5 +205,4 @@ class InstructorMatchingSettingTest {
                 Instant.parse("2026-07-07T00:00:00Z")
         );
     }
-
 }

@@ -25,6 +25,7 @@ import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 
+// 강사가 즉시 매칭에 노출될 때 사용할 조건 저장 엔티티
 @Getter
 @Entity
 @Table(
@@ -49,7 +50,7 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
     @Column(nullable = false, length = 30)
     private Sport sport;
 
-    // 레벨 - 여러 개 다중 선택이므로 별도 테이블로 분리
+    // 최종 API의 레벨 선택 목록 저장용 별도 테이블
     @ElementCollection(fetch = FetchType.LAZY)
     @Enumerated(EnumType.STRING)
     @CollectionTable(
@@ -63,10 +64,7 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
     @Column(name = "lesson_level", nullable = false, length = 30)
     private Set<LessonLevel> lessonLevels = new LinkedHashSet<>();
 
-    @Column(nullable = false)
-    private int maxHeadcount;
-
-    // 강습 시간 - 여러 개 다중 선택이므로 별도 테이블로 분리
+    // 최종 API의 강사 가능 수업 시간 목록 저장용 별도 테이블
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(
             name = "instructor_matching_settings_available_durations",
@@ -80,12 +78,15 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
     private Set<Integer> availableDurationMinutes = new LinkedHashSet<>();
 
     @Column(nullable = false)
+    private int maxHeadcount;
+
+    @Column(nullable = false)
     private boolean isEquipmentReady;
 
     @Column(nullable = false)
     private boolean isExposed;
 
-    // 생성/상태 변경
+    // 새 강사 노출 조건 생성 시 프로필/조건값 결합 및 즉시 노출 상태 설정
     public static InstructorMatchingSetting create(
             InstructorProfile instructorProfile,
             Sport sport,
@@ -100,6 +101,27 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
         return setting;
     }
 
+    // 외부의 내부 Set 직접 수정 방지를 위한 읽기 전용 view 반환
+    public Set<LessonLevel> getLessonLevels() {
+        return Collections.unmodifiableSet(lessonLevels);
+    }
+
+    // 후보 조회와 API 응답에서 사용할 강사 가능 시간 읽기 전용 view 반환
+    public Set<Integer> getAvailableDurationMinutes() {
+        return Collections.unmodifiableSet(availableDurationMinutes);
+    }
+
+    // 소비자 요청 레벨의 강사 선택 레벨 목록 포함 여부 판단
+    public boolean supportsLessonLevel(LessonLevel lessonLevel) {
+        return lessonLevels.contains(lessonLevel);
+    }
+
+    // 소비자 요청 시간의 강사 가능 시간 목록 포함 여부 판단
+    public boolean supportsDurationMinutes(int durationMinutes) {
+        return availableDurationMinutes.contains(durationMinutes);
+    }
+
+    // 강사 조건 저장 API의 갱신 지점, 레벨/시간 목록 검증 후 교체 및 즉시 노출 시작
     public void updateConditions(
             Sport sport,
             Collection<LessonLevel> lessonLevels,
@@ -107,45 +129,41 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
             int maxHeadcount,
             boolean isEquipmentReady
     ) {
+        validateEquipmentReady(isEquipmentReady);
+
         this.sport = sport;
         replaceLessonLevels(lessonLevels);
         replaceAvailableDurationMinutes(availableDurationMinutes);
         this.maxHeadcount = maxHeadcount;
         this.isEquipmentReady = isEquipmentReady;
-        // 조건 저장 API는 저장과 동시에 즉시 노출을 시작한다.
+        // 조건 저장과 동시에 즉시 노출 시작
         startExposure();
     }
 
+    // 조건 저장 또는 ON 요청 이후 즉시 매칭 후보 조회 포함을 위한 노출 상태 ON
     public void startExposure() {
         this.isExposed = true;
     }
 
+    // 강사의 즉시 매칭 일시 중지 시 후보 조회 제외를 위한 노출 상태 OFF
     public void stopExposure() {
         this.isExposed = false;
     }
 
-    // 조회
-    public Set<LessonLevel> getLessonLevels() {
-        return Collections.unmodifiableSet(lessonLevels);
+    // 즉시 노출 시작 API 계약의 장비 준비 완료 필수 조건 검증
+    private void validateEquipmentReady(boolean isEquipmentReady) {
+        if (!isEquipmentReady) {
+            throw new IllegalArgumentException("isEquipmentReady must be true to start exposure.");
+        }
     }
 
-    public boolean supportsLessonLevel(LessonLevel lessonLevel) {
-        return lessonLevels.contains(lessonLevel);
-    }
-
-    public Set<Integer> getAvailableDurationMinutes() {
-        return Collections.unmodifiableSet(availableDurationMinutes);
-    }
-
-    public boolean supportsDurationMinutes(int durationMinutes) {
-        return availableDurationMinutes.contains(durationMinutes);
-    }
-
+    // 후보 매칭 기준 보호를 위한 레벨 목록 비어 있음/null 포함 검증
     private void replaceLessonLevels(Collection<LessonLevel> lessonLevels) {
         if (lessonLevels == null || lessonLevels.isEmpty()) {
             throw new IllegalArgumentException("lessonLevels must not be empty.");
         }
 
+        // Set 기반 중복 제거 및 리뷰/디버깅용 입력 순서 유지
         LinkedHashSet<LessonLevel> nextLessonLevels = new LinkedHashSet<>();
         for (LessonLevel lessonLevel : lessonLevels) {
             if (lessonLevel == null) {
@@ -158,17 +176,22 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
         this.lessonLevels.addAll(nextLessonLevels);
     }
 
+    // 소비자 requestedDurationMinutes 교집합 비교용 가능 시간 목록 양수 검증
     private void replaceAvailableDurationMinutes(Collection<Integer> availableDurationMinutes) {
         if (availableDurationMinutes == null || availableDurationMinutes.isEmpty()) {
             throw new IllegalArgumentException("availableDurationMinutes must not be empty.");
         }
 
+        // 같은 시간 중복 전송 시 하나의 선택값 저장을 위한 Set 정규화
         LinkedHashSet<Integer> nextAvailableDurationMinutes = new LinkedHashSet<>();
-        for (Integer availableDurationMinute : availableDurationMinutes) {
-            if (availableDurationMinute == null) {
+        for (Integer durationMinutes : availableDurationMinutes) {
+            if (durationMinutes == null) {
                 throw new IllegalArgumentException("availableDurationMinutes must not contain null.");
             }
-            nextAvailableDurationMinutes.add(availableDurationMinute);
+            if (durationMinutes <= 0) {
+                throw new IllegalArgumentException("availableDurationMinutes must contain positive minutes.");
+            }
+            nextAvailableDurationMinutes.add(durationMinutes);
         }
 
         this.availableDurationMinutes.clear();
