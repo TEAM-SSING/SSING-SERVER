@@ -39,12 +39,9 @@ public class MatchingOrchestrationService {
     // 요청 생성 API 호출 지점, DB REQUESTED 저장과 API SEARCHING 응답 고정
     @Transactional
     public MatchingCreationResult createImmediateMatchingRequest(MatchingCreationCommand command) {
-        // 소비자 입력 총 인원과 참여자 상세 목록 불일치에 따른 팀 구성 기준 오염 방지
-        validateParticipantCount(command);
-
         // Controller의 DB 조회 책임 방지를 위한 Service 내부 회원/리조트 존재 검증
         Member member = getMember(command.memberId());
-        Resort resort = getResort(command.resortId());
+        Resort resort = getResort(command.resortCode());
 
         // 요청 생성 시각 기준 SEARCHING 재탐색 최대 시간 5분 계산
         Instant expiresAt = clock.instant().plus(SEARCH_TIMEOUT);
@@ -87,17 +84,10 @@ public class MatchingOrchestrationService {
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_MEMBER_NOT_FOUND));
     }
 
-    // 매칭 요청 대상 리조트 조회와 요청 저장 전 명시적 실패 처리
-    private Resort getResort(Long resortId) {
-        return resortRepository.findById(resortId)
+    // 매칭 요청 대상 리조트 code 조회와 요청 저장 전 명시적 실패 처리
+    private Resort getResort(String resortCode) {
+        return resortRepository.findByCode(resortCode)
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_RESORT_NOT_FOUND));
-    }
-
-    // 요청 인원과 참여자 목록 수 일치 검증을 통한 이후 그룹 생성 기준 통일
-    private void validateParticipantCount(MatchingCreationCommand command) {
-        if (command.headcount() != command.participants().size()) {
-            throw new BusinessException(MatchingErrorCode.MATCHING_PARTICIPANT_COUNT_MISMATCH);
-        }
     }
 
     // command 참여자 값의 DB 저장용 MatchingRequestParticipant 엔티티 목록 변환

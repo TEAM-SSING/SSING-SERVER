@@ -9,6 +9,8 @@ import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSetti
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
+import org.sopt.ssingserver.domain.matching.service.MatchingAfterCommitExecutor;
+import org.sopt.ssingserver.domain.matching.service.MatchingSearchTriggerService;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -22,17 +24,23 @@ public class InstructorService {
     private final InstructorProfileRepository instructorProfileRepository;
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
     private final LessonRepository lessonRepository;
+    private final MatchingSearchTriggerService matchingSearchTriggerService;
+    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
     private final TransactionTemplate transactionTemplate;
 
     public InstructorService(
             InstructorProfileRepository instructorProfileRepository,
             InstructorMatchingSettingRepository instructorMatchingSettingRepository,
             LessonRepository lessonRepository,
+            MatchingSearchTriggerService matchingSearchTriggerService,
+            MatchingAfterCommitExecutor matchingAfterCommitExecutor,
             PlatformTransactionManager transactionManager
     ) {
         this.instructorProfileRepository = instructorProfileRepository;
         this.instructorMatchingSettingRepository = instructorMatchingSettingRepository;
         this.lessonRepository = lessonRepository;
+        this.matchingSearchTriggerService = matchingSearchTriggerService;
+        this.matchingAfterCommitExecutor = matchingAfterCommitExecutor;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -82,6 +90,7 @@ public class InstructorService {
                 ));
 
         instructorMatchingSettingRepository.save(setting);
+        triggerRequestedSearchAfterCommit();
         return setting.isExposed();
     }
 
@@ -107,8 +116,17 @@ public class InstructorService {
                     request.maxHeadcount(),
                     request.equipmentReady()
             );
+            triggerRequestedSearchAfterCommit();
             return setting.isExposed();
         }));
+    }
+
+    // 노출 조건 저장 커밋 이후 SEARCHING 요청 전체 재탐색 예약
+    private void triggerRequestedSearchAfterCommit() {
+        matchingAfterCommitExecutor.execute(
+                "instructor-matching-exposure-search",
+                matchingSearchTriggerService::triggerAllRequested
+        );
     }
 
     // 진행 중인 강습 여부와 활동 리조트 등록 여부를 확인

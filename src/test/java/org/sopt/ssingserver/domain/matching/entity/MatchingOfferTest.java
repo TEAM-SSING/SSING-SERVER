@@ -16,7 +16,7 @@ class MatchingOfferTest {
 
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
-                MatchingRequestGroup.createCandidate(),
+                MatchingRequestGroup.createCandidate(120),
                 exposedAt
         );
 
@@ -29,7 +29,7 @@ class MatchingOfferTest {
     void 응답_메서드는_상태와_응답시각을_저장한다() {
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
-                MatchingRequestGroup.createCandidate(),
+                MatchingRequestGroup.createCandidate(120),
                 Instant.parse("2026-07-07T00:00:00Z")
         );
         Instant respondedAt = Instant.parse("2026-07-07T00:01:00Z");
@@ -47,7 +47,7 @@ class MatchingOfferTest {
     void 닫기_메서드는_의도에_맞는_제안상태를_저장한다() {
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
-                MatchingRequestGroup.createCandidate(),
+                MatchingRequestGroup.createCandidate(120),
                 Instant.parse("2026-07-07T00:00:00Z")
         );
 

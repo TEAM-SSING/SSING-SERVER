@@ -28,10 +28,24 @@ public class MatchingRequestGroup extends BaseTimeEntity {
     @Column(nullable = false, length = 40)
     private MatchingRequestGroupStatus status;
 
-    public static MatchingRequestGroup createCandidate() {
+    // 요청/강사 가능 시간 교집합에서 서버가 확정한 단일 강습 시간
+    @Column(nullable = false)
+    private int durationMinutes;
+
+    public static MatchingRequestGroup createCandidate(int durationMinutes) {
+        validateDurationMinutes(durationMinutes);
+
         MatchingRequestGroup matchingRequestGroup = new MatchingRequestGroup();
         matchingRequestGroup.status = MatchingRequestGroupStatus.CANDIDATE;
+        matchingRequestGroup.durationMinutes = durationMinutes;
         return matchingRequestGroup;
+    }
+
+    // 그룹 생성 이후 API 응답/결제/수업 생성에서 재사용할 확정 강습 시간 양수 검증
+    private static void validateDurationMinutes(int durationMinutes) {
+        if (durationMinutes <= 0) {
+            throw new IllegalArgumentException("durationMinutes must be positive.");
+        }
     }
 
     public void expose() {

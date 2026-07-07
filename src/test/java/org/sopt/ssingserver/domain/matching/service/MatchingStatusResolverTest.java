@@ -37,7 +37,7 @@ class MatchingStatusResolverTest {
     }
 
     @Test
-    void REQUESTED이고_후보는_있지만_제안이_없으면_WAITING_FOR_TEAM으로_계산한다() {
+    void REQUESTED이고_후보는_있지만_그룹과_제안이_없으면_SEARCHING으로_계산한다() {
         MatchingStatus status = resolver.resolve(
                 matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z")),
                 true,
@@ -45,12 +45,12 @@ class MatchingStatusResolverTest {
                 Optional.empty()
         );
 
-        assertThat(status).isSameAs(MatchingStatus.WAITING_FOR_TEAM);
+        assertThat(status).isSameAs(MatchingStatus.SEARCHING);
     }
 
     @Test
     void 강사_제안이_생성되면_WAITING_FOR_INSTRUCTOR로_계산한다() {
-        MatchingRequestGroup group = MatchingRequestGroup.createCandidate();
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
         group.expose();
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
@@ -72,7 +72,7 @@ class MatchingStatusResolverTest {
     void 취소된_요청은_주변_객체보다_CANCELED로_먼저_계산한다() {
         MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
         matchingRequest.cancelByConsumer();
-        MatchingRequestGroup group = MatchingRequestGroup.createCandidate();
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
                 group,
@@ -98,7 +98,7 @@ class MatchingStatusResolverTest {
         matchedRequest.markMatched(
                 MatchingOffer.create(
                         instructorProfile(),
-                        MatchingRequestGroup.createCandidate(),
+                        MatchingRequestGroup.createCandidate(120),
                         Instant.parse("2026-07-07T00:00:00Z")
                 ),
                 Instant.parse("2026-07-07T00:10:00Z")

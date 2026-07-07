@@ -75,6 +75,32 @@ class InstructorMatchingSettingTest {
     }
 
     @Test
+    void updateConditions는_equipmentReady가_false이면_노출조건을_변경하지_않는다() {
+        InstructorMatchingSetting setting = InstructorMatchingSetting.create(
+                instructorProfile(),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120, 180),
+                3,
+                true
+        );
+
+        assertThatThrownBy(() -> setting.updateConditions(
+                Sport.SKI,
+                List.of(LessonLevel.CERTIFIED),
+                List.of(180),
+                5,
+                false
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("isEquipmentReady must be true to start exposure.");
+        assertThat(setting.getSport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(setting.getLessonLevels()).containsExactly(LessonLevel.FIRST_TIME);
+        assertThat(setting.getAvailableDurationMinutes()).containsExactly(120, 180);
+        assertThat(setting.getMaxHeadcount()).isEqualTo(3);
+    }
+
+    @Test
     void create는_lessonLevels가_비어있으면_생성하지_않는다() {
         assertThatThrownBy(() -> InstructorMatchingSetting.create(
                 instructorProfile(),

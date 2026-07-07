@@ -41,11 +41,9 @@ public class MatchingStatusResolver {
             return MatchingStatus.WAITING_FOR_TEAM;
         }
 
-        // DB REQUESTED 유지 중 후보 없음 상태의 앱 SEARCHING 표시
+        // DB REQUESTED 유지 중 그룹/제안 없음 상태의 앱 SEARCHING 표시
+        // WAITING_FOR_TEAM은 추후 minHeadcount/요청 결합 정책 도입 시 재개
         if (matchingRequest.getStatus() == MatchingRequestStatus.REQUESTED) {
-            if (hasAvailableCandidate) {
-                return MatchingStatus.WAITING_FOR_TEAM;
-            }
             return MatchingStatus.SEARCHING;
         }
 

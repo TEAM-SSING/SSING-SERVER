@@ -70,14 +70,18 @@ class MatchingOrchestrationServiceTest {
         Member member = member();
         Resort resort = resort();
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
-        when(resortRepository.findById(2L)).thenReturn(Optional.of(resort));
+        when(resortRepository.findByCode("HIGH1")).thenReturn(Optional.of(resort));
         when(matchingRequestRepository.save(any(MatchingRequest.class))).thenAnswer(invocation -> {
             MatchingRequest matchingRequest = invocation.getArgument(0);
             ReflectionTestUtils.setField(matchingRequest, "id", 10L);
             return matchingRequest;
         });
 
-        MatchingCreationResult result = service.createImmediateMatchingRequest(command(2));
+        MatchingCreationResult result = service.createImmediateMatchingRequest(command(List.of(
+                MatchingParticipantCommand.of(24, Gender.FEMALE),
+                MatchingParticipantCommand.of(25, Gender.MALE),
+                MatchingParticipantCommand.of(26, Gender.FEMALE)
+        )));
 
         assertThat(result.matchingRequestId()).isEqualTo(10L);
         assertThat(result.matchingStatus()).isSameAs(MatchingStatus.SEARCHING);
@@ -91,6 +95,7 @@ class MatchingOrchestrationServiceTest {
         verify(matchingRequestRepository).save(matchingRequestCaptor.capture());
         assertThat(matchingRequestCaptor.getValue().getMember()).isSameAs(member);
         assertThat(matchingRequestCaptor.getValue().getResort()).isSameAs(resort);
+        assertThat(matchingRequestCaptor.getValue().getHeadcount()).isEqualTo(3);
         assertThat(matchingRequestCaptor.getValue().getRequestedDurationMinutes())
                 .containsExactly(120, 180);
         assertThat(matchingRequestCaptor.getValue().getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
@@ -102,7 +107,7 @@ class MatchingOrchestrationServiceTest {
     void createImmediateMatchingRequest는_트랜잭션_동기화가_있으면_커밋후_즉시탐색을_트리거한다() {
         MatchingOrchestrationService service = createService();
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member()));
-        when(resortRepository.findById(2L)).thenReturn(Optional.of(resort()));
+        when(resortRepository.findByCode("HIGH1")).thenReturn(Optional.of(resort()));
         when(matchingRequestRepository.save(any(MatchingRequest.class))).thenAnswer(invocation -> {
             MatchingRequest matchingRequest = invocation.getArgument(0);
             ReflectionTestUtils.setField(matchingRequest, "id", 10L);
@@ -111,7 +116,7 @@ class MatchingOrchestrationServiceTest {
         TransactionSynchronizationManager.initSynchronization();
 
         try {
-            service.createImmediateMatchingRequest(command(2));
+            service.createImmediateMatchingRequest(command());
 
             verifyNoInteractions(matchingSearchTriggerService);
 
@@ -125,30 +130,11 @@ class MatchingOrchestrationServiceTest {
     }
 
     @Test
-    void createImmediateMatchingRequest는_headcount와_참여자수가_다르면_저장하지_않는다() {
-        MatchingOrchestrationService service = createService();
-        MatchingCreationCommand command = command(2, List.of(
-                MatchingParticipantCommand.of(24, Gender.FEMALE)
-        ));
-
-        assertThatThrownBy(() -> service.createImmediateMatchingRequest(command))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isSameAs(MatchingErrorCode.MATCHING_PARTICIPANT_COUNT_MISMATCH);
-
-        verifyNoInteractions(memberRepository);
-        verifyNoInteractions(resortRepository);
-        verifyNoInteractions(matchingRequestRepository);
-        verifyNoInteractions(matchingRequestParticipantRepository);
-        verifyNoInteractions(matchingSearchTriggerService);
-    }
-
-    @Test
     void createImmediateMatchingRequest는_회원을_찾지_못하면_요청을_저장하지_않는다() {
         MatchingOrchestrationService service = createService();
         when(memberRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.createImmediateMatchingRequest(command(2)))
+        assertThatThrownBy(() -> service.createImmediateMatchingRequest(command()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isSameAs(MatchingErrorCode.MATCHING_MEMBER_NOT_FOUND);
@@ -163,9 +149,9 @@ class MatchingOrchestrationServiceTest {
     void createImmediateMatchingRequest는_리조트를_찾지_못하면_요청을_저장하지_않는다() {
         MatchingOrchestrationService service = createService();
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member()));
-        when(resortRepository.findById(2L)).thenReturn(Optional.empty());
+        when(resortRepository.findByCode("HIGH1")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.createImmediateMatchingRequest(command(2)))
+        assertThatThrownBy(() -> service.createImmediateMatchingRequest(command()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isSameAs(MatchingErrorCode.MATCHING_RESORT_NOT_FOUND);
@@ -187,23 +173,19 @@ class MatchingOrchestrationServiceTest {
         );
     }
 
-    private MatchingCreationCommand command(int headcount) {
-        return command(headcount, List.of(
+    private MatchingCreationCommand command() {
+        return command(List.of(
                 MatchingParticipantCommand.of(24, Gender.FEMALE),
                 MatchingParticipantCommand.of(25, Gender.MALE)
         ));
     }
 
-    private MatchingCreationCommand command(
-            int headcount,
-            List<MatchingParticipantCommand> participants
-    ) {
+    private MatchingCreationCommand command(List<MatchingParticipantCommand> participants) {
         return MatchingCreationCommand.of(
                 1L,
-                2L,
+                "HIGH1",
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
-                headcount,
                 List.of(120, 180),
                 true,
                 participants

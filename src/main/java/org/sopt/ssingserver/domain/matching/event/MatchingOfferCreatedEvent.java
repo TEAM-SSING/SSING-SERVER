@@ -15,6 +15,8 @@ public record MatchingOfferCreatedEvent(
         Long matchingRequestGroupId,
         // 강사 응답 API가 참조할 제안 row id
         Long matchingOfferId,
+        // 요청/강사 가능 시간 교집합에서 이번 제안에 확정된 강습 시간
+        int durationMinutes,
         // 알림 수신 강사 프로필 id
         Long instructorProfileId
 ) implements MatchingDomainEvent {

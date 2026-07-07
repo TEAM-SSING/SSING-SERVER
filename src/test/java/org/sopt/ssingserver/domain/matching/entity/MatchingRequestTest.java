@@ -97,7 +97,7 @@ class MatchingRequestTest {
         MatchingRequest matchingRequest = matchingRequest();
         MatchingOffer matchingOffer = MatchingOffer.create(
                 instructorProfile(),
-                MatchingRequestGroup.createCandidate(),
+                MatchingRequestGroup.createCandidate(120),
                 Instant.parse("2026-07-07T00:01:00Z")
         );
         Instant confirmationExpiresAt = Instant.parse("2026-07-07T00:02:00Z");

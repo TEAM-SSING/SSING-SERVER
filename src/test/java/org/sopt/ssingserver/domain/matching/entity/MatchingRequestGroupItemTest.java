@@ -21,7 +21,7 @@ class MatchingRequestGroupItemTest {
     void createNotRequested는_아직_요청하지_않은_그룹항목으로_초기화한다() {
         MatchingRequestGroupItem item = MatchingRequestGroupItem.createNotRequested(
                 matchingRequest(),
-                MatchingRequestGroup.createCandidate()
+                MatchingRequestGroup.createCandidate(120)
         );
 
         assertThat(item.getStatus()).isSameAs(MatchingRequestGroupItemStatus.NOT_REQUESTED);
@@ -32,7 +32,7 @@ class MatchingRequestGroupItemTest {
     void 응답_메서드는_상태와_응답시각을_저장한다() {
         MatchingRequestGroupItem item = MatchingRequestGroupItem.createNotRequested(
                 matchingRequest(),
-                MatchingRequestGroup.createCandidate()
+                MatchingRequestGroup.createCandidate(120)
         );
         Instant respondedAt = Instant.parse("2026-07-07T00:01:00Z");
 
@@ -52,7 +52,7 @@ class MatchingRequestGroupItemTest {
     void 닫기_메서드는_의도에_맞는_항목상태를_저장한다() {
         MatchingRequestGroupItem item = MatchingRequestGroupItem.createNotRequested(
                 matchingRequest(),
-                MatchingRequestGroup.createCandidate()
+                MatchingRequestGroup.createCandidate(120)
         );
 
         item.cancel();
