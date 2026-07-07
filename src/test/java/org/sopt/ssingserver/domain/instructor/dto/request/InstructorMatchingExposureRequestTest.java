@@ -80,6 +80,23 @@ class InstructorMatchingExposureRequestTest {
                 .contains("최대 강습 가능 인원은 5명 이하여야 합니다.");
     }
 
+    @Test
+    void 장비_착용_및_즉시_이동_가능_여부가_false이면_검증에_실패한다() {
+        InstructorMatchingExposureRequest request = new InstructorMatchingExposureRequest(
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120),
+                3,
+                false
+        );
+
+        Set<ConstraintViolation<InstructorMatchingExposureRequest>> violations = validator.validate(request);
+
+        assertThat(violations)
+                .extracting(ConstraintViolation::getMessage)
+                .contains("장비 착용 및 즉시 이동 가능 여부는 true여야 합니다.");
+    }
+
     private InstructorMatchingExposureRequest request(List<Integer> availableDurationMinutes) {
         return new InstructorMatchingExposureRequest(
                 Sport.SNOWBOARD,

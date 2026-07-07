@@ -33,6 +33,7 @@ public record InstructorMatchingExposureRequest(
 
         @Schema(description = "장비 착용 및 즉시 이동 가능 여부", example = "true")
         @NotNull(message = "장비 착용 및 즉시 이동 가능 여부는 필수입니다.")
+        @AssertTrue(message = "장비 착용 및 즉시 이동 가능 여부는 true여야 합니다.")
         Boolean equipmentReady
 ) {
 
