@@ -10,12 +10,16 @@ import org.sopt.ssingserver.domain.matching.dto.command.MatchingParticipantComma
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingCreationResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestParticipant;
+import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipantRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
+import org.sopt.ssingserver.domain.member.entity.Member;
+import org.sopt.ssingserver.domain.member.repository.MemberRepository;
+import org.sopt.ssingserver.domain.resort.entity.Resort;
+import org.sopt.ssingserver.domain.resort.repository.ResortRepository;
+import org.sopt.ssingserver.global.error.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 // 소비자 매칭 요청 생성 시작점, 요청 저장과 생성 직후 SEARCHING 응답 구성
 @Service
@@ -24,9 +28,12 @@ public class MatchingOrchestrationService {
 
     private static final Duration SEARCH_TIMEOUT = Duration.ofMinutes(5);
 
+    private final MemberRepository memberRepository;
+    private final ResortRepository resortRepository;
     private final MatchingRequestRepository matchingRequestRepository;
     private final MatchingRequestParticipantRepository matchingRequestParticipantRepository;
     private final MatchingSearchTriggerService matchingSearchTriggerService;
+    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
     private final Clock clock;
 
     // 요청 생성 API 호출 지점, DB REQUESTED 저장과 API SEARCHING 응답 고정
@@ -35,13 +42,17 @@ public class MatchingOrchestrationService {
         // 소비자 입력 총 인원과 참여자 상세 목록 불일치에 따른 팀 구성 기준 오염 방지
         validateParticipantCount(command);
 
+        // Controller의 DB 조회 책임 방지를 위한 Service 내부 회원/리조트 존재 검증
+        Member member = getMember(command.memberId());
+        Resort resort = getResort(command.resortId());
+
         // 요청 생성 시각 기준 SEARCHING 재탐색 최대 시간 5분 계산
         Instant expiresAt = clock.instant().plus(SEARCH_TIMEOUT);
 
         // DB SEARCHING 미저장, 실제 요청 상태 REQUESTED와 탐색 만료 시각 저장
         MatchingRequest matchingRequest = matchingRequestRepository.save(MatchingRequest.create(
-                command.member(),
-                command.resort(),
+                member,
+                resort,
                 command.sport(),
                 command.lessonLevel(),
                 command.headcount(),
@@ -62,25 +73,30 @@ public class MatchingOrchestrationService {
         return result;
     }
 
-    // Spring 트랜잭션 내부 afterCommit 등록, 단위 테스트 등 트랜잭션 부재 시 즉시 실행
+    // 공통 afterCommit 실행기 위임을 통한 생성 커밋 이후 재탐색 시작
     private void triggerSearchAfterCommit(Long matchingRequestId) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            matchingSearchTriggerService.triggerSearch(matchingRequestId);
-            return;
-        }
+        matchingAfterCommitExecutor.execute(
+                "matching-request-created-search",
+                () -> matchingSearchTriggerService.triggerSearch(matchingRequestId)
+        );
+    }
 
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                matchingSearchTriggerService.triggerSearch(matchingRequestId);
-            }
-        });
+    // 매칭 요청 소유 회원 조회와 요청 저장 전 명시적 실패 처리
+    private Member getMember(Long memberId) {
+        return memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_MEMBER_NOT_FOUND));
+    }
+
+    // 매칭 요청 대상 리조트 조회와 요청 저장 전 명시적 실패 처리
+    private Resort getResort(Long resortId) {
+        return resortRepository.findById(resortId)
+                .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_RESORT_NOT_FOUND));
     }
 
     // 요청 인원과 참여자 목록 수 일치 검증을 통한 이후 그룹 생성 기준 통일
     private void validateParticipantCount(MatchingCreationCommand command) {
         if (command.headcount() != command.participants().size()) {
-            throw new IllegalArgumentException("headcount must match participants size.");
+            throw new BusinessException(MatchingErrorCode.MATCHING_PARTICIPANT_COUNT_MISMATCH);
         }
     }
 

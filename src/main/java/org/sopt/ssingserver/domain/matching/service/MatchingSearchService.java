@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
@@ -24,8 +25,6 @@ import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepos
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 // SEARCHING 중인 매칭 요청 재탐색과 만료/후보/그룹/제안 생성 결정 서비스
 @Service
@@ -39,19 +38,21 @@ public class MatchingSearchService {
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
     private final MatchingStatusResolver matchingStatusResolver;
     private final MatchingEventPublisher matchingEventPublisher;
+    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
     private final Clock clock;
 
     // 즉시 트리거와 스케줄러의 단건 탐색 입구, REQUESTED 요청 잠금 조회 처리
     @Transactional
     public MatchingSearchResult search(Long matchingRequestId) {
         // 같은 요청 동시 처리와 중복 그룹/제안 생성 방지를 위한 REQUESTED row DB lock
+        // 잠금 조회 실패 시 이미 만료/그룹화/실패 처리된 요청으로 보고 새 작업 생략
         return matchingRequestRepository.findByIdAndStatusForUpdate(
                         matchingRequestId,
                         MatchingRequestStatus.REQUESTED
                 )
                 .map(this::searchRequestedRequest)
-                // 다른 흐름에서 이미 상태 변경된 요청의 새 작업 없는 멱등 SEARCHING 결과 반환
-                .orElseGet(() -> MatchingSearchResult.searching(matchingRequestId));
+                // 다른 흐름에서 이미 상태 변경된 요청의 새 작업 없는 멱등 결과 반환
+                .orElseGet(() -> MatchingSearchResult.skipped(matchingRequestId));
     }
 
     // lock 확보 REQUESTED 요청 1건의 만료 여부, 후보 존재 여부, 그룹/제안 생성 판단
@@ -70,6 +71,10 @@ public class MatchingSearchService {
 
             // 생성 직후 SEARCHING 이벤트 미발행, 만료 실패 등 이후 상태 변경의 이벤트 경계 전달
             publishAfterCommit(new MatchingRequestStatusChangedEvent(
+                    // 이벤트 저장소 도입 전 MVP의 발행 단위 추적용 id 생성
+                    UUID.randomUUID(),
+                    // 만료 판단과 이벤트 발생 시각의 동일 기준 적용
+                    now,
                     matchingRequest.getId(),
                     matchingRequest.getStatus(),
                     matchingRequest.getStatusReason(),
@@ -90,6 +95,7 @@ public class MatchingSearchService {
 
         // 후보 없음 상태의 즉시 실패 방지, REQUESTED 유지와 다음 트리거/스케줄러 재탐색
         if (candidates.isEmpty()) {
+            // DB 상태 변경 없음, API 표시 상태만 SEARCHING으로 계산해 호출자에게 반환
             MatchingStatus matchingStatus = matchingStatusResolver.resolve(
                     matchingRequest,
                     false,
@@ -133,6 +139,10 @@ public class MatchingSearchService {
 
         // 실제 WebSocket/FCM 부재 상태의 제안 생성 이벤트 포트 전달과 후속 구현 연결 지점
         publishAfterCommit(new MatchingOfferCreatedEvent(
+                // 이벤트 저장소 도입 전 MVP의 발행 단위 추적용 id 생성
+                UUID.randomUUID(),
+                // 제안 row 생성 시각과 이벤트 발생 시각의 동일 기준 적용
+                now,
                 matchingRequest.getId(),
                 matchingRequestGroup.getId(),
                 matchingOffer.getId(),
@@ -154,17 +164,11 @@ public class MatchingSearchService {
     // DB 변경 커밋 이후 상태 변경 이벤트의 알림 계층 전달
     // 트랜잭션 없는 단위 테스트/직접 호출 환경의 즉시 발행과 같은 코드 경로 검증
     private void publishAfterCommit(MatchingDomainEvent event) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            matchingEventPublisher.publish(event);
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                matchingEventPublisher.publish(event);
-            }
-        });
+        // 이벤트 수신 계층의 미구현 상태에서도 Service가 포트 호출 위치를 고정하는 경계
+        matchingAfterCommitExecutor.execute(
+                "matching-domain-event-publish",
+                () -> matchingEventPublisher.publish(event)
+        );
     }
 
 }

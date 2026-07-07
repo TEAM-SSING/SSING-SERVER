@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
@@ -119,7 +120,12 @@ class MatchingSearchServiceTest {
         verifyNoInteractions(instructorMatchingSettingRepository);
         verifyNoInteractions(matchingRequestGroupRepository);
         verifyNoInteractions(matchingOfferRepository);
-        verify(matchingEventPublisher).publish(isA(MatchingRequestStatusChangedEvent.class));
+        ArgumentCaptor<MatchingRequestStatusChangedEvent> eventCaptor =
+                ArgumentCaptor.forClass(MatchingRequestStatusChangedEvent.class);
+        verify(matchingEventPublisher).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().eventId()).isNotNull();
+        assertThat(eventCaptor.getValue().occurredAt()).isEqualTo(FIXED_CLOCK.instant());
+        assertThat(eventCaptor.getValue().matchingRequestId()).isEqualTo(1L);
     }
 
     @Test
@@ -154,7 +160,7 @@ class MatchingSearchServiceTest {
         MatchingSearchResult result = service.search(1L);
 
         assertThat(result.matchingRequestId()).isEqualTo(1L);
-        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.SEARCHING);
+        assertThat(result.matchingStatus()).isNull();
         assertThat(result.requestStatus()).isNull();
         assertThat(result.requestStatusReason()).isNull();
         assertThat(result.groupId()).isNull();
@@ -200,7 +206,12 @@ class MatchingSearchServiceTest {
         assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
         verify(matchingRequestGroupItemRepository).save(any(MatchingRequestGroupItem.class));
         verify(matchingOfferRepository).save(any(MatchingOffer.class));
-        verify(matchingEventPublisher).publish(isA(MatchingOfferCreatedEvent.class));
+        ArgumentCaptor<MatchingOfferCreatedEvent> eventCaptor =
+                ArgumentCaptor.forClass(MatchingOfferCreatedEvent.class);
+        verify(matchingEventPublisher).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().eventId()).isNotNull();
+        assertThat(eventCaptor.getValue().occurredAt()).isEqualTo(FIXED_CLOCK.instant());
+        assertThat(eventCaptor.getValue().matchingRequestId()).isEqualTo(1L);
     }
 
     @Test
@@ -290,6 +301,7 @@ class MatchingSearchServiceTest {
                 instructorMatchingSettingRepository,
                 new MatchingStatusResolver(),
                 matchingEventPublisher,
+                new MatchingAfterCommitExecutor(),
                 FIXED_CLOCK
         );
     }
