@@ -1,6 +1,6 @@
 package org.sopt.ssingserver.domain.instructor.service;
 
-import lombok.RequiredArgsConstructor;
+import java.util.Objects;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
@@ -11,24 +11,49 @@ import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class InstructorService {
 
     private final InstructorProfileRepository instructorProfileRepository;
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
     private final LessonRepository lessonRepository;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
+    public InstructorService(
+            InstructorProfileRepository instructorProfileRepository,
+            InstructorMatchingSettingRepository instructorMatchingSettingRepository,
+            LessonRepository lessonRepository,
+            PlatformTransactionManager transactionManager
+    ) {
+        this.instructorProfileRepository = instructorProfileRepository;
+        this.instructorMatchingSettingRepository = instructorMatchingSettingRepository;
+        this.lessonRepository = lessonRepository;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
     public boolean startExposure(
             Long memberId,
             InstructorMatchingExposureRequest request
     ) {
-        // InstructorProfile 조회
+        try {
+            return Objects.requireNonNull(
+                    transactionTemplate.execute(status -> startExposureInTransaction(memberId, request))
+            );
+        } catch (DataIntegrityViolationException exception) {
+            return updateAfterConflict(memberId, request, exception);
+        }
+    }
+
+    // 단일 트랜잭션에서 검증과 조건 생성/갱신을 수행
+    private boolean startExposureInTransaction(
+            Long memberId,
+            InstructorMatchingExposureRequest request
+    ) {
         InstructorProfile instructorProfile = instructorProfileRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
 
@@ -69,5 +94,29 @@ public class InstructorService {
 
         instructorMatchingSettingRepository.save(setting);
         return setting.isExposed();
+    }
+
+    // 무결성 오류로 실패한 트랜잭션과 분리하여, 동시에 먼저 생성된 설정을 다시 조회해 요청값으로 덮어씀
+    private boolean updateAfterConflict(
+            Long memberId,
+            InstructorMatchingExposureRequest request,
+            DataIntegrityViolationException originalException
+    ) {
+        return Objects.requireNonNull(transactionTemplate.execute(status -> {
+            InstructorProfile instructorProfile = instructorProfileRepository.findByMemberId(memberId)
+                    .orElseThrow(() -> originalException);
+            InstructorMatchingSetting setting = instructorMatchingSettingRepository
+                    .findByInstructorProfileId(instructorProfile.getId())
+                    .orElseThrow(() -> originalException);
+
+            setting.updateConditions(
+                    request.sport(),
+                    request.lessonLevels(),
+                    request.availableDurationMinutes(),
+                    request.maxHeadcount(),
+                    request.equipmentReady()
+            );
+            return setting.isExposed();
+        }));
     }
 }

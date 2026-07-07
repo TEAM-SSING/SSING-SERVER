@@ -36,6 +36,9 @@ import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
 
 @ExtendWith(MockitoExtension.class)
 class InstructorServiceTest {
@@ -157,7 +160,8 @@ class InstructorServiceTest {
         return new InstructorService(
                 instructorProfileRepository,
                 instructorMatchingSettingRepository,
-                lessonRepository
+                lessonRepository,
+                new NoOpTransactionManager()
         );
     }
 
@@ -209,6 +213,27 @@ class InstructorServiceTest {
             return resort;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
+        }
+    }
+
+    // TransactionTemplate이 실제 트랜잭션 없이 콜백만 실행하도록 하는 테스트 전용 더미
+    private static class NoOpTransactionManager extends AbstractPlatformTransactionManager {
+
+        @Override
+        protected Object doGetTransaction() {
+            return new Object();
+        }
+
+        @Override
+        protected void doBegin(Object transaction, TransactionDefinition definition) {
+        }
+
+        @Override
+        protected void doCommit(DefaultTransactionStatus status) {
+        }
+
+        @Override
+        protected void doRollback(DefaultTransactionStatus status) {
         }
     }
 }
