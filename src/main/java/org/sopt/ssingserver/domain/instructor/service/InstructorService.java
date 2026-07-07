@@ -45,7 +45,7 @@ public class InstructorService {
                     transactionTemplate.execute(status -> startExposureInTransaction(memberId, request))
             );
         } catch (DataIntegrityViolationException exception) {
-            return updateAfterConflict(memberId, request, exception);
+            return updateAfterConflict(memberId, request);
         }
     }
 
@@ -57,18 +57,7 @@ public class InstructorService {
         InstructorProfile instructorProfile = instructorProfileRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
 
-        // 진행 중인 강습이 있으면 즉시 매칭 불가능
-        if (lessonRepository.existsByInstructorProfileIdAndStatus(
-                instructorProfile.getId(),
-                LessonStatus.IN_PROGRESS
-        )) {
-            throw new BusinessException(InstructorErrorCode.ACTIVE_LESSON_EXISTS);
-        }
-
-        // 강사 활동 리조트 확인
-        if (instructorProfile.getResort() == null) {
-            throw new BusinessException(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET);
-        }
+        validateExposureAllowed(instructorProfile);
 
         // 기존 조건이 없으면 새로 만들고, 있으면 요청값으로 덮어씀
         InstructorMatchingSetting setting = instructorMatchingSettingRepository
@@ -99,15 +88,17 @@ public class InstructorService {
     // 무결성 오류로 실패한 트랜잭션과 분리하여, 동시에 먼저 생성된 설정을 다시 조회해 요청값으로 덮어씀
     private boolean updateAfterConflict(
             Long memberId,
-            InstructorMatchingExposureRequest request,
-            DataIntegrityViolationException originalException
+            InstructorMatchingExposureRequest request
     ) {
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
             InstructorProfile instructorProfile = instructorProfileRepository.findByMemberId(memberId)
-                    .orElseThrow(() -> originalException);
+                    .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+
+            validateExposureAllowed(instructorProfile);
+
             InstructorMatchingSetting setting = instructorMatchingSettingRepository
                     .findByInstructorProfileId(instructorProfile.getId())
-                    .orElseThrow(() -> originalException);
+                    .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
 
             setting.updateConditions(
                     request.sport(),
@@ -118,5 +109,19 @@ public class InstructorService {
             );
             return setting.isExposed();
         }));
+    }
+
+    // 진행 중인 강습 여부와 활동 리조트 등록 여부를 확인
+    private void validateExposureAllowed(InstructorProfile instructorProfile) {
+        if (lessonRepository.existsByInstructorProfileIdAndStatus(
+                instructorProfile.getId(),
+                LessonStatus.IN_PROGRESS
+        )) {
+            throw new BusinessException(InstructorErrorCode.ACTIVE_LESSON_EXISTS);
+        }
+
+        if (instructorProfile.getResort() == null) {
+            throw new BusinessException(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET);
+        }
     }
 }
