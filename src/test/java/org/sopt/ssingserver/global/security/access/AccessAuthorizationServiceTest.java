@@ -2,7 +2,6 @@ package org.sopt.ssingserver.global.security.access;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -41,12 +40,29 @@ class AccessAuthorizationServiceTest {
         Member member = member(1L, MemberRole.CONSUMER, MemberStatus.ACTIVE);
 
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.empty());
 
         CurrentMember currentMember = service.authorize(principal, AccessPolicy.CONSUMER);
 
         assertThat(currentMember.memberId()).isEqualTo(1L);
         assertThat(currentMember.role()).isSameAs(MemberRole.CONSUMER);
-        verifyNoInteractions(instructorProfileRepository);
+        assertThat(currentMember.instructorApprovalStatus()).isNull();
+    }
+
+    @Test
+    void authorize는_ACTIVE_MEMBER에서도_강사상태를_CurrentMember에_포함한다() {
+        AccessAuthorizationService service = createService();
+        AuthenticatedMember principal = new AuthenticatedMember(1L, MemberRole.INSTRUCTOR);
+        Member member = member(1L, MemberRole.INSTRUCTOR, MemberStatus.ACTIVE);
+        InstructorProfile profile = instructorProfile(member, InstructorApprovalStatus.APPROVED);
+
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+
+        CurrentMember currentMember = service.authorize(principal, AccessPolicy.ACTIVE_MEMBER);
+
+        assertThat(currentMember.isApprovedInstructor()).isTrue();
+        assertThat(currentMember.instructorApprovalStatus()).isSameAs(InstructorApprovalStatus.APPROVED);
     }
 
     @Test

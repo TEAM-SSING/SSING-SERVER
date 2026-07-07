@@ -27,10 +27,7 @@ public class AccessAuthorizationService {
             AccessPolicy... policies
     ) {
         AccessPolicy[] accessPolicies = normalizePolicies(policies);
-        CurrentMember currentMember = getCurrentMember(
-                authenticatedMember,
-                requiresInstructorApprovalStatus(accessPolicies)
-        );
+        CurrentMember currentMember = getCurrentMember(authenticatedMember);
 
         if (Arrays.stream(accessPolicies).anyMatch(policy -> policy.isSatisfiedBy(currentMember))) {
             return currentMember;
@@ -39,13 +36,6 @@ public class AccessAuthorizationService {
     }
 
     public CurrentMember getCurrentMember(AuthenticatedMember authenticatedMember) {
-        return getCurrentMember(authenticatedMember, true);
-    }
-
-    private CurrentMember getCurrentMember(
-            AuthenticatedMember authenticatedMember,
-            boolean includeInstructorApprovalStatus
-    ) {
         if (authenticatedMember == null) {
             throw new BusinessException(CommonErrorCode.UNAUTHENTICATED);
         }
@@ -54,12 +44,9 @@ public class AccessAuthorizationService {
         Member member = memberRepository.findById(authenticatedMember.memberId())
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHENTICATED));
 
-        InstructorApprovalStatus instructorApprovalStatus = null;
-        if (includeInstructorApprovalStatus) {
-            instructorApprovalStatus = instructorProfileRepository.findByMemberId(member.getId())
-                    .map(instructorProfile -> instructorProfile.getApprovalStatus())
-                    .orElse(null);
-        }
+        InstructorApprovalStatus instructorApprovalStatus = instructorProfileRepository.findByMemberId(member.getId())
+                .map(instructorProfile -> instructorProfile.getApprovalStatus())
+                .orElse(null);
 
         return new CurrentMember(
                 member.getId(),
@@ -74,10 +61,5 @@ public class AccessAuthorizationService {
             return DEFAULT_POLICIES;
         }
         return policies;
-    }
-
-    private boolean requiresInstructorApprovalStatus(AccessPolicy[] policies) {
-        return Arrays.stream(policies)
-                .anyMatch(AccessPolicy::requiresInstructorApprovalStatus);
     }
 }

@@ -21,22 +21,12 @@ public enum AccessPolicy {
         boolean isSatisfiedBy(CurrentMember currentMember) {
             return currentMember.isPendingInstructor();
         }
-
-        @Override
-        boolean requiresInstructorApprovalStatus() {
-            return true;
-        }
     },
 
     APPROVED_INSTRUCTOR {
         @Override
         boolean isSatisfiedBy(CurrentMember currentMember) {
             return currentMember.isApprovedInstructor();
-        }
-
-        @Override
-        boolean requiresInstructorApprovalStatus() {
-            return true;
         }
     },
 
@@ -48,8 +38,4 @@ public enum AccessPolicy {
     };
 
     abstract boolean isSatisfiedBy(CurrentMember currentMember);
-
-    boolean requiresInstructorApprovalStatus() {
-        return false;
-    }
 }
