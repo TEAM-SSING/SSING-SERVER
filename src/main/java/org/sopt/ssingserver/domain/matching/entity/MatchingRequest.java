@@ -158,12 +158,12 @@ public class MatchingRequest extends BaseTimeEntity {
         updateStatus(MatchingRequestStatus.MATCHED, null);
     }
 
-    // 소비자 강사 매칭 최종 수락 이후 결제 전 CONFIRMED 요청 상태 이동
+    // 전체 결제 완료와 강습 생성 이후 요청 최종 확정 상태 이동
     public void confirm() {
         updateStatus(MatchingRequestStatus.CONFIRMED, null);
     }
 
-    // 결제 완료와 수업 확정 이후 COMPLETED 상태 종료
+    // 연결된 강습 완료 이후 매칭 요청 완료 상태 이동
     public void complete() {
         updateStatus(MatchingRequestStatus.COMPLETED, null);
     }

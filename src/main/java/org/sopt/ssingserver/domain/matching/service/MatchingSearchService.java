@@ -65,7 +65,6 @@ public class MatchingSearchService {
             matchingRequest.failNoAvailableInstructor();
             MatchingStatus matchingStatus = matchingStatusResolver.resolve(
                     matchingRequest,
-                    false,
                     Optional.empty(),
                     Optional.empty()
             );
@@ -99,7 +98,6 @@ public class MatchingSearchService {
             // DB 상태 변경 없음, API 표시 상태만 SEARCHING으로 계산해 호출자에게 반환
             MatchingStatus matchingStatus = matchingStatusResolver.resolve(
                     matchingRequest,
-                    false,
                     Optional.empty(),
                     Optional.empty()
             );
@@ -227,7 +225,6 @@ public class MatchingSearchService {
     private MatchingSearchResult searching(MatchingRequest matchingRequest) {
         MatchingStatus matchingStatus = matchingStatusResolver.resolve(
                 matchingRequest,
-                false,
                 Optional.empty(),
                 Optional.empty()
         );

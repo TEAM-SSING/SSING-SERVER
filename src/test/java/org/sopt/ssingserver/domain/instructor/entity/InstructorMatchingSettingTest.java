@@ -199,6 +199,57 @@ class InstructorMatchingSettingTest {
     }
 
     @Test
+    void create는_maxHeadcount가_허용범위를_벗어나면_생성하지_않는다() {
+        assertThatThrownBy(() -> InstructorMatchingSetting.create(
+                instructorProfile(),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120),
+                0,
+                true
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("maxHeadcount must be between 1 and 5.");
+
+        assertThatThrownBy(() -> InstructorMatchingSetting.create(
+                instructorProfile(),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120),
+                6,
+                true
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("maxHeadcount must be between 1 and 5.");
+    }
+
+    @Test
+    void updateConditions는_maxHeadcount가_허용범위를_벗어나면_노출조건을_변경하지_않는다() {
+        InstructorMatchingSetting setting = InstructorMatchingSetting.create(
+                instructorProfile(),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120, 180),
+                3,
+                true
+        );
+
+        assertThatThrownBy(() -> setting.updateConditions(
+                Sport.SKI,
+                List.of(LessonLevel.CERTIFIED),
+                List.of(240),
+                6,
+                true
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("maxHeadcount must be between 1 and 5.");
+        assertThat(setting.getSport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(setting.getLessonLevels()).containsExactly(LessonLevel.FIRST_TIME);
+        assertThat(setting.getAvailableDurationMinutes()).containsExactly(120, 180);
+        assertThat(setting.getMaxHeadcount()).isEqualTo(3);
+    }
+
+    @Test
     void create는_equipmentReady가_false이면_생성하지_않는다() {
         assertThatThrownBy(() -> InstructorMatchingSetting.create(
                 instructorProfile(),

@@ -28,7 +28,6 @@ class MatchingStatusResolverTest {
     void REQUESTED이고_후보도_그룹도_없으면_SEARCHING으로_계산한다() {
         MatchingStatus status = resolver.resolve(
                 matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z")),
-                false,
                 Optional.empty(),
                 Optional.empty()
         );
@@ -37,19 +36,33 @@ class MatchingStatusResolverTest {
     }
 
     @Test
-    void REQUESTED이고_후보는_있지만_그룹과_제안이_없으면_SEARCHING으로_계산한다() {
+    void REQUESTED이고_그룹과_제안이_없으면_SEARCHING으로_계산한다() {
         MatchingStatus status = resolver.resolve(
                 matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z")),
-                true,
                 Optional.empty(),
                 Optional.empty()
         );
 
         assertThat(status).isSameAs(MatchingStatus.SEARCHING);
+    }
+
+    @Test
+    void REQUESTED이고_팀결합용_그룹이_있으면_WAITING_FOR_TEAM으로_계산한다() {
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z")),
+                Optional.of(group),
+                Optional.empty()
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.WAITING_FOR_TEAM);
     }
 
     @Test
     void 강사_제안이_생성되면_WAITING_FOR_INSTRUCTOR로_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        matchingRequest.markGrouped();
         MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
         group.expose();
         MatchingOffer offer = MatchingOffer.create(
@@ -59,8 +72,7 @@ class MatchingStatusResolverTest {
         );
 
         MatchingStatus status = resolver.resolve(
-                matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z")),
-                true,
+                matchingRequest,
                 Optional.of(group),
                 Optional.of(offer)
         );
@@ -81,7 +93,6 @@ class MatchingStatusResolverTest {
 
         MatchingStatus status = resolver.resolve(
                 matchingRequest,
-                true,
                 Optional.of(group),
                 Optional.of(offer)
         );
@@ -94,23 +105,25 @@ class MatchingStatusResolverTest {
         MatchingRequest matchedRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
         MatchingRequest confirmedRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
         MatchingRequest completedRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
+        MatchingOffer offer = MatchingOffer.create(
+                instructorProfile(),
+                group,
+                Instant.parse("2026-07-07T00:00:00Z")
+        );
 
         matchedRequest.markMatched(
-                MatchingOffer.create(
-                        instructorProfile(),
-                        MatchingRequestGroup.createCandidate(120),
-                        Instant.parse("2026-07-07T00:00:00Z")
-                ),
+                offer,
                 Instant.parse("2026-07-07T00:10:00Z")
         );
         confirmedRequest.confirm();
         completedRequest.complete();
 
-        assertThat(resolver.resolve(matchedRequest, false, Optional.empty(), Optional.empty()))
+        assertThat(resolver.resolve(matchedRequest, Optional.of(group), Optional.of(offer)))
                 .isSameAs(MatchingStatus.WAITING_FOR_CONFIRMATION);
-        assertThat(resolver.resolve(confirmedRequest, false, Optional.empty(), Optional.empty()))
-                .isSameAs(MatchingStatus.PAYMENT_PENDING);
-        assertThat(resolver.resolve(completedRequest, false, Optional.empty(), Optional.empty()))
+        assertThat(resolver.resolve(confirmedRequest, Optional.of(group), Optional.of(offer)))
+                .isSameAs(MatchingStatus.CONFIRMED);
+        assertThat(resolver.resolve(completedRequest, Optional.of(group), Optional.of(offer)))
                 .isSameAs(MatchingStatus.CONFIRMED);
     }
 
@@ -121,7 +134,6 @@ class MatchingStatusResolverTest {
 
         MatchingStatus status = resolver.resolve(
                 matchingRequest,
-                false,
                 Optional.empty(),
                 Optional.empty()
         );

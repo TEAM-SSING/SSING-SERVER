@@ -38,6 +38,9 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class InstructorMatchingSetting extends BaseTimeEntity {
 
+    private static final int MIN_HEADCOUNT = 1;
+    private static final int MAX_HEADCOUNT = 5;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -130,6 +133,7 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
             boolean isEquipmentReady
     ) {
         validateEquipmentReady(isEquipmentReady);
+        validateMaxHeadcount(maxHeadcount);
 
         this.sport = sport;
         replaceLessonLevels(lessonLevels);
@@ -154,6 +158,13 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
     private void validateEquipmentReady(boolean isEquipmentReady) {
         if (!isEquipmentReady) {
             throw new IllegalArgumentException("isEquipmentReady must be true to start exposure.");
+        }
+    }
+
+    // API 계약과 후보 조회 조건 보호를 위한 최대 강습 가능 인원 범위 검증
+    private void validateMaxHeadcount(int maxHeadcount) {
+        if (maxHeadcount < MIN_HEADCOUNT || maxHeadcount > MAX_HEADCOUNT) {
+            throw new IllegalArgumentException("maxHeadcount must be between 1 and 5.");
         }
     }
 
