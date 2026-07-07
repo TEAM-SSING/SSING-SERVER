@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
@@ -44,12 +45,18 @@ public record InstructorMatchingExposureRequest(
         if (availableDurationMinutes == null || availableDurationMinutes.isEmpty()) {
             return true;
         }
+        if (availableDurationMinutes.stream().anyMatch(Objects::isNull)) {
+            return true;
+        }
         return ALLOWED_DURATION_MINUTES.containsAll(availableDurationMinutes);
     }
 
     @AssertTrue(message = "강습 가능 시간은 중복 없이 선택해야 합니다.")
     public boolean isAvailableDurationMinutesDistinct() {
         if (availableDurationMinutes == null || availableDurationMinutes.isEmpty()) {
+            return true;
+        }
+        if (availableDurationMinutes.stream().anyMatch(Objects::isNull)) {
             return true;
         }
         return new HashSet<>(availableDurationMinutes).size() == availableDurationMinutes.size();
