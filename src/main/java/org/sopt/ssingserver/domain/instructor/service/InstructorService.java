@@ -45,29 +45,27 @@ public class InstructorService {
             throw new BusinessException(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET);
         }
 
-        InstructorMatchingSetting setting = instructorMatchingSettingRepository.findByInstructorProfileId(
-                instructorProfile.getId()
-        ).orElse(null);
-
         // 기존 조건이 없으면 새로 만들고, 있으면 요청값으로 덮어씀
-        if (setting == null) {
-            setting = InstructorMatchingSetting.create(
-                    instructorProfile,
-                    request.sport(),
-                    request.lessonLevels(),
-                    request.availableDurationMinutes(),
-                    request.maxHeadcount(),
-                    request.equipmentReady()
-            );
-        } else {
-            setting.updateConditions(
-                    request.sport(),
-                    request.lessonLevels(),
-                    request.availableDurationMinutes(),
-                    request.maxHeadcount(),
-                    request.equipmentReady()
-            );
-        }
+        InstructorMatchingSetting setting = instructorMatchingSettingRepository
+                .findByInstructorProfileId(instructorProfile.getId())
+                .map(existingSetting -> {
+                    existingSetting.updateConditions(
+                            request.sport(),
+                            request.lessonLevels(),
+                            request.availableDurationMinutes(),
+                            request.maxHeadcount(),
+                            request.equipmentReady()
+                    );
+                    return existingSetting;
+                })
+                .orElseGet(() -> InstructorMatchingSetting.create(
+                        instructorProfile,
+                        request.sport(),
+                        request.lessonLevels(),
+                        request.availableDurationMinutes(),
+                        request.maxHeadcount(),
+                        request.equipmentReady()
+                ));
 
         instructorMatchingSettingRepository.save(setting);
         return setting.isExposed();
