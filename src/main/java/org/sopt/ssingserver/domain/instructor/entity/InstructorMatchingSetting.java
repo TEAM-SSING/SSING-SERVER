@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -52,8 +53,12 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
     @ElementCollection(fetch = FetchType.LAZY)
     @Enumerated(EnumType.STRING)
     @CollectionTable(
-            name = "instructor_matching_setting_lesson_levels",
-            joinColumns = @JoinColumn(name = "instructor_matching_setting_id")
+            name = "instructor_matching_settings_lesson_levels",
+            joinColumns = @JoinColumn(name = "instructor_matching_setting_id"),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_instructor_matching_settings_lesson_level",
+                    columnNames = {"instructor_matching_setting_id", "lesson_level"}
+            )
     )
     @Column(name = "lesson_level", nullable = false, length = 30)
     private Set<LessonLevel> lessonLevels = new LinkedHashSet<>();

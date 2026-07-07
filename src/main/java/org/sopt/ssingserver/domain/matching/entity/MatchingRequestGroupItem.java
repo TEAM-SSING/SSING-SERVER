@@ -60,6 +60,7 @@ public class MatchingRequestGroupItem extends BaseTimeEntity {
         return item;
     }
 
+    // TODO: PR 5 상태 전이 API에서 NOT_REQUESTED/PENDING 규칙과 종료 상태 guard 추가
     public void requestConfirmation() {
         this.status = MatchingRequestGroupItemStatus.PENDING;
     }

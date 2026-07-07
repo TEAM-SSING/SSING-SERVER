@@ -66,6 +66,7 @@ public class MatchingOffer extends BaseTimeEntity {
         return matchingOffer;
     }
 
+    // TODO: PR 5 상태 전이 API에서 OFFERED 이후 재전이를 막는 guard 추가
     public void accept(Instant respondedAt) {
         respond(MatchingOfferStatus.ACCEPTED, respondedAt);
     }

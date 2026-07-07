@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
@@ -82,6 +83,34 @@ class InstructorMatchingSettingTest {
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("lessonLevels must not be empty.");
+    }
+
+    @Test
+    void create는_lessonLevels가_null이면_생성하지_않는다() {
+        assertThatThrownBy(() -> InstructorMatchingSetting.create(
+                instructorProfile(),
+                resort(),
+                Sport.SNOWBOARD,
+                null,
+                3,
+                true
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("lessonLevels must not be empty.");
+    }
+
+    @Test
+    void create는_lessonLevels에_null_원소가_있으면_생성하지_않는다() {
+        assertThatThrownBy(() -> InstructorMatchingSetting.create(
+                instructorProfile(),
+                resort(),
+                Sport.SNOWBOARD,
+                Arrays.asList(LessonLevel.FIRST_TIME, null),
+                3,
+                true
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("lessonLevels must not contain null.");
     }
 
     private InstructorProfile instructorProfile() {
