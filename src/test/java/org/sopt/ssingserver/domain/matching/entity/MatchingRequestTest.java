@@ -39,6 +39,24 @@ class MatchingRequestTest {
     }
 
     @Test
+    void createUnlimitedSearch는_탐색만료시각_없이_REQUESTED_상태로_초기화한다() {
+        MatchingRequest matchingRequest = MatchingRequest.createUnlimitedSearch(
+                Member.create("소비자", null, MemberRole.CONSUMER, MemberStatus.ACTIVE),
+                resort(),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2,
+                List.of(120, 180),
+                true
+        );
+
+        assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+        assertThat(matchingRequest.getStatusReason()).isNull();
+        assertThat(matchingRequest.getExpiresAt()).isNull();
+        assertThat(matchingRequest.isSearchExpired(EXPIRES_AT)).isFalse();
+    }
+
+    @Test
     void failNoAvailableInstructor는_FAILED와_후보없음_사유를_저장한다() {
         MatchingRequest matchingRequest = matchingRequest();
 

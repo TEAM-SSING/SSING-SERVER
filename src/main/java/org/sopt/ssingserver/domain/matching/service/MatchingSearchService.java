@@ -60,7 +60,7 @@ public class MatchingSearchService {
     private MatchingSearchResult searchRequestedRequest(MatchingRequest matchingRequest) {
         Instant now = clock.instant();
 
-        // 탐색 가능 시간 종료 요청의 최종 실패 전환과 이후 재탐색 대상 제외
+        // fallback 탐색 만료 시각이 지난 요청의 최종 실패 전환과 이후 재탐색 대상 제외
         if (matchingRequest.isSearchExpired(now)) {
             matchingRequest.failNoAvailableInstructor();
             MatchingStatus matchingStatus = matchingStatusResolver.resolve(

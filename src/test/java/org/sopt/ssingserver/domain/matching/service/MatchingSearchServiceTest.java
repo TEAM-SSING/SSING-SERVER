@@ -79,9 +79,9 @@ class MatchingSearchServiceTest {
     private MatchingEventPublisher matchingEventPublisher;
 
     @Test
-    void search는_후보가_없어도_만료전이면_REQUESTED_SEARCHING을_유지한다() {
+    void search는_무제한탐색_요청에_후보가_없어도_REQUESTED_SEARCHING을_유지한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), null);
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
         when(instructorMatchingSettingRepository.findExposedCandidates(

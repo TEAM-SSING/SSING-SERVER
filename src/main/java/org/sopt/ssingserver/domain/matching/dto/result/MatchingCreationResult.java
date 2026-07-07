@@ -18,7 +18,7 @@ public record MatchingCreationResult(
         Instant expiresAt
 ) {
 
-    // 생성 직후 후보 탐색 결과와 무관한 SEARCHING/REQUESTED/expiresAt 최초 응답
+    // 생성 직후 후보 탐색 결과와 무관한 SEARCHING/REQUESTED 최초 응답
     public static MatchingCreationResult searching(MatchingRequest matchingRequest) {
         return new MatchingCreationResult(
                 matchingRequest.getId(),

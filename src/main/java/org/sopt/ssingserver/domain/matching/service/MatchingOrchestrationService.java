@@ -1,8 +1,5 @@
 package org.sopt.ssingserver.domain.matching.service;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.matching.dto.command.MatchingCreationCommand;
@@ -26,15 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MatchingOrchestrationService {
 
-    private static final Duration SEARCH_TIMEOUT = Duration.ofMinutes(5);
-
     private final MemberRepository memberRepository;
     private final ResortRepository resortRepository;
     private final MatchingRequestRepository matchingRequestRepository;
     private final MatchingRequestParticipantRepository matchingRequestParticipantRepository;
     private final MatchingSearchTriggerService matchingSearchTriggerService;
     private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
-    private final Clock clock;
 
     // 요청 생성 API 호출 지점, DB REQUESTED 저장과 API SEARCHING 응답 고정
     @Transactional
@@ -43,19 +37,15 @@ public class MatchingOrchestrationService {
         Member member = getMember(command.memberId());
         Resort resort = getResort(command.resortCode());
 
-        // 요청 생성 시각 기준 SEARCHING 재탐색 최대 시간 5분 계산
-        Instant expiresAt = clock.instant().plus(SEARCH_TIMEOUT);
-
-        // DB SEARCHING 미저장, 실제 요청 상태 REQUESTED와 탐색 만료 시각 저장
-        MatchingRequest matchingRequest = matchingRequestRepository.save(MatchingRequest.create(
+        // 기본 무제한 탐색 정책 적용, DB SEARCHING 미저장과 REQUESTED 상태만 저장
+        MatchingRequest matchingRequest = matchingRequestRepository.save(MatchingRequest.createUnlimitedSearch(
                 member,
                 resort,
                 command.sport(),
                 command.lessonLevel(),
                 command.headcount(),
                 command.requestedDurationMinutes(),
-                command.isEquipmentReady(),
-                expiresAt
+                command.isEquipmentReady()
         ));
 
         // 요청 row 생성 이후 참여자별 나이/성별 정보와 같은 요청 연결 저장

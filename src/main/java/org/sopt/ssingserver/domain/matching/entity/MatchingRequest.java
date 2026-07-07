@@ -90,7 +90,29 @@ public class MatchingRequest extends BaseTimeEntity {
     // 요청, 최종 확인, 결제처럼 현재 진행 단계에서 앱이 참고할 만료 시각
     private Instant expiresAt;
 
-    // 매칭 요청 생성 시 DB REQUESTED 시작 및 SEARCHING의 API 표시 상태 계산
+    // 기본 무제한 탐색 요청 생성, 후보 없음만으로 실패시키지 않는 REQUESTED 시작
+    public static MatchingRequest createUnlimitedSearch(
+            Member member,
+            Resort resort,
+            Sport sport,
+            LessonLevel lessonLevel,
+            int headcount,
+            Collection<Integer> requestedDurationMinutes,
+            boolean isEquipmentReady
+    ) {
+        return create(
+                member,
+                resort,
+                sport,
+                lessonLevel,
+                headcount,
+                requestedDurationMinutes,
+                isEquipmentReady,
+                null
+        );
+    }
+
+    // 매칭 요청 생성 시 DB REQUESTED 시작 및 fallback 탐색 만료 시각 선택 저장
     public static MatchingRequest create(
             Member member,
             Resort resort,
@@ -119,7 +141,7 @@ public class MatchingRequest extends BaseTimeEntity {
         return Collections.unmodifiableSet(requestedDurationMinutes);
     }
 
-    // 현재 시각 기준 탐색 만료 시각 도달 여부와 5분 SEARCHING 종료 여부 판단
+    // fallback 만료 시각이 있는 요청만 현재 시각 기준 SEARCHING 종료 여부 판단
     public boolean isSearchExpired(Instant now) {
         return expiresAt != null && !expiresAt.isAfter(now);
     }

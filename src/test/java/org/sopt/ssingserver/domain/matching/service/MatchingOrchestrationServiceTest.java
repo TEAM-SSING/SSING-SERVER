@@ -8,9 +8,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -43,11 +40,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @ExtendWith(MockitoExtension.class)
 class MatchingOrchestrationServiceTest {
-
-    private static final Clock FIXED_CLOCK = Clock.fixed(
-            Instant.parse("2026-07-07T00:00:00Z"),
-            ZoneOffset.UTC
-    );
 
     @Mock
     private MemberRepository memberRepository;
@@ -89,7 +81,7 @@ class MatchingOrchestrationServiceTest {
         assertThat(result.requestStatusReason()).isNull();
         assertThat(result.groupId()).isNull();
         assertThat(result.groupStatus()).isNull();
-        assertThat(result.expiresAt()).isEqualTo(Instant.parse("2026-07-07T00:05:00Z"));
+        assertThat(result.expiresAt()).isNull();
 
         ArgumentCaptor<MatchingRequest> matchingRequestCaptor = ArgumentCaptor.forClass(MatchingRequest.class);
         verify(matchingRequestRepository).save(matchingRequestCaptor.capture());
@@ -99,6 +91,7 @@ class MatchingOrchestrationServiceTest {
         assertThat(matchingRequestCaptor.getValue().getRequestedDurationMinutes())
                 .containsExactly(120, 180);
         assertThat(matchingRequestCaptor.getValue().getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+        assertThat(matchingRequestCaptor.getValue().getExpiresAt()).isNull();
         verify(matchingRequestParticipantRepository).saveAll(any());
         verify(matchingSearchTriggerService).triggerSearch(10L);
     }
@@ -168,8 +161,7 @@ class MatchingOrchestrationServiceTest {
                 matchingRequestRepository,
                 matchingRequestParticipantRepository,
                 matchingSearchTriggerService,
-                new MatchingAfterCommitExecutor(),
-                FIXED_CLOCK
+                new MatchingAfterCommitExecutor()
         );
     }
 
