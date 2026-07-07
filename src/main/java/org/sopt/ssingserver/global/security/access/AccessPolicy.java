@@ -6,14 +6,14 @@ import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 
 public enum AccessPolicy {
 
-    ACTIVE_MEMBER(false) {
+    ACTIVE_MEMBER {
         @Override
         boolean isSatisfiedBy(CurrentMember currentMember) {
             return isActive(currentMember);
         }
     },
 
-    CONSUMER(false) {
+    CONSUMER {
         @Override
         boolean isSatisfiedBy(CurrentMember currentMember) {
             return isActive(currentMember)
@@ -21,25 +21,35 @@ public enum AccessPolicy {
         }
     },
 
-    PENDING_INSTRUCTOR(true) {
+    PENDING_INSTRUCTOR {
         @Override
         boolean isSatisfiedBy(CurrentMember currentMember) {
             return isActive(currentMember)
                     && currentMember.role() == MemberRole.CONSUMER
                     && currentMember.instructorApprovalStatus() == InstructorApprovalStatus.PENDING;
         }
+
+        @Override
+        boolean requiresInstructorApprovalStatus() {
+            return true;
+        }
     },
 
-    APPROVED_INSTRUCTOR(true) {
+    APPROVED_INSTRUCTOR {
         @Override
         boolean isSatisfiedBy(CurrentMember currentMember) {
             return isActive(currentMember)
                     && currentMember.role() == MemberRole.INSTRUCTOR
                     && currentMember.instructorApprovalStatus() == InstructorApprovalStatus.APPROVED;
         }
+
+        @Override
+        boolean requiresInstructorApprovalStatus() {
+            return true;
+        }
     },
 
-    ADMIN(false) {
+    ADMIN {
         @Override
         boolean isSatisfiedBy(CurrentMember currentMember) {
             return isActive(currentMember)
@@ -47,16 +57,10 @@ public enum AccessPolicy {
         }
     };
 
-    private final boolean requiresInstructorApprovalStatus;
-
-    AccessPolicy(boolean requiresInstructorApprovalStatus) {
-        this.requiresInstructorApprovalStatus = requiresInstructorApprovalStatus;
-    }
-
     abstract boolean isSatisfiedBy(CurrentMember currentMember);
 
     boolean requiresInstructorApprovalStatus() {
-        return requiresInstructorApprovalStatus;
+        return false;
     }
 
     private static boolean isActive(CurrentMember currentMember) {
