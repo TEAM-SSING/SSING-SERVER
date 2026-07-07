@@ -16,8 +16,7 @@ public class AccessAuthorizationConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(requireAccessInterceptor)
-                .addPathPatterns("/api/v1/**");
+        registry.addInterceptor(requireAccessInterceptor);
     }
 
     @Override

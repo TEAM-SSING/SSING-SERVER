@@ -36,6 +36,12 @@ public class CurrentMemberArgumentResolver implements HandlerMethodArgumentResol
         }
 
         AuthenticatedMember authenticatedMember = AuthenticatedMemberExtractor.getAuthenticatedMember();
-        return accessAuthorizationService.getCurrentMember(authenticatedMember);
+        CurrentMember currentMember = accessAuthorizationService.authorize(authenticatedMember);
+        webRequest.setAttribute(
+                RequireAccessInterceptor.CURRENT_MEMBER_ATTRIBUTE,
+                currentMember,
+                NativeWebRequest.SCOPE_REQUEST
+        );
+        return currentMember;
     }
 }

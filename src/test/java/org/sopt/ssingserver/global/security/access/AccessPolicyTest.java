@@ -28,6 +28,12 @@ class AccessPolicyTest {
         CurrentMember currentMember = currentMember(MemberRole.CONSUMER, MemberStatus.ACTIVE, null);
 
         assertThat(AccessPolicy.CONSUMER.isSatisfiedBy(currentMember)).isTrue();
+        assertThat(AccessPolicy.CONSUMER.isSatisfiedBy(
+                currentMember(MemberRole.CONSUMER, MemberStatus.SUSPENDED, null)
+        )).isFalse();
+        assertThat(AccessPolicy.CONSUMER.isSatisfiedBy(
+                currentMember(MemberRole.ADMIN, MemberStatus.ACTIVE, null)
+        )).isFalse();
     }
 
     @Test
@@ -39,6 +45,15 @@ class AccessPolicyTest {
         );
 
         assertThat(AccessPolicy.PENDING_INSTRUCTOR.isSatisfiedBy(currentMember)).isTrue();
+        assertThat(AccessPolicy.PENDING_INSTRUCTOR.isSatisfiedBy(
+                currentMember(MemberRole.INSTRUCTOR, MemberStatus.ACTIVE, InstructorApprovalStatus.PENDING)
+        )).isFalse();
+        assertThat(AccessPolicy.PENDING_INSTRUCTOR.isSatisfiedBy(
+                currentMember(MemberRole.CONSUMER, MemberStatus.ACTIVE, InstructorApprovalStatus.APPROVED)
+        )).isFalse();
+        assertThat(AccessPolicy.PENDING_INSTRUCTOR.isSatisfiedBy(
+                currentMember(MemberRole.CONSUMER, MemberStatus.SUSPENDED, InstructorApprovalStatus.PENDING)
+        )).isFalse();
     }
 
     @Test
@@ -50,6 +65,15 @@ class AccessPolicyTest {
         );
 
         assertThat(AccessPolicy.APPROVED_INSTRUCTOR.isSatisfiedBy(currentMember)).isTrue();
+        assertThat(AccessPolicy.APPROVED_INSTRUCTOR.isSatisfiedBy(
+                currentMember(MemberRole.CONSUMER, MemberStatus.ACTIVE, InstructorApprovalStatus.APPROVED)
+        )).isFalse();
+        assertThat(AccessPolicy.APPROVED_INSTRUCTOR.isSatisfiedBy(
+                currentMember(MemberRole.INSTRUCTOR, MemberStatus.ACTIVE, InstructorApprovalStatus.PENDING)
+        )).isFalse();
+        assertThat(AccessPolicy.APPROVED_INSTRUCTOR.isSatisfiedBy(
+                currentMember(MemberRole.INSTRUCTOR, MemberStatus.SUSPENDED, InstructorApprovalStatus.APPROVED)
+        )).isFalse();
     }
 
     @Test
@@ -57,6 +81,12 @@ class AccessPolicyTest {
         CurrentMember currentMember = currentMember(MemberRole.ADMIN, MemberStatus.ACTIVE, null);
 
         assertThat(AccessPolicy.ADMIN.isSatisfiedBy(currentMember)).isTrue();
+        assertThat(AccessPolicy.ADMIN.isSatisfiedBy(
+                currentMember(MemberRole.ADMIN, MemberStatus.SUSPENDED, null)
+        )).isFalse();
+        assertThat(AccessPolicy.ADMIN.isSatisfiedBy(
+                currentMember(MemberRole.CONSUMER, MemberStatus.ACTIVE, null)
+        )).isFalse();
     }
 
     private CurrentMember currentMember(

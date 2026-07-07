@@ -2,6 +2,7 @@ package org.sopt.ssingserver.global.security.access;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -60,22 +61,25 @@ class CurrentMemberArgumentResolverTest {
     }
 
     @Test
-    void resolveArgument는_request에_CurrentMember가_없으면_인증_주체로_조회한다() throws Exception {
+    void resolveArgument는_request에_CurrentMember가_없으면_기본_인가를_수행하고_저장한다() throws Exception {
         CurrentMemberArgumentResolver resolver = createResolver();
         CurrentMember currentMember = currentMember();
         AuthenticatedMember principal = new AuthenticatedMember(1L, MemberRole.CONSUMER);
+        MockHttpServletRequest request = new MockHttpServletRequest();
         setAuthentication(principal);
 
-        when(accessAuthorizationService.getCurrentMember(principal)).thenReturn(currentMember);
+        when(accessAuthorizationService.authorize(principal)).thenReturn(currentMember);
 
         Object result = resolver.resolveArgument(
                 methodParameter("currentMember"),
                 null,
-                new ServletWebRequest(new MockHttpServletRequest()),
+                new ServletWebRequest(request),
                 null
         );
 
         assertThat(result).isSameAs(currentMember);
+        assertThat(request.getAttribute(RequireAccessInterceptor.CURRENT_MEMBER_ATTRIBUTE)).isSameAs(currentMember);
+        verify(accessAuthorizationService).authorize(principal);
     }
 
     @Test
