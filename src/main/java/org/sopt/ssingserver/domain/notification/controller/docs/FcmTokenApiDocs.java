@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.sopt.ssingserver.domain.notification.dto.request.DeleteFcmTokenRequest;
 import org.sopt.ssingserver.domain.notification.dto.request.RegisterFcmTokenRequest;
-import org.sopt.ssingserver.global.security.AuthenticatedMember;
+import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -23,7 +23,7 @@ public interface FcmTokenApiDocs {
     @ApiResponse(responseCode = "204", description = "FCM 토큰 등록 또는 수정 성공")
     ResponseEntity<Void> registerOrUpdate(
             @Parameter(hidden = true)
-            AuthenticatedMember authenticatedMember,
+            CurrentMember currentMember,
             @Valid @RequestBody RegisterFcmTokenRequest request
     );
 
@@ -35,7 +35,7 @@ public interface FcmTokenApiDocs {
     @ApiResponse(responseCode = "204", description = "FCM 토큰 삭제 성공")
     ResponseEntity<Void> unregister(
             @Parameter(hidden = true)
-            AuthenticatedMember authenticatedMember,
+            CurrentMember currentMember,
             @Valid @RequestBody DeleteFcmTokenRequest request
     );
 }
