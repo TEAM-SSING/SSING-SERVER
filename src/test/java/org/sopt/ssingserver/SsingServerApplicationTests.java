@@ -3,7 +3,9 @@ package org.sopt.ssingserver;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.auth.repository.OAuthAccountRepository;
 import org.sopt.ssingserver.domain.auth.repository.RefreshTokenRepository;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
+import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,6 +28,12 @@ class SsingServerApplicationTests {
 
 	@MockitoBean
 	private InstructorProfileRepository instructorProfileRepository;
+
+	@MockitoBean
+	private InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+
+	@MockitoBean
+	private LessonRepository lessonRepository;
 
 	@MockitoBean
 	private FcmTokenRepository fcmTokenRepository;
