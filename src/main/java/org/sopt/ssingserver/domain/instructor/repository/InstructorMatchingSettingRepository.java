@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.instructor.repository;
 
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -11,6 +12,7 @@ import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 // 즉시 매칭 탐색의 강사 노출 조건 조회 Repository
@@ -45,6 +47,7 @@ public interface InstructorMatchingSettingRepository extends JpaRepository<Instr
 
     // 후보 선택 직전 강사 노출 조건 row 잠금 재조회, 동시 트리거의 같은 강사 중복 제안 방지
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
     @Query("""
             select distinct setting
             from InstructorMatchingSetting setting

@@ -1,13 +1,16 @@
 package org.sopt.ssingserver.domain.matching.repository;
 
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import java.util.List;
 import java.util.Optional;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 // 매칭 요청 재탐색 대상 조회와 동시 처리 방어 Repository
@@ -15,6 +18,7 @@ public interface MatchingRequestRepository extends JpaRepository<MatchingRequest
 
     // 즉시 트리거와 스케줄러의 같은 REQUESTED 요청 동시 처리 방지용 비관적 락 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
     @Query("""
             select matchingRequest
             from MatchingRequest matchingRequest
@@ -26,12 +30,15 @@ public interface MatchingRequestRepository extends JpaRepository<MatchingRequest
             @Param("status") MatchingRequestStatus status
     );
 
-    // 1분 스케줄러의 재탐색 대상 REQUESTED 요청 id 오름차순 조회
+    // 1분 스케줄러의 재탐색 대상 REQUESTED 요청 id 오름차순 배치 조회
     @Query("""
             select matchingRequest.id
             from MatchingRequest matchingRequest
             where matchingRequest.status = :status
             order by matchingRequest.id asc
             """)
-    List<Long> findIdsByStatusOrderByIdAsc(@Param("status") MatchingRequestStatus status);
+    List<Long> findIdsByStatusOrderByIdAsc(
+            @Param("status") MatchingRequestStatus status,
+            Pageable pageable
+    );
 }
