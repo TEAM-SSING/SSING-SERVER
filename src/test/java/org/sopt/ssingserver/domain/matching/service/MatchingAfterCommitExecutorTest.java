@@ -1,6 +1,8 @@
 package org.sopt.ssingserver.domain.matching.service;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -53,15 +55,17 @@ class MatchingAfterCommitExecutorTest {
     @Test
     void execute는_커밋후_작업_예외를_원_흐름으로_전파하지_않는다() {
         MatchingAfterCommitExecutor executor = new MatchingAfterCommitExecutor();
+        Runnable action = mock(Runnable.class);
+        doThrow(new IllegalStateException("failed")).when(action).run();
         TransactionSynchronizationManager.initSynchronization();
 
         try {
-            executor.execute("test-action", () -> {
-                throw new IllegalStateException("failed");
-            });
+            executor.execute("test-action", action);
 
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(TransactionSynchronization::afterCommit);
+            assertThatCode(() -> TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit))
+                    .doesNotThrowAnyException();
+            verify(action).run();
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }

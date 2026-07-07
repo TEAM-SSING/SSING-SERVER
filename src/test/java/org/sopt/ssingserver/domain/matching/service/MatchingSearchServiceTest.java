@@ -300,6 +300,53 @@ class MatchingSearchServiceTest {
     }
 
     @Test
+    void search는_앞선_후보가_잠금재조회에서_유효하지_않으면_다음_가능후보로_제안한다() {
+        MatchingSearchService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        InstructorMatchingSetting staleSetting = instructorMatchingSetting(11L, 101L, 2, List.of(120, 180));
+        InstructorMatchingSetting availableSetting = instructorMatchingSetting(12L, 102L, 2, List.of(180, 240));
+        when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
+                .thenReturn(Optional.of(matchingRequest));
+        when(instructorMatchingSettingRepository.findExposedCandidates(
+                matchingRequest.getResort(),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2,
+                matchingRequest.getRequestedDurationMinutes(),
+                true
+        )).thenReturn(List.of(staleSetting, availableSetting));
+        when(instructorMatchingSettingRepository.findExposedCandidateByIdForUpdate(
+                11L,
+                matchingRequest.getResort(),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2,
+                matchingRequest.getRequestedDurationMinutes(),
+                true
+        )).thenReturn(Optional.empty());
+        givenLockedAvailableCandidate(matchingRequest, availableSetting);
+        when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
+            MatchingRequestGroup group = invocation.getArgument(0);
+            ReflectionTestUtils.setField(group, "id", 20L);
+            return group;
+        });
+        when(matchingOfferRepository.save(any(MatchingOffer.class))).thenAnswer(invocation -> {
+            MatchingOffer offer = invocation.getArgument(0);
+            ReflectionTestUtils.setField(offer, "id", 30L);
+            return offer;
+        });
+
+        MatchingSearchResult result = service.search(1L);
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_INSTRUCTOR);
+        verify(matchingOfferRepository, never())
+                .findByInstructorProfileIdAndStatusForUpdate(101L, MatchingOfferStatus.OFFERED);
+        ArgumentCaptor<MatchingOffer> offerCaptor = ArgumentCaptor.forClass(MatchingOffer.class);
+        verify(matchingOfferRepository).save(offerCaptor.capture());
+        assertThat(offerCaptor.getValue().getInstructorProfile()).isSameAs(availableSetting.getInstructorProfile());
+    }
+
+    @Test
     void search는_앞선_후보가_활성제안으로_점유되어도_다음_가능후보로_제안한다() {
         MatchingSearchService service = createService();
         MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));

@@ -41,13 +41,6 @@ public class MatchingRequestGroup extends BaseTimeEntity {
         return matchingRequestGroup;
     }
 
-    // 그룹 생성 이후 API 응답/결제/수업 생성에서 재사용할 확정 강습 시간 양수 검증
-    private static void validateDurationMinutes(int durationMinutes) {
-        if (durationMinutes <= 0) {
-            throw new IllegalArgumentException("durationMinutes must be positive.");
-        }
-    }
-
     public void expose() {
         this.status = MatchingRequestGroupStatus.EXPOSED;
     }
@@ -82,5 +75,12 @@ public class MatchingRequestGroup extends BaseTimeEntity {
 
     public void expire() {
         this.status = MatchingRequestGroupStatus.EXPIRED;
+    }
+
+    // 그룹 생성 이후 API 응답/결제/수업 생성에서 재사용할 확정 강습 시간 양수 검증
+    private static void validateDurationMinutes(int durationMinutes) {
+        if (durationMinutes <= 0) {
+            throw new IllegalArgumentException("durationMinutes must be positive.");
+        }
     }
 }

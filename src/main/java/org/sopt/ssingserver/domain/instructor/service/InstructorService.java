@@ -62,36 +62,7 @@ public class InstructorService {
             Long memberId,
             InstructorMatchingExposureRequest request
     ) {
-        InstructorProfile instructorProfile = instructorProfileRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
-
-        validateExposureAllowed(instructorProfile);
-
-        // 기존 조건이 없으면 새로 만들고, 있으면 요청값으로 덮어씀
-        InstructorMatchingSetting setting = instructorMatchingSettingRepository
-                .findByInstructorProfileId(instructorProfile.getId())
-                .map(existingSetting -> {
-                    existingSetting.updateConditions(
-                            request.sport(),
-                            request.lessonLevels(),
-                            request.availableDurationMinutes(),
-                            request.maxHeadcount(),
-                            request.equipmentReady()
-                    );
-                    return existingSetting;
-                })
-                .orElseGet(() -> InstructorMatchingSetting.create(
-                        instructorProfile,
-                        request.sport(),
-                        request.lessonLevels(),
-                        request.availableDurationMinutes(),
-                        request.maxHeadcount(),
-                        request.equipmentReady()
-                ));
-
-        instructorMatchingSettingRepository.save(setting);
-        triggerRequestedSearchAfterCommit();
-        return setting.isExposed();
+        return saveExposureSetting(memberId, request, true);
     }
 
     // 무결성 오류로 실패한 트랜잭션과 분리하여, 동시에 먼저 생성된 설정을 다시 조회해 요청값으로 덮어씀
@@ -99,26 +70,80 @@ public class InstructorService {
             Long memberId,
             InstructorMatchingExposureRequest request
     ) {
-        return Objects.requireNonNull(transactionTemplate.execute(status -> {
-            InstructorProfile instructorProfile = instructorProfileRepository.findByMemberId(memberId)
-                    .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+        return Objects.requireNonNull(
+                transactionTemplate.execute(status -> saveExposureSetting(memberId, request, false))
+        );
+    }
 
-            validateExposureAllowed(instructorProfile);
+    // 강사 프로필 조회, 노출 가능 검증, 조건 생성/갱신, 커밋 후 재탐색 예약의 공통 흐름
+    private boolean saveExposureSetting(
+            Long memberId,
+            InstructorMatchingExposureRequest request,
+            boolean createWhenMissing
+    ) {
+        InstructorProfile instructorProfile = findInstructorProfile(memberId);
+        validateExposureAllowed(instructorProfile);
 
-            InstructorMatchingSetting setting = instructorMatchingSettingRepository
-                    .findByInstructorProfileId(instructorProfile.getId())
-                    .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+        InstructorMatchingSetting setting = findOrCreateMatchingSetting(
+                instructorProfile,
+                request,
+                createWhenMissing
+        );
+        instructorMatchingSettingRepository.save(setting);
+        triggerRequestedSearchAfterCommit();
+        return setting.isExposed();
+    }
 
-            setting.updateConditions(
-                    request.sport(),
-                    request.lessonLevels(),
-                    request.availableDurationMinutes(),
-                    request.maxHeadcount(),
-                    request.equipmentReady()
-            );
-            triggerRequestedSearchAfterCommit();
-            return setting.isExposed();
-        }));
+    // 인증 회원의 강사 프로필 필수 존재 조회
+    private InstructorProfile findInstructorProfile(Long memberId) {
+        return instructorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+    }
+
+    // 기존 조건이 있으면 요청값 갱신, 없으면 최초 저장 경로에서만 새 조건 생성
+    private InstructorMatchingSetting findOrCreateMatchingSetting(
+            InstructorProfile instructorProfile,
+            InstructorMatchingExposureRequest request,
+            boolean createWhenMissing
+    ) {
+        return instructorMatchingSettingRepository.findByInstructorProfileId(instructorProfile.getId())
+                .map(existingSetting -> updateMatchingSetting(existingSetting, request))
+                .orElseGet(() -> createMatchingSetting(instructorProfile, request, createWhenMissing));
+    }
+
+    // 기존 즉시 노출 조건의 요청값 덮어쓰기와 노출 ON 전환
+    private InstructorMatchingSetting updateMatchingSetting(
+            InstructorMatchingSetting setting,
+            InstructorMatchingExposureRequest request
+    ) {
+        setting.updateConditions(
+                request.sport(),
+                request.lessonLevels(),
+                request.availableDurationMinutes(),
+                request.maxHeadcount(),
+                request.equipmentReady()
+        );
+        return setting;
+    }
+
+    // 동시 생성 충돌 복구 경로와 최초 생성 경로의 생성 가능 여부 분리
+    private InstructorMatchingSetting createMatchingSetting(
+            InstructorProfile instructorProfile,
+            InstructorMatchingExposureRequest request,
+            boolean createWhenMissing
+    ) {
+        if (!createWhenMissing) {
+            throw new BusinessException(CommonErrorCode.NOT_FOUND);
+        }
+
+        return InstructorMatchingSetting.create(
+                instructorProfile,
+                request.sport(),
+                request.lessonLevels(),
+                request.availableDurationMinutes(),
+                request.maxHeadcount(),
+                request.equipmentReady()
+        );
     }
 
     // 노출 조건 저장 커밋 이후 SEARCHING 요청 전체 재탐색 예약

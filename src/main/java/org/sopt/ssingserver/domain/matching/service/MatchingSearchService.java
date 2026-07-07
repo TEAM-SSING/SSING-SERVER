@@ -95,13 +95,7 @@ public class MatchingSearchService {
 
         // 후보 없음 상태의 즉시 실패 방지, REQUESTED 유지와 다음 트리거/스케줄러 재탐색
         if (candidates.isEmpty()) {
-            // DB 상태 변경 없음, API 표시 상태만 SEARCHING으로 계산해 호출자에게 반환
-            MatchingStatus matchingStatus = matchingStatusResolver.resolve(
-                    matchingRequest,
-                    Optional.empty(),
-                    Optional.empty()
-            );
-            return MatchingSearchResult.of(matchingRequest, matchingStatus);
+            return searching(matchingRequest);
         }
 
         // 현재 MVP의 repository id 오름차순 후보 중 잠금/활성 제안 방어를 통과한 첫 후보 선택
