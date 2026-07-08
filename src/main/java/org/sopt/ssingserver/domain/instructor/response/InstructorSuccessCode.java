@@ -9,7 +9,8 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum InstructorSuccessCode implements SuccessCode {
 
-    INSTRUCTOR_MATCHING_EXPOSURE_STARTED(HttpStatus.OK, "즉시 매칭 노출이 시작되었습니다.");
+    INSTRUCTOR_MATCHING_EXPOSURE_STARTED(HttpStatus.OK, "즉시 매칭 노출이 시작되었습니다."),
+    INSTRUCTOR_MATCHING_EXPOSURE_CANCELLED(HttpStatus.OK, "즉시 매칭 노출이 중단되었습니다.");
 
     private final HttpStatus status;
     private final String message;

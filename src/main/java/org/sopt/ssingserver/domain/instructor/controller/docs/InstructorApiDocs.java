@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
+import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureCancelResponse;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
@@ -26,5 +27,16 @@ public interface InstructorApiDocs {
             @Parameter(hidden = true)
             CurrentMember currentMember,
             @Valid @RequestBody InstructorMatchingExposureRequest request
+    );
+
+    @Operation(
+            summary = "강사 즉시 매칭 노출 중단",
+            description = "강사의 즉시 매칭 노출을 중단합니다.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponse(responseCode = "200", description = "즉시 매칭 노출 중단 성공")
+    ResponseEntity<BaseResponse<InstructorMatchingExposureCancelResponse>> cancelExposure(
+            @Parameter(hidden = true)
+            CurrentMember currentMember
     );
 }
