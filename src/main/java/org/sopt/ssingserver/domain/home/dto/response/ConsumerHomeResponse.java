@@ -32,7 +32,7 @@ public record ConsumerHomeResponse(
             int remainingDays,
 
             @Schema(description = "강습 상태", example = "CONFIRMED")
-            LessonStatus lessonStatus,
+            LessonStatus displayStatus,
 
             @Schema(description = "홈 강습 카드 제목", example = "김철수님 팀 4명")
             String title,

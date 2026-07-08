@@ -52,7 +52,7 @@ class HomeServiceTest {
         assertThat(response.lessonCards()).hasSize(1);
         LessonCardResponse lesson = response.lessonCards().get(0);
         assertThat(lesson.lessonId()).isEqualTo(1L);
-        assertThat(lesson.lessonStatus()).isSameAs(LessonStatus.CONFIRMED);
+        assertThat(lesson.displayStatus()).isSameAs(LessonStatus.CONFIRMED);
         assertThat(lesson.remainingDays()).isEqualTo(2);
         assertThat(lesson.title()).isEqualTo("김철수님 팀 4명");
         assertThat(lesson.scheduledAt()).isEqualTo(OffsetDateTime.of(2026, 7, 11, 19, 0, 0, 0, ZoneOffset.ofHours(9)));
@@ -76,7 +76,7 @@ class HomeServiceTest {
         ConsumerHomeResponse response = service.getHome(1L);
 
         LessonCardResponse lesson = response.lessonCards().get(0);
-        assertThat(lesson.lessonStatus()).isSameAs(LessonStatus.IN_PROGRESS);
+        assertThat(lesson.displayStatus()).isSameAs(LessonStatus.IN_PROGRESS);
         assertThat(lesson.remainingDays()).isZero();
         assertThat(lesson.title()).isEqualTo("박영희님 팀 2명");
     }
