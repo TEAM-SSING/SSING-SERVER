@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
+import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
@@ -37,6 +39,7 @@ import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
@@ -44,6 +47,8 @@ import org.springframework.transaction.support.DefaultTransactionStatus;
 
 @ExtendWith(MockitoExtension.class)
 class InstructorServiceTest {
+
+    private static final Instant FIXED_UPDATED_AT = Instant.parse("2026-07-07T00:00:00Z");
 
     @Mock
     private InstructorProfileRepository instructorProfileRepository;
@@ -70,14 +75,14 @@ class InstructorServiceTest {
         )).thenReturn(false);
         when(instructorMatchingSettingRepository.findByInstructorProfileId(10L)).thenReturn(Optional.empty());
 
-        boolean isExposed = service.startExposure(1L, request);
+        InstructorMatchingExposureResponse response = service.startExposure(1L, request);
 
         ArgumentCaptor<InstructorMatchingSetting> settingCaptor =
                 ArgumentCaptor.forClass(InstructorMatchingSetting.class);
         verify(instructorMatchingSettingRepository).save(settingCaptor.capture());
 
         InstructorMatchingSetting savedSetting = settingCaptor.getValue();
-        assertThat(isExposed).isTrue();
+        assertThat(response.isExposed()).isTrue();
         assertThat(savedSetting.getInstructorProfile()).isSameAs(profile);
         assertThat(savedSetting.getSport()).isSameAs(Sport.SNOWBOARD);
         assertThat(savedSetting.getLessonLevels())
@@ -122,6 +127,53 @@ class InstructorServiceTest {
         assertThat(existingSetting.getMaxHeadcount()).isEqualTo(3);
         assertThat(existingSetting.isExposed()).isTrue();
         verify(matchingSearchTriggerService).triggerAllRequested();
+    }
+
+    @Test
+    void cancelExposure는_기존_즉시노출_조건의_노출을_중단한다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        InstructorMatchingSetting existingSetting = InstructorMatchingSetting.create(
+                profile,
+                Sport.SKI,
+                List.of(LessonLevel.CERTIFIED),
+                List.of(120),
+                1,
+                true
+        );
+
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
+                .thenReturn(Optional.of(existingSetting));
+        when(instructorMatchingSettingRepository.saveAndFlush(existingSetting)).thenAnswer(invocation -> {
+            ReflectionTestUtils.setField(existingSetting, "updatedAt", FIXED_UPDATED_AT);
+            return existingSetting;
+        });
+
+        var result = service.cancelExposure(1L);
+
+        verify(instructorMatchingSettingRepository).saveAndFlush(existingSetting);
+        assertThat(result.isExposed()).isFalse();
+        assertThat(result.updatedAt()).isEqualTo(FIXED_UPDATED_AT.atOffset(ZoneOffset.ofHours(9)));
+        assertThat(existingSetting.isExposed()).isFalse();
+        verify(matchingSearchTriggerService, never()).triggerAllRequested();
+    }
+
+    @Test
+    void cancelExposure는_즉시노출_조건이_없으면_오류를_던진다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancelExposure(1L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isSameAs(CommonErrorCode.NOT_FOUND));
+
+        verify(instructorMatchingSettingRepository, never()).save(any());
+        verify(matchingSearchTriggerService, never()).triggerAllRequested();
     }
 
     @Test
