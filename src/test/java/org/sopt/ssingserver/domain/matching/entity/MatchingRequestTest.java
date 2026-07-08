@@ -21,6 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class MatchingRequestTest {
 
     private static final Instant EXPIRES_AT = Instant.parse("2026-07-07T00:10:00Z");
+    private static final Instant CANCELED_AT = Instant.parse("2026-07-07T00:03:00Z");
 
     @Test
     void create는_매칭요청을_REQUESTED_상태로_초기화한다() {
@@ -103,11 +104,12 @@ class MatchingRequestTest {
     void cancelByConsumer는_CANCELED와_소비자취소_사유를_저장한다() {
         MatchingRequest matchingRequest = matchingRequest();
 
-        matchingRequest.cancelByConsumer();
+        matchingRequest.cancelByConsumer(CANCELED_AT);
 
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.CANCELED);
         assertThat(matchingRequest.getStatusReason())
                 .isSameAs(MatchingRequestStatusReason.CONSUMER_CANCELED);
+        assertThat(matchingRequest.getCanceledAt()).isEqualTo(CANCELED_AT);
     }
 
     @Test

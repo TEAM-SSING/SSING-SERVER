@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.matching.repository;
 
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
@@ -29,4 +30,18 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
     );
 
     Optional<MatchingOffer> findFirstByMatchingRequestGroupIdOrderByIdDesc(Long matchingRequestGroupId);
+
+    // 매칭 중지 시 현재 그룹의 활성 제안을 같은 트랜잭션에서 종료하기 위한 잠금 조회
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
+    @Query("""
+            select matchingOffer
+            from MatchingOffer matchingOffer
+            where matchingOffer.matchingRequestGroup.id = :matchingRequestGroupId
+              and matchingOffer.status in :statuses
+            """)
+    List<MatchingOffer> findByMatchingRequestGroupIdAndStatusIn(
+            @Param("matchingRequestGroupId") Long matchingRequestGroupId,
+            @Param("statuses") Collection<MatchingOfferStatus> statuses
+    );
 }

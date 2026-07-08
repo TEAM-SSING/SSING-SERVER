@@ -16,6 +16,16 @@ import org.springframework.data.repository.query.Param;
 // 매칭 요청 재탐색 대상 조회와 동시 처리 방어 Repository
 public interface MatchingRequestRepository extends JpaRepository<MatchingRequest, Long> {
 
+    // 소비자 매칭 중지와 탐색/상태전이의 같은 요청 row 동시 변경 방지용 비관적 락 조회
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
+    @Query("""
+            select matchingRequest
+            from MatchingRequest matchingRequest
+            where matchingRequest.id = :id
+            """)
+    Optional<MatchingRequest> findByIdForUpdate(@Param("id") Long id);
+
     // 즉시 트리거와 스케줄러의 같은 REQUESTED 요청 동시 처리 방지용 비관적 락 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
