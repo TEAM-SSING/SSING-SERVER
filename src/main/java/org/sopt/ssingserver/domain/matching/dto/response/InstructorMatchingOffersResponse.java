@@ -50,7 +50,7 @@ public record InstructorMatchingOffersResponse(
             @Schema(description = "제안 상태", example = "OFFERED")
             MatchingOfferStatus offerStatus,
 
-            @Schema(description = "제안 만료 시각", example = "2026-06-28T15:31:00+09:00")
+            @Schema(description = "제안 만료 시각. offerStatus=OFFERED인 경우 포함하고, 값이 없으면 생략", example = "2026-06-28T15:31:00+09:00")
             Instant expiresAt,
 
             @Schema(description = "강습 조건 요약")

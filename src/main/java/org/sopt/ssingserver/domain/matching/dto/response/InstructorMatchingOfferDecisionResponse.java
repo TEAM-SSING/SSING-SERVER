@@ -23,7 +23,7 @@ public record InstructorMatchingOfferDecisionResponse(
         @Schema(description = "그룹 상태", example = "INSTRUCTOR_ACCEPTED")
         MatchingRequestGroupStatus groupStatus,
 
-        @Schema(description = "대표 소비자 최종 응답 만료 시각. 수락 시 포함", example = "2026-06-28T15:32:00+09:00")
+        @Schema(description = "대표 소비자 최종 응답 만료 시각. 수락 시 포함하고, 값이 없으면 생략", example = "2026-06-28T15:32:00+09:00")
         Instant requesterConfirmationExpiresAt
 ) {
 
