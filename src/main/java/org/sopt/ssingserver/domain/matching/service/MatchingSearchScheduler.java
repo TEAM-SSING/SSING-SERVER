@@ -11,11 +11,13 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MatchingSearchScheduler {
 
+    private final MatchingOfferExpirationTriggerService matchingOfferExpirationTriggerService;
     private final MatchingSearchTriggerService matchingSearchTriggerService;
 
-    // MVP 기준 1분 주기 REQUESTED 요청 스캔과 후보 생성/만료 여부 재판단
+    // MVP 기준 1분 주기 제안 만료 정리 후 REQUESTED 요청 재탐색
     @Scheduled(fixedDelay = 60_000)
     public void runScheduledSearch() {
+        matchingOfferExpirationTriggerService.expireOverdueOffers();
         matchingSearchTriggerService.triggerAllRequested();
     }
 }

@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.matching.service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingSearchResult;
+import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
@@ -24,6 +26,8 @@ import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
+import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MatchingSearchService {
+
+    // 매칭 시간 정책의 MVP 기준: 강사 제안 응답 제한 시간 1분
+    private static final Duration INSTRUCTOR_RESPONSE_TIMEOUT = Duration.ofMinutes(1);
 
     private final MatchingRequestRepository matchingRequestRepository;
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
@@ -98,7 +105,7 @@ public class MatchingSearchService {
             return searching(matchingRequest);
         }
 
-        // 현재 MVP의 repository id 오름차순 후보 중 잠금/활성 제안 방어를 통과한 첫 후보 선택
+        // 현재 MVP의 강사 프로필 id 오름차순 후보 중 잠금/활성 제안 방어를 통과한 첫 후보 선택
         return selectOfferableCandidate(matchingRequest, candidates)
                 .map(candidate -> createGroupAndOffer(matchingRequest, candidate, now))
                 // 모든 후보가 다른 트랜잭션에서 변경/점유된 경우 REQUESTED 유지와 다음 재탐색 대기
@@ -126,30 +133,46 @@ public class MatchingSearchService {
         // maxHeadcount의 목표 정원 아닌 수용 가능한 최대 인원 의미
         // 후보 쿼리의 maxHeadcount >= 요청 인원 확인 이후 즉시 제안 생성
         matchingRequestGroup.expose();
-        MatchingOffer matchingOffer = matchingOfferRepository.save(MatchingOffer.create(
-                candidate.setting().getInstructorProfile(),
-                matchingRequestGroup,
-                now
-        ));
-
-        // 실제 WebSocket/FCM 부재 상태의 제안 생성 이벤트 포트 전달과 후속 구현 연결 지점
-        publishAfterCommit(new MatchingOfferCreatedEvent(
-                // 이벤트 저장소 도입 전 MVP의 발행 단위 추적용 id 생성
-                UUID.randomUUID(),
-                // 제안 row 생성 시각과 이벤트 발생 시각의 동일 기준 적용
-                now,
-                matchingRequest.getId(),
-                matchingRequestGroup.getId(),
-                matchingOffer.getId(),
-                candidate.durationMinutes(),
-                candidate.setting().getInstructorProfile().getId()
-        ));
+        createOffer(matchingRequest, matchingRequestGroup, candidate, now);
 
         return MatchingSearchResult.of(
                 matchingRequest,
                 MatchingStatus.WAITING_FOR_INSTRUCTOR,
                 matchingRequestGroup
         );
+    }
+
+    // 기존 그룹에서 강사 거절/만료 이후 후순위 후보 1명에게 새 제안을 순차 노출
+    @Transactional
+    public NextMatchingOfferResult ensureNextOfferForGroup(
+            MatchingRequest matchingRequest,
+            MatchingRequestGroup matchingRequestGroup,
+            Instant now
+    ) {
+        MatchingRequestGroup lockedGroup = matchingRequestGroupRepository.findByIdForUpdate(
+                        matchingRequestGroup.getId()
+                )
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
+        List<MatchingOffer> activeOffers = matchingOfferRepository.findByMatchingRequestGroupIdAndStatusForUpdate(
+                lockedGroup.getId(),
+                MatchingOfferStatus.OFFERED
+        );
+        if (!activeOffers.isEmpty()) {
+            return NextMatchingOfferResult.alreadyActive(activeOffers.getFirst());
+        }
+
+        List<InstructorMatchingSetting> candidates = instructorMatchingSettingRepository.findExposedCandidates(
+                matchingRequest.getResort(),
+                matchingRequest.getSport(),
+                matchingRequest.getLessonLevel(),
+                matchingRequest.getHeadcount(),
+                matchingRequest.getRequestedDurationMinutes(),
+                matchingRequest.isEquipmentReady()
+        );
+
+        return selectOfferableCandidate(matchingRequest, candidates)
+                .map(candidate -> NextMatchingOfferResult.created(createOffer(matchingRequest, lockedGroup, candidate, now)))
+                .orElseGet(NextMatchingOfferResult::noCandidate);
     }
 
     // 후보 목록의 repository 정렬 결과를 유지하되 강사 row 잠금과 활성 제안 방어를 통과한 후보 선택
@@ -169,6 +192,10 @@ public class MatchingSearchService {
 
             InstructorMatchingSetting setting = lockedCandidate.get();
             if (hasOfferedMatchingOffer(setting)) {
+                continue;
+            }
+
+            if (hasAlreadyOfferedInMatchingRequest(matchingRequest, setting)) {
                 continue;
             }
 
@@ -203,6 +230,47 @@ public class MatchingSearchService {
                 setting.getInstructorProfile().getId(),
                 MatchingOfferStatus.OFFERED
         ).isEmpty();
+    }
+
+    // 같은 소비자 매칭 요청이 유지되는 동안 이미 제안받은 강사에게 같은 매칭을 다시 노출하지 않음
+    private boolean hasAlreadyOfferedInMatchingRequest(
+            MatchingRequest matchingRequest,
+            InstructorMatchingSetting setting
+    ) {
+        return matchingOfferRepository.existsByMatchingRequestIdAndInstructorProfileId(
+                matchingRequest.getId(),
+                setting.getInstructorProfile().getId()
+        );
+    }
+
+    // 그룹에 활성 제안을 1개 더 만들고 강사 알림 이벤트 발행 지점을 고정
+    private MatchingOffer createOffer(
+            MatchingRequest matchingRequest,
+            MatchingRequestGroup matchingRequestGroup,
+            OfferableCandidate candidate,
+            Instant now
+    ) {
+        MatchingOffer matchingOffer = matchingOfferRepository.save(MatchingOffer.create(
+                candidate.setting().getInstructorProfile(),
+                matchingRequestGroup,
+                now,
+                now.plus(INSTRUCTOR_RESPONSE_TIMEOUT)
+        ));
+
+        // 실제 WebSocket/FCM 부재 상태의 제안 생성 이벤트 포트 전달과 후속 구현 연결 지점
+        publishAfterCommit(new MatchingOfferCreatedEvent(
+                // 이벤트 저장소 도입 전 MVP의 발행 단위 추적용 id 생성
+                UUID.randomUUID(),
+                // 제안 row 생성 시각과 이벤트 발생 시각의 동일 기준 적용
+                now,
+                matchingRequest.getId(),
+                matchingRequestGroup.getId(),
+                matchingOffer.getId(),
+                candidate.durationMinutes(),
+                candidate.setting().getInstructorProfile().getId()
+        ));
+
+        return matchingOffer;
     }
 
     // 요청 희망 시간과 강사 가능 시간 교집합 중 서버가 이번 제안에 사용할 최소 분 값 선택
