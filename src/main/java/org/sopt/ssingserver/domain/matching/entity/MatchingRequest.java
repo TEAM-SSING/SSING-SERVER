@@ -90,6 +90,9 @@ public class MatchingRequest extends BaseTimeEntity {
     // 요청, 최종 확인, 결제처럼 현재 진행 단계에서 앱이 참고할 만료 시각
     private Instant expiresAt;
 
+    // 소비자 직접 중지 시 API 응답과 운영 추적에 사용할 취소 시각
+    private Instant canceledAt;
+
     // 기본 무제한 탐색 요청 생성, 후보 없음만으로 실패시키지 않는 REQUESTED 시작
     public static MatchingRequest createUnlimitedSearch(
             Member member,
@@ -170,6 +173,12 @@ public class MatchingRequest extends BaseTimeEntity {
 
     // 소비자 직접 중지 요청의 취소 사유 저장 및 상태 조회 원인 구분
     public void cancelByConsumer() {
+        cancelByConsumer(null);
+    }
+
+    // 소비자 직접 중지 요청의 취소 사유와 취소 시각 저장
+    public void cancelByConsumer(Instant canceledAt) {
+        this.canceledAt = canceledAt;
         updateStatus(MatchingRequestStatus.CANCELED, MatchingRequestStatusReason.CONSUMER_CANCELED);
     }
 

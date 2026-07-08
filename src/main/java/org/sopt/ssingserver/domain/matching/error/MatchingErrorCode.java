@@ -14,7 +14,9 @@ public enum MatchingErrorCode implements ErrorCode {
     // 매칭 요청 대상 리조트를 요청 저장 전에 찾지 못한 경우의 명시적 실패
     MATCHING_RESORT_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리조트를 찾을 수 없습니다."),
     // 소비자 상태 조회 대상 매칭 요청 row를 찾지 못한 경우의 명시적 실패
-    MATCHING_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 매칭 요청입니다.");
+    MATCHING_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 매칭 요청입니다."),
+    // 이미 종료되었거나 MVP 범위 밖 결제 완료 요청을 소비자 중지 API로 취소하려는 경우
+    MATCHING_CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "취소할 수 없는 매칭 요청 상태입니다.");
 
     private final HttpStatus status;
     private final String message;
