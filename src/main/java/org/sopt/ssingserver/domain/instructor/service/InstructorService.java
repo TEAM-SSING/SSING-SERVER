@@ -2,6 +2,8 @@ package org.sopt.ssingserver.domain.instructor.service;
 
 import java.util.Objects;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
+import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureCancelResponse;
+import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
@@ -16,6 +18,7 @@ import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
@@ -44,17 +47,36 @@ public class InstructorService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    public boolean startExposure(
+    // 강사 즉시 매칭 조건 저장 및 시작
+    public InstructorMatchingExposureResponse startExposure(
             Long memberId,
             InstructorMatchingExposureRequest request
     ) {
         try {
-            return Objects.requireNonNull(
+            boolean isExposed = Objects.requireNonNull(
                     transactionTemplate.execute(status -> startExposureInTransaction(memberId, request))
             );
+            return InstructorMatchingExposureResponse.from(isExposed);
         } catch (DataIntegrityViolationException exception) {
-            return updateAfterConflict(memberId, request);
+            return InstructorMatchingExposureResponse.from(updateAfterConflict(memberId, request));
         }
+    }
+
+    // 강사 즉시 매칭 노출 false
+    @Transactional
+    public InstructorMatchingExposureCancelResponse cancelExposure(Long memberId) {
+        InstructorProfile instructorProfile = findInstructorProfile(memberId);
+
+        InstructorMatchingSetting setting = instructorMatchingSettingRepository
+                .findByInstructorProfileId(instructorProfile.getId())
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+
+        if (setting.isExposed()) {
+            setting.stopExposure();
+            instructorMatchingSettingRepository.saveAndFlush(setting);
+        }
+
+        return InstructorMatchingExposureCancelResponse.from(setting.getUpdatedAt());
     }
 
     // 단일 트랜잭션에서 검증과 조건 생성/갱신을 수행
