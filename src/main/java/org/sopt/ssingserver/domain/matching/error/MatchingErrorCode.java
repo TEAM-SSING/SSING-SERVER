@@ -12,7 +12,9 @@ public enum MatchingErrorCode implements ErrorCode {
     // 매칭 요청 소유 회원을 요청 저장 전에 찾지 못한 경우의 명시적 실패
     MATCHING_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 회원을 찾을 수 없습니다."),
     // 매칭 요청 대상 리조트를 요청 저장 전에 찾지 못한 경우의 명시적 실패
-    MATCHING_RESORT_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리조트를 찾을 수 없습니다.");
+    MATCHING_RESORT_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리조트를 찾을 수 없습니다."),
+    // 소비자 상태 조회 대상 매칭 요청 row를 찾지 못한 경우의 명시적 실패
+    MATCHING_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 매칭 요청입니다.");
 
     private final HttpStatus status;
     private final String message;

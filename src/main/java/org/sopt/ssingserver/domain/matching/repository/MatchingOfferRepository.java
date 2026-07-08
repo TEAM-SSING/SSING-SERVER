@@ -3,6 +3,7 @@ package org.sopt.ssingserver.domain.matching.repository;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.util.List;
+import java.util.Optional;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,4 +27,6 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
             @Param("instructorProfileId") Long instructorProfileId,
             @Param("status") MatchingOfferStatus status
     );
+
+    Optional<MatchingOffer> findFirstByMatchingRequestGroupIdOrderByIdDesc(Long matchingRequestGroupId);
 }
