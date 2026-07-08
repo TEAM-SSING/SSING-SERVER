@@ -12,6 +12,7 @@ class MatchingStatusTest {
         assertThat(Arrays.stream(MatchingStatus.values())
                 .map(Enum::name))
                 .containsExactly(
+                        "SEARCHING",
                         "NO_AVAILABLE_INSTRUCTOR",
                         "WAITING_FOR_TEAM",
                         "WAITING_FOR_INSTRUCTOR",

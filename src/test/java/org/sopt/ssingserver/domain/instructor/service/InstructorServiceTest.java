@@ -29,6 +29,8 @@ import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSetti
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
+import org.sopt.ssingserver.domain.matching.service.MatchingAfterCommitExecutor;
+import org.sopt.ssingserver.domain.matching.service.MatchingSearchTriggerService;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
@@ -51,6 +53,9 @@ class InstructorServiceTest {
 
     @Mock
     private LessonRepository lessonRepository;
+
+    @Mock
+    private MatchingSearchTriggerService matchingSearchTriggerService;
 
     @Test
     void startExposure는_새_즉시노출_조건을_저장하고_노출을_시작한다() {
@@ -81,6 +86,7 @@ class InstructorServiceTest {
         assertThat(savedSetting.getMaxHeadcount()).isEqualTo(3);
         assertThat(savedSetting.isEquipmentReady()).isTrue();
         assertThat(savedSetting.isExposed()).isTrue();
+        verify(matchingSearchTriggerService).triggerAllRequested();
     }
 
     @Test
@@ -115,6 +121,7 @@ class InstructorServiceTest {
         assertThat(existingSetting.getAvailableDurationMinutes()).containsExactlyInAnyOrder(120, 180, 240);
         assertThat(existingSetting.getMaxHeadcount()).isEqualTo(3);
         assertThat(existingSetting.isExposed()).isTrue();
+        verify(matchingSearchTriggerService).triggerAllRequested();
     }
 
     @Test
@@ -134,6 +141,7 @@ class InstructorServiceTest {
                         .isSameAs(InstructorErrorCode.ACTIVE_LESSON_EXISTS));
 
         verify(instructorMatchingSettingRepository, never()).save(any());
+        verify(matchingSearchTriggerService, never()).triggerAllRequested();
     }
 
     @Test
@@ -154,6 +162,7 @@ class InstructorServiceTest {
                         .isSameAs(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET));
 
         verifyNoInteractions(instructorMatchingSettingRepository);
+        verify(matchingSearchTriggerService, never()).triggerAllRequested();
     }
 
     private InstructorService createService() {
@@ -161,6 +170,8 @@ class InstructorServiceTest {
                 instructorProfileRepository,
                 instructorMatchingSettingRepository,
                 lessonRepository,
+                matchingSearchTriggerService,
+                new MatchingAfterCommitExecutor(),
                 new NoOpTransactionManager()
         );
     }

@@ -1,9 +1,11 @@
 package org.sopt.ssingserver.domain.matching.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
@@ -29,11 +31,29 @@ class MatchingRequestTest {
         assertThat(matchingRequest.getSport()).isSameAs(Sport.SNOWBOARD);
         assertThat(matchingRequest.getLessonLevel()).isSameAs(LessonLevel.FIRST_TIME);
         assertThat(matchingRequest.getHeadcount()).isEqualTo(2);
-        assertThat(matchingRequest.getDurationMinutes()).isEqualTo(120);
+        assertThat(matchingRequest.getRequestedDurationMinutes()).containsExactly(120, 180);
         assertThat(matchingRequest.isEquipmentReady()).isTrue();
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         assertThat(matchingRequest.getStatusReason()).isNull();
         assertThat(matchingRequest.getExpiresAt()).isEqualTo(EXPIRES_AT);
+    }
+
+    @Test
+    void createUnlimitedSearch는_탐색만료시각_없이_REQUESTED_상태로_초기화한다() {
+        MatchingRequest matchingRequest = MatchingRequest.createUnlimitedSearch(
+                Member.create("소비자", null, MemberRole.CONSUMER, MemberStatus.ACTIVE),
+                resort(),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2,
+                List.of(120, 180),
+                true
+        );
+
+        assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+        assertThat(matchingRequest.getStatusReason()).isNull();
+        assertThat(matchingRequest.getExpiresAt()).isNull();
+        assertThat(matchingRequest.isSearchExpired(EXPIRES_AT)).isFalse();
     }
 
     @Test
@@ -45,6 +65,38 @@ class MatchingRequestTest {
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.FAILED);
         assertThat(matchingRequest.getStatusReason())
                 .isSameAs(MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR);
+    }
+
+    @Test
+    void create는_희망시간_목록이_비어있으면_생성하지_않는다() {
+        assertThatThrownBy(() -> MatchingRequest.create(
+                Member.create("소비자", null, MemberRole.CONSUMER, MemberStatus.ACTIVE),
+                resort(),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2,
+                List.of(),
+                true,
+                EXPIRES_AT
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("requestedDurationMinutes must not be empty.");
+    }
+
+    @Test
+    void create는_희망시간_목록에_양수가_아닌_값이_있으면_생성하지_않는다() {
+        assertThatThrownBy(() -> MatchingRequest.create(
+                Member.create("소비자", null, MemberRole.CONSUMER, MemberStatus.ACTIVE),
+                resort(),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2,
+                List.of(120, 0),
+                true,
+                EXPIRES_AT
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("requestedDurationMinutes must contain positive minutes.");
     }
 
     @Test
@@ -63,7 +115,7 @@ class MatchingRequestTest {
         MatchingRequest matchingRequest = matchingRequest();
         MatchingOffer matchingOffer = MatchingOffer.create(
                 instructorProfile(),
-                MatchingRequestGroup.createCandidate(),
+                MatchingRequestGroup.createCandidate(120),
                 Instant.parse("2026-07-07T00:01:00Z")
         );
         Instant confirmationExpiresAt = Instant.parse("2026-07-07T00:02:00Z");
@@ -119,7 +171,7 @@ class MatchingRequestTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
-                120,
+                List.of(120, 180),
                 true,
                 EXPIRES_AT
         );
@@ -141,7 +193,8 @@ class MatchingRequestTest {
             constructor.setAccessible(true);
             Resort resort = constructor.newInstance();
             ReflectionTestUtils.setField(resort, "code", "HIGH1");
-            ReflectionTestUtils.setField(resort, "name", "하이원");
+            ReflectionTestUtils.setField(resort, "name", "하이원리조트");
+            ReflectionTestUtils.setField(resort, "displayName", "하이원");
             return resort;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);

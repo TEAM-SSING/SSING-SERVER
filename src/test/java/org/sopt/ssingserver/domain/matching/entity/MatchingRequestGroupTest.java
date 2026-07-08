@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.matching.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
@@ -9,14 +10,22 @@ class MatchingRequestGroupTest {
 
     @Test
     void createCandidate는_후보그룹으로_초기화한다() {
-        MatchingRequestGroup group = MatchingRequestGroup.createCandidate();
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
 
         assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.CANDIDATE);
+        assertThat(group.getDurationMinutes()).isEqualTo(120);
+    }
+
+    @Test
+    void createCandidate는_durationMinutes가_양수가_아니면_생성하지_않는다() {
+        assertThatThrownBy(() -> MatchingRequestGroup.createCandidate(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("durationMinutes must be positive.");
     }
 
     @Test
     void 상태변경_메서드는_의도에_맞는_그룹상태를_저장한다() {
-        MatchingRequestGroup group = MatchingRequestGroup.createCandidate();
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
 
         group.expose();
         assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);

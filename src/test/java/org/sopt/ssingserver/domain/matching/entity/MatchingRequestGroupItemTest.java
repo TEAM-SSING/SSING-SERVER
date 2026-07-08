@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
@@ -20,7 +21,7 @@ class MatchingRequestGroupItemTest {
     void createNotRequested는_아직_요청하지_않은_그룹항목으로_초기화한다() {
         MatchingRequestGroupItem item = MatchingRequestGroupItem.createNotRequested(
                 matchingRequest(),
-                MatchingRequestGroup.createCandidate()
+                MatchingRequestGroup.createCandidate(120)
         );
 
         assertThat(item.getStatus()).isSameAs(MatchingRequestGroupItemStatus.NOT_REQUESTED);
@@ -31,7 +32,7 @@ class MatchingRequestGroupItemTest {
     void 응답_메서드는_상태와_응답시각을_저장한다() {
         MatchingRequestGroupItem item = MatchingRequestGroupItem.createNotRequested(
                 matchingRequest(),
-                MatchingRequestGroup.createCandidate()
+                MatchingRequestGroup.createCandidate(120)
         );
         Instant respondedAt = Instant.parse("2026-07-07T00:01:00Z");
 
@@ -51,7 +52,7 @@ class MatchingRequestGroupItemTest {
     void 닫기_메서드는_의도에_맞는_항목상태를_저장한다() {
         MatchingRequestGroupItem item = MatchingRequestGroupItem.createNotRequested(
                 matchingRequest(),
-                MatchingRequestGroup.createCandidate()
+                MatchingRequestGroup.createCandidate(120)
         );
 
         item.cancel();
@@ -68,7 +69,7 @@ class MatchingRequestGroupItemTest {
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 1,
-                120,
+                List.of(120),
                 true,
                 Instant.parse("2026-07-07T00:10:00Z")
         );
@@ -80,7 +81,8 @@ class MatchingRequestGroupItemTest {
             constructor.setAccessible(true);
             Resort resort = constructor.newInstance();
             ReflectionTestUtils.setField(resort, "code", "HIGH1");
-            ReflectionTestUtils.setField(resort, "name", "하이원");
+            ReflectionTestUtils.setField(resort, "name", "하이원리조트");
+            ReflectionTestUtils.setField(resort, "displayName", "하이원");
             return resort;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
