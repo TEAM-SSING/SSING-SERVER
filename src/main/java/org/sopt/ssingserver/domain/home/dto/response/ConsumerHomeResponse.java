@@ -2,10 +2,10 @@ package org.sopt.ssingserver.domain.home.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
+import org.sopt.ssingserver.global.time.AppZoneId;
 
 public record ConsumerHomeResponse(
         @Schema(description = "홈에 표시할 예약/진행 중 강습 카드 목록")
@@ -14,8 +14,6 @@ public record ConsumerHomeResponse(
         @Schema(description = "읽지 않은 알림 존재 여부", example = "true")
         boolean hasUnreadNotification
 ) {
-
-    private static final ZoneId RESPONSE_ZONE = ZoneId.of("Asia/Seoul");
 
     public static ConsumerHomeResponse from(
             List<LessonCardResponse> lessonCards,
@@ -54,7 +52,7 @@ public record ConsumerHomeResponse(
                     remainingDays,
                     lessonCard.getLessonStatus(),
                     title,
-                    lessonCard.getScheduledAt().atZone(RESPONSE_ZONE).toOffsetDateTime(),
+                    lessonCard.getScheduledAt().atZone(AppZoneId.SEOUL).toOffsetDateTime(),
                     new ResortResponse(lessonCard.getResortCode(), lessonCard.getResortDisplayName())
             );
         }
