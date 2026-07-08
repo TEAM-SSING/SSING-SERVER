@@ -202,6 +202,46 @@ class InstructorMatchingOfferServiceTest {
     }
 
     @Test
+    void respond는_이미_응답한_제안이면_MATCHING_OFFER_ALREADY_RESPONDED를_던지고_주변상태를_변경하지_않는다() {
+        InstructorMatchingOfferService service = createService();
+        InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
+        MatchingRequestGroup group = exposedGroup(20L);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group, OFFER_EXPIRES_AT);
+        offer.reject(FIXED_CLOCK.instant().minusSeconds(30));
+        givenOfferAndGroup(instructorProfile, offer, group);
+
+        assertThatExceptionOfType(BusinessException.class)
+                .isThrownBy(() -> service.respond(1L, 50L, MatchingOfferDecision.ACCEPTED))
+                .satisfies(exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(MatchingErrorCode.MATCHING_OFFER_ALREADY_RESPONDED));
+
+        assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.REJECTED);
+        assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
+        verifyNoInteractions(matchingRequestGroupItemRepository);
+        verifyNoInteractions(matchingSearchService);
+    }
+
+    @Test
+    void respond는_이미_닫힌_그룹이면_MATCHING_GROUP_ALREADY_CLOSED를_던지고_제안을_변경하지_않는다() {
+        InstructorMatchingOfferService service = createService();
+        InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
+        MatchingRequestGroup group = exposedGroup(20L);
+        group.cancel();
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group, OFFER_EXPIRES_AT);
+        givenOfferAndGroup(instructorProfile, offer, group);
+
+        assertThatExceptionOfType(BusinessException.class)
+                .isThrownBy(() -> service.respond(1L, 50L, MatchingOfferDecision.ACCEPTED))
+                .satisfies(exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(MatchingErrorCode.MATCHING_GROUP_ALREADY_CLOSED));
+
+        assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.OFFERED);
+        assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.CANCELED);
+        verifyNoInteractions(matchingRequestGroupItemRepository);
+        verifyNoInteractions(matchingSearchService);
+    }
+
+    @Test
     void getCurrentOffers는_현재_강사의_제안과_강습요약을_반환한다() {
         InstructorMatchingOfferService service = createService();
         InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
@@ -259,6 +299,16 @@ class InstructorMatchingOfferServiceTest {
         when(matchingRequestGroupRepository.findByIdForUpdate(group.getId())).thenReturn(Optional.of(group));
         when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdForUpdate(group.getId()))
                 .thenReturn(groupItems);
+    }
+
+    private void givenOfferAndGroup(
+            InstructorProfile instructorProfile,
+            MatchingOffer offer,
+            MatchingRequestGroup group
+    ) {
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(instructorProfile));
+        when(matchingOfferRepository.findByIdForUpdate(offer.getId())).thenReturn(Optional.of(offer));
+        when(matchingRequestGroupRepository.findByIdForUpdate(group.getId())).thenReturn(Optional.of(group));
     }
 
     private MatchingOffer offeredOffer(
