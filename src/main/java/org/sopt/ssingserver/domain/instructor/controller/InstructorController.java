@@ -34,8 +34,7 @@ public class InstructorController implements InstructorApiDocs {
             CurrentMember currentMember,
             @Valid @RequestBody InstructorMatchingExposureRequest request
     ) {
-        InstructorMatchingExposureResponse response =
-                instructorService.startExposure(currentMember.memberId(), request);
+        InstructorMatchingExposureResponse response = instructorService.startExposure(currentMember.memberId(), request);
         return SuccessResponseFactory.success(InstructorSuccessCode.INSTRUCTOR_MATCHING_EXPOSURE_STARTED, response);
     }
 

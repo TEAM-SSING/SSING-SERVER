@@ -62,7 +62,7 @@ public class InstructorService {
         }
     }
 
-    // 강사 즉시 매칭 노출 false
+    // 강사 즉시 매칭 노출 중단
     @Transactional
     public InstructorMatchingExposureCancelResponse cancelExposure(Long memberId) {
         InstructorProfile instructorProfile = findInstructorProfile(memberId);
@@ -76,7 +76,7 @@ public class InstructorService {
             instructorMatchingSettingRepository.saveAndFlush(setting);
         }
 
-        return InstructorMatchingExposureCancelResponse.from(setting.getUpdatedAt());
+        return InstructorMatchingExposureCancelResponse.of(setting.isExposed(), setting.getUpdatedAt());
     }
 
     // 단일 트랜잭션에서 검증과 조건 생성/갱신을 수행

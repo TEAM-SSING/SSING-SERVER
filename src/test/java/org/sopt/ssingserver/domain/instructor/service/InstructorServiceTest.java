@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
+import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureCancelResponse;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
@@ -150,11 +151,39 @@ class InstructorServiceTest {
             return existingSetting;
         });
 
-        var result = service.cancelExposure(1L);
+        InstructorMatchingExposureCancelResponse response = service.cancelExposure(1L);
 
         verify(instructorMatchingSettingRepository).saveAndFlush(existingSetting);
-        assertThat(result.isExposed()).isFalse();
-        assertThat(result.updatedAt()).isEqualTo(FIXED_UPDATED_AT.atOffset(ZoneOffset.ofHours(9)));
+        assertThat(response.isExposed()).isFalse();
+        assertThat(response.updatedAt()).isEqualTo(FIXED_UPDATED_AT.atOffset(ZoneOffset.ofHours(9)));
+        assertThat(existingSetting.isExposed()).isFalse();
+        verify(matchingSearchTriggerService, never()).triggerAllRequested();
+    }
+
+    @Test
+    void cancelExposure는_이미_중단된_즉시노출_조건을_성공으로_처리한다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        InstructorMatchingSetting existingSetting = InstructorMatchingSetting.create(
+                profile,
+                Sport.SKI,
+                List.of(LessonLevel.CERTIFIED),
+                List.of(120),
+                1,
+                true
+        );
+        existingSetting.stopExposure();
+        ReflectionTestUtils.setField(existingSetting, "updatedAt", FIXED_UPDATED_AT);
+
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
+                .thenReturn(Optional.of(existingSetting));
+
+        InstructorMatchingExposureCancelResponse response = service.cancelExposure(1L);
+
+        verify(instructorMatchingSettingRepository, never()).saveAndFlush(any());
+        assertThat(response.isExposed()).isFalse();
+        assertThat(response.updatedAt()).isEqualTo(FIXED_UPDATED_AT.atOffset(ZoneOffset.ofHours(9)));
         assertThat(existingSetting.isExposed()).isFalse();
         verify(matchingSearchTriggerService, never()).triggerAllRequested();
     }

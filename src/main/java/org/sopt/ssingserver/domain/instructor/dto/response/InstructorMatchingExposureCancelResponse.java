@@ -15,7 +15,7 @@ public record InstructorMatchingExposureCancelResponse(
 
     private static final ZoneOffset KOREA_TIME_OFFSET = ZoneOffset.ofHours(9);
 
-    public static InstructorMatchingExposureCancelResponse from(Instant updatedAt) {
-        return new InstructorMatchingExposureCancelResponse(false, updatedAt.atOffset(KOREA_TIME_OFFSET));
+    public static InstructorMatchingExposureCancelResponse of(boolean isExposed, Instant updatedAt) {
+        return new InstructorMatchingExposureCancelResponse(isExposed, updatedAt.atOffset(KOREA_TIME_OFFSET));
     }
 }
