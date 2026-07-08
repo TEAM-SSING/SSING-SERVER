@@ -51,6 +51,8 @@ class MatchingStatusQueryServiceTest {
 
     private static final Instant MATCHING_EXPIRES_AT = Instant.parse("2026-07-07T00:10:00Z");
     private static final Instant PAYMENT_EXPIRES_AT = Instant.parse("2026-07-07T00:15:00Z");
+    private static final Instant OFFER_EXPOSED_AT = Instant.parse("2026-07-07T00:00:00Z");
+    private static final Instant INSTRUCTOR_RESPONSE_EXPIRES_AT = Instant.parse("2026-07-07T00:01:00Z");
 
     @Mock
     private MatchingRequestRepository matchingRequestRepository;
@@ -172,7 +174,8 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
         assertThat(result.itemStatus()).isSameAs(MatchingRequestGroupItemStatus.NOT_REQUESTED);
         assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
-        assertThat(result.instructorProfile().instructorId()).isEqualTo(40L);
+        assertThat(result.expiresAt()).isEqualTo(INSTRUCTOR_RESPONSE_EXPIRES_AT);
+        assertThat(result.instructorProfile()).isNull();
         verifyNoInteractions(lessonRepository);
     }
 
@@ -356,8 +359,8 @@ class MatchingStatusQueryServiceTest {
             InstructorProfile instructorProfile,
             MatchingRequestGroup group
     ) {
-        MatchingOffer offer = MatchingOffer.create(instructorProfile, group, Instant.parse("2026-07-07T00:00:00Z"));
-        offer.accept(Instant.parse("2026-07-07T00:01:00Z"));
+        MatchingOffer offer = MatchingOffer.create(instructorProfile, group, OFFER_EXPOSED_AT);
+        offer.accept(INSTRUCTOR_RESPONSE_EXPIRES_AT);
         ReflectionTestUtils.setField(offer, "id", id);
         return offer;
     }
@@ -367,7 +370,7 @@ class MatchingStatusQueryServiceTest {
             InstructorProfile instructorProfile,
             MatchingRequestGroup group
     ) {
-        MatchingOffer offer = MatchingOffer.create(instructorProfile, group, Instant.parse("2026-07-07T00:00:00Z"));
+        MatchingOffer offer = MatchingOffer.create(instructorProfile, group, OFFER_EXPOSED_AT);
         ReflectionTestUtils.setField(offer, "id", id);
         return offer;
     }

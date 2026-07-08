@@ -1,5 +1,7 @@
 package org.sopt.ssingserver.domain.matching.service;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +12,7 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
+import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
@@ -25,6 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MatchingStatusQueryService {
+
+    // 매칭 시간 정책의 MVP 기준: 강사 제안 응답 제한 시간 1분
+    private static final Duration INSTRUCTOR_RESPONSE_TIMEOUT = Duration.ofMinutes(1);
 
     private final MatchingRequestRepository matchingRequestRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
@@ -61,14 +67,98 @@ public class MatchingStatusQueryService {
         );
         Optional<Lesson> lesson = findConfirmedLesson(matchingStatus, matchingOffer);
 
-        return MatchingStatusQueryResult.of(
+        return toQueryResult(
                 matchingRequest,
                 matchingStatus,
+                matchingRequestGroup,
                 matchingRequestGroupItem,
                 matchingOffer,
                 matchingRequestPayment,
                 lesson
         );
+    }
+
+    private static MatchingStatusQueryResult toQueryResult(
+            MatchingRequest matchingRequest,
+            MatchingStatus matchingStatus,
+            Optional<MatchingRequestGroup> matchingRequestGroup,
+            Optional<MatchingRequestGroupItem> matchingRequestGroupItem,
+            Optional<MatchingOffer> matchingOffer,
+            Optional<MatchingRequestPayment> matchingRequestPayment,
+            Optional<Lesson> lesson
+    ) {
+        Optional<MatchingRequestGroup> responseMatchingRequestGroup = matchingRequestGroup
+                .or(() -> matchingOffer.map(MatchingOffer::getMatchingRequestGroup));
+
+        return new MatchingStatusQueryResult(
+                matchingRequest.getId(),
+                matchingStatus,
+                matchingRequest.getStatus(),
+                matchingRequest.getStatusReason(),
+                responseMatchingRequestGroup.map(MatchingRequestGroup::getId).orElse(null),
+                responseMatchingRequestGroup.map(MatchingRequestGroup::getStatus).orElse(null),
+                matchingRequestGroupItem.map(MatchingRequestGroupItem::getStatus).orElse(null),
+                matchingOffer.map(MatchingOffer::getStatus).orElse(null),
+                matchingRequestPayment.map(MatchingRequestPayment::getStatus).orElse(null),
+                resolveExpiresAt(matchingStatus, matchingRequest, matchingOffer, matchingRequestPayment),
+                resolveInstructorProfile(matchingOffer),
+                resolveLessonId(matchingStatus, lesson)
+        );
+    }
+
+    private static Instant resolveExpiresAt(
+            MatchingStatus matchingStatus,
+            MatchingRequest matchingRequest,
+            Optional<MatchingOffer> matchingOffer,
+            Optional<MatchingRequestPayment> matchingRequestPayment
+    ) {
+        // 현재 앱 표시 상태에 맞는 다음 전환 기준 시각만 선택
+        return switch (matchingStatus) {
+            case SEARCHING,
+                 WAITING_FOR_TEAM -> matchingRequest.getExpiresAt();
+            case WAITING_FOR_INSTRUCTOR -> matchingOffer
+                    .map(MatchingStatusQueryService::resolveInstructorResponseExpiresAt)
+                    .orElse(null);
+            // TODO: 강습생 응답 타임아웃 정책이 MatchingRequest.expiresAt과 분리되면 별도 계산 기준 추가
+            case WAITING_FOR_CONFIRMATION,
+                 WAITING_FOR_OTHER_CONFIRMATIONS -> matchingRequest.getExpiresAt();
+            case PAYMENT_PENDING,
+                 WAITING_FOR_OTHER_PAYMENTS,
+                 PAYMENT_EXPIRED -> matchingRequestPayment
+                    .map(MatchingRequestPayment::getPaymentExpiresAt)
+                    .orElse(null);
+            case CONFIRMED,
+                 NO_AVAILABLE_INSTRUCTOR,
+                 REMATCHING,
+                 CANCELED,
+                 FAILED -> null;
+        };
+    }
+
+    private static Instant resolveInstructorResponseExpiresAt(MatchingOffer matchingOffer) {
+        return matchingOffer.getExposedAt().plus(INSTRUCTOR_RESPONSE_TIMEOUT);
+    }
+
+    private static MatchingStatusQueryResult.InstructorProfileResult resolveInstructorProfile(
+            Optional<MatchingOffer> matchingOffer
+    ) {
+        return matchingOffer
+                .filter(offer -> offer.getStatus() == MatchingOfferStatus.ACCEPTED)
+                .map(MatchingOffer::getInstructorProfile)
+                .map(MatchingStatusQueryResult.InstructorProfileResult::from)
+                .orElse(null);
+    }
+
+    private static Long resolveLessonId(
+            MatchingStatus matchingStatus,
+            Optional<Lesson> lesson
+    ) {
+        // 확정 매칭 화면 복구에만 필요한 강습 ID 노출
+        if (matchingStatus != MatchingStatus.CONFIRMED) {
+            return null;
+        }
+
+        return lesson.map(Lesson::getId).orElse(null);
     }
 
     private void validateOwner(
