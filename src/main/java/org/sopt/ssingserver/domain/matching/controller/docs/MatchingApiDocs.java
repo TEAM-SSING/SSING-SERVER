@@ -19,6 +19,7 @@ public interface MatchingApiDocs {
             description = "소비자가 생성한 즉시 매칭 요청의 현재 진행 상태를 조회합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
+    // TODO: Swagger 문서화 기준 확정 후 4xx/5xx 실패 응답을 일괄 반영
     @ApiResponse(responseCode = "200", description = "매칭 진행 상태 조회 성공")
     ResponseEntity<BaseResponse<ConsumerMatchingStatusResponse>> getStatus(
             @Parameter(hidden = true)
