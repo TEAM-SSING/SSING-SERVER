@@ -6,12 +6,10 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
+import org.sopt.ssingserver.global.validation.ValidRequestedDurations;
 
 public record InstructorMatchingExposureRequest(
         @Schema(description = "노출할 종목", example = "SNOWBOARD")
@@ -24,6 +22,11 @@ public record InstructorMatchingExposureRequest(
 
         @Schema(description = "강습 가능 시간 목록", example = "[120, 180, 240]")
         @NotEmpty(message = "강습 가능 시간은 1개 이상 선택해야 합니다.")
+        @ValidRequestedDurations(
+                allowedValues = {120, 180, 240},
+                notAllowedMessage = "강습 가능 시간은 120, 180, 240분 중에서 선택해야 합니다.",
+                duplicatedMessage = "강습 가능 시간은 중복 없이 선택해야 합니다."
+        )
         List<@NotNull(message = "강습 가능 시간은 null일 수 없습니다.") Integer> availableDurationMinutes,
 
         @Schema(description = "최대 강습 가능 인원", example = "3")
@@ -37,28 +40,4 @@ public record InstructorMatchingExposureRequest(
         @AssertTrue(message = "장비 착용 및 즉시 이동 가능 여부는 true여야 합니다.")
         Boolean equipmentReady
 ) {
-
-    private static final Set<Integer> ALLOWED_DURATION_MINUTES = Set.of(120, 180, 240);
-
-    @AssertTrue(message = "강습 가능 시간은 120, 180, 240분 중에서 선택해야 합니다.")
-    public boolean isAvailableDurationMinutesAllowed() {
-        if (availableDurationMinutes == null || availableDurationMinutes.isEmpty()) {
-            return true;
-        }
-        if (availableDurationMinutes.stream().anyMatch(Objects::isNull)) {
-            return true;
-        }
-        return ALLOWED_DURATION_MINUTES.containsAll(availableDurationMinutes);
-    }
-
-    @AssertTrue(message = "강습 가능 시간은 중복 없이 선택해야 합니다.")
-    public boolean isAvailableDurationMinutesDistinct() {
-        if (availableDurationMinutes == null || availableDurationMinutes.isEmpty()) {
-            return true;
-        }
-        if (availableDurationMinutes.stream().anyMatch(Objects::isNull)) {
-            return true;
-        }
-        return new HashSet<>(availableDurationMinutes).size() == availableDurationMinutes.size();
-    }
 }

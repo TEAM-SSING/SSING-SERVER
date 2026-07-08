@@ -13,7 +13,7 @@ import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@Tag(name = "Instructor", description = "강사 기능 API")
+@Tag(name = "Instructor Matching", description = "강사 매칭 API")
 public interface InstructorApiDocs {
 
     @Operation(
