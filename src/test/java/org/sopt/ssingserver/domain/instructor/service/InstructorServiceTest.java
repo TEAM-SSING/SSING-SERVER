@@ -201,7 +201,7 @@ class InstructorServiceTest {
                 .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
                         .isSameAs(CommonErrorCode.NOT_FOUND));
 
-        verify(instructorMatchingSettingRepository, never()).save(any());
+        verify(instructorMatchingSettingRepository, never()).saveAndFlush(any());
         verify(matchingSearchTriggerService, never()).triggerAllRequested();
     }
 
