@@ -2,11 +2,11 @@ package org.sopt.ssingserver.domain.matching.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingCancellationResult;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
+import org.sopt.ssingserver.global.time.AppZoneId;
 
 public record ConsumerMatchingCancellationResponse(
         @Schema(description = "매칭 요청 ID", example = "10")
@@ -25,15 +25,13 @@ public record ConsumerMatchingCancellationResponse(
         OffsetDateTime canceledAt
 ) {
 
-    private static final ZoneOffset KOREA_TIME_OFFSET = ZoneOffset.ofHours(9);
-
     public static ConsumerMatchingCancellationResponse from(MatchingCancellationResult result) {
         return new ConsumerMatchingCancellationResponse(
                 result.matchingRequestId(),
                 result.matchingStatus(),
                 result.requestStatus(),
                 result.requestStatusReason(),
-                result.canceledAt().atOffset(KOREA_TIME_OFFSET)
+                result.canceledAt().atZone(AppZoneId.SEOUL).toOffsetDateTime()
         );
     }
 }

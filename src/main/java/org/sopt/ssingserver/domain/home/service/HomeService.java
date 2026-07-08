@@ -3,7 +3,6 @@ package org.sopt.ssingserver.domain.home.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +11,7 @@ import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse.Lesson
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
+import org.sopt.ssingserver.global.time.AppZoneId;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +23,6 @@ public class HomeService {
             LessonStatus.CONFIRMED,
             LessonStatus.IN_PROGRESS
     );
-    private static final ZoneId RESOLVE_ZONE = ZoneId.of("Asia/Seoul");
 
     private final LessonParticipantRepository lessonParticipantRepository;
     private final Clock clock;
@@ -53,8 +52,8 @@ public class HomeService {
             return 0;
         }
 
-        LocalDate today = now.atZone(RESOLVE_ZONE).toLocalDate();
-        LocalDate scheduledDate = scheduledAt.atZone(RESOLVE_ZONE).toLocalDate();
+        LocalDate today = now.atZone(AppZoneId.SEOUL).toLocalDate();
+        LocalDate scheduledDate = scheduledAt.atZone(AppZoneId.SEOUL).toLocalDate();
         return (int) Math.max(0, ChronoUnit.DAYS.between(today, scheduledDate));
     }
 
