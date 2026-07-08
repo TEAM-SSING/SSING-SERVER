@@ -58,23 +58,50 @@ public record MatchingStatusQueryResult(
                 matchingRequestGroupItem.map(MatchingRequestGroupItem::getStatus).orElse(null),
                 matchingOffer.map(MatchingOffer::getStatus).orElse(null),
                 matchingRequestPayment.map(MatchingRequestPayment::getStatus).orElse(null),
-                resolveExpiresAt(matchingRequest, matchingRequestPayment),
+                resolveExpiresAt(matchingStatus, matchingRequest, matchingRequestPayment),
                 matchingOffer
                         .map(MatchingOffer::getInstructorProfile)
                         .map(InstructorProfileResult::from)
                         .orElse(null),
-                lesson.map(Lesson::getId).orElse(null)
+                resolveLessonId(matchingStatus, lesson)
         );
     }
 
     private static Instant resolveExpiresAt(
+            MatchingStatus matchingStatus,
             MatchingRequest matchingRequest,
             Optional<MatchingRequestPayment> matchingRequestPayment
     ) {
-        // 결제 단계의 만료 시각은 요청의 이전 확인 만료 시각보다 결제 row 현재값을 우선한다.
-        return matchingRequestPayment
-                .map(MatchingRequestPayment::getPaymentExpiresAt)
-                .orElse(matchingRequest.getExpiresAt());
+        // 현재 앱 표시 상태에 맞는 다음 전환 기준 시각만 선택
+        return switch (matchingStatus) {
+            case SEARCHING,
+                 WAITING_FOR_TEAM,
+                 WAITING_FOR_INSTRUCTOR,
+                 WAITING_FOR_CONFIRMATION,
+                 WAITING_FOR_OTHER_CONFIRMATIONS -> matchingRequest.getExpiresAt();
+            case PAYMENT_PENDING,
+                 WAITING_FOR_OTHER_PAYMENTS,
+                 PAYMENT_EXPIRED -> matchingRequestPayment
+                    .map(MatchingRequestPayment::getPaymentExpiresAt)
+                    .orElse(null);
+            case CONFIRMED,
+                 NO_AVAILABLE_INSTRUCTOR,
+                 REMATCHING,
+                 CANCELED,
+                 FAILED -> null;
+        };
+    }
+
+    private static Long resolveLessonId(
+            MatchingStatus matchingStatus,
+            Optional<Lesson> lesson
+    ) {
+        // 확정 매칭 화면 복구에만 필요한 강습 ID 노출
+        if (matchingStatus != MatchingStatus.CONFIRMED) {
+            return null;
+        }
+
+        return lesson.map(Lesson::getId).orElse(null);
     }
 
     public record InstructorProfileResult(

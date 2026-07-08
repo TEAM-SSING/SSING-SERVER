@@ -51,7 +51,6 @@ public class MatchingStatusQueryService {
         Optional<MatchingOffer> matchingOffer = findCurrentOffer(matchingRequest, matchingRequestGroup);
         Optional<MatchingRequestPayment> matchingRequestPayment =
                 matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(matchingRequestId);
-        Optional<Lesson> lesson = findLesson(matchingOffer);
 
         MatchingStatus matchingStatus = matchingStatusResolver.resolve(
                 matchingRequest,
@@ -60,6 +59,7 @@ public class MatchingStatusQueryService {
                 matchingOffer,
                 matchingRequestPayment
         );
+        Optional<Lesson> lesson = findConfirmedLesson(matchingStatus, matchingOffer);
 
         return MatchingStatusQueryResult.of(
                 matchingRequest,
@@ -96,7 +96,15 @@ public class MatchingStatusQueryService {
                 .flatMap(matchingOfferRepository::findFirstByMatchingRequestGroupIdOrderByIdDesc);
     }
 
-    private Optional<Lesson> findLesson(Optional<MatchingOffer> matchingOffer) {
+    private Optional<Lesson> findConfirmedLesson(
+            MatchingStatus matchingStatus,
+            Optional<MatchingOffer> matchingOffer
+    ) {
+        // 확정 상태에서만 강습 ID를 노출하는 API 계약 보호
+        if (matchingStatus != MatchingStatus.CONFIRMED) {
+            return Optional.empty();
+        }
+
         return matchingOffer
                 .map(MatchingOffer::getId)
                 .filter(Objects::nonNull)

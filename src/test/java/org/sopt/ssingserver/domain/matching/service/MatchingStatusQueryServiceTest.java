@@ -157,7 +157,6 @@ class MatchingStatusQueryServiceTest {
                 .thenReturn(Optional.of(offer));
         when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.empty());
-        when(lessonRepository.findByMatchingOfferId(50L)).thenReturn(Optional.empty());
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),
@@ -174,6 +173,7 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.itemStatus()).isSameAs(MatchingRequestGroupItemStatus.NOT_REQUESTED);
         assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
         assertThat(result.instructorProfile().instructorId()).isEqualTo(40L);
+        verifyNoInteractions(lessonRepository);
     }
 
     @Test
@@ -192,7 +192,6 @@ class MatchingStatusQueryServiceTest {
                 .thenReturn(Optional.of(item));
         when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.empty());
-        when(lessonRepository.findByMatchingOfferId(50L)).thenReturn(Optional.empty());
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),
@@ -216,6 +215,7 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.instructorProfile().gender()).isSameAs(Gender.FEMALE);
         assertThat(result.instructorProfile().birthYear()).isEqualTo(1998);
         assertThat(result.lessonId()).isNull();
+        verifyNoInteractions(lessonRepository);
     }
 
     @Test
@@ -240,7 +240,6 @@ class MatchingStatusQueryServiceTest {
                 .thenReturn(Optional.of(item));
         when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(payment));
-        when(lessonRepository.findByMatchingOfferId(50L)).thenReturn(Optional.empty());
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),
@@ -255,6 +254,7 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.paymentStatus()).isSameAs(MatchingRequestPaymentStatus.PENDING);
         assertThat(result.expiresAt()).isEqualTo(PAYMENT_EXPIRES_AT);
         assertThat(result.lessonId()).isNull();
+        verifyNoInteractions(lessonRepository);
     }
 
     @Test
@@ -296,6 +296,7 @@ class MatchingStatusQueryServiceTest {
 
         assertThat(result.matchingStatus()).isSameAs(MatchingStatus.CONFIRMED);
         assertThat(result.paymentStatus()).isSameAs(MatchingRequestPaymentStatus.COMPLETED);
+        assertThat(result.expiresAt()).isNull();
         assertThat(result.lessonId()).isEqualTo(70L);
     }
 
