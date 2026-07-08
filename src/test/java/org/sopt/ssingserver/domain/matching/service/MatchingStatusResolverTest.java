@@ -14,10 +14,13 @@ import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
+import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
+import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
+import org.sopt.ssingserver.domain.payment.enums.MatchingRequestPaymentStatus;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
@@ -131,6 +134,116 @@ class MatchingStatusResolverTest {
     }
 
     @Test
+    void 소비자가_확정한_뒤_다른_참여자_확정을_기다리면_WAITING_FOR_OTHER_CONFIRMATIONS로_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
+        MatchingRequestGroupItem item = MatchingRequestGroupItem.createNotRequested(matchingRequest, group);
+        MatchingOffer offer = MatchingOffer.create(
+                instructorProfile(),
+                group,
+                Instant.parse("2026-07-07T00:00:00Z")
+        );
+        item.accept(Instant.parse("2026-07-07T00:01:00Z"));
+        matchingRequest.markMatched(offer, Instant.parse("2026-07-07T00:10:00Z"));
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.of(item),
+                Optional.of(offer),
+                Optional.empty()
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.WAITING_FOR_OTHER_CONFIRMATIONS);
+    }
+
+    @Test
+    void 결제_대기_row가_있으면_PAYMENT_PENDING으로_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
+        MatchingOffer offer = MatchingOffer.create(
+                instructorProfile(),
+                group,
+                Instant.parse("2026-07-07T00:00:00Z")
+        );
+        MatchingRequestPayment payment = matchingRequestPayment(MatchingRequestPaymentStatus.PENDING);
+        matchingRequest.markMatched(offer, Instant.parse("2026-07-07T00:10:00Z"));
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.empty(),
+                Optional.of(offer),
+                Optional.of(payment)
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.PAYMENT_PENDING);
+    }
+
+    @Test
+    void 내_결제는_끝났지만_그룹이_결제대기이면_WAITING_FOR_OTHER_PAYMENTS로_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
+        group.markPaymentPending();
+        MatchingOffer offer = MatchingOffer.create(
+                instructorProfile(),
+                group,
+                Instant.parse("2026-07-07T00:00:00Z")
+        );
+        MatchingRequestPayment payment = matchingRequestPayment(MatchingRequestPaymentStatus.COMPLETED);
+        matchingRequest.markMatched(offer, Instant.parse("2026-07-07T00:10:00Z"));
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.empty(),
+                Optional.of(offer),
+                Optional.of(payment)
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.WAITING_FOR_OTHER_PAYMENTS);
+    }
+
+    @Test
+    void 결제가_만료되면_PAYMENT_EXPIRED로_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
+        MatchingOffer offer = MatchingOffer.create(
+                instructorProfile(),
+                group,
+                Instant.parse("2026-07-07T00:00:00Z")
+        );
+        MatchingRequestPayment payment = matchingRequestPayment(MatchingRequestPaymentStatus.EXPIRED);
+        matchingRequest.markMatched(offer, Instant.parse("2026-07-07T00:10:00Z"));
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.empty(),
+                Optional.of(offer),
+                Optional.of(payment)
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.PAYMENT_EXPIRED);
+    }
+
+    @Test
+    void 강사거절이나_응답시간초과_요청은_REMATCHING으로_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        matchingRequest.expireByInstructorTimeout();
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.REMATCHING);
+    }
+
+    @Test
     void 후보없음_실패_요청은_NO_AVAILABLE_INSTRUCTOR로_계산한다() {
         MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
         matchingRequest.failNoAvailableInstructor();
@@ -147,7 +260,7 @@ class MatchingStatusResolverTest {
     @Test
     void 명시되지_않은_상태_조합은_기본_FAILED로_숨기지_않고_오류로_드러낸다() {
         MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
-        matchingRequest.expireByInstructorTimeout();
+        matchingRequest.markGrouped();
 
         assertThatThrownBy(() -> resolver.resolve(
                 matchingRequest,
@@ -181,6 +294,18 @@ class MatchingStatusResolverTest {
             Constructor<InstructorProfile> constructor = InstructorProfile.class.getDeclaredConstructor();
             constructor.setAccessible(true);
             return constructor.newInstance();
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private MatchingRequestPayment matchingRequestPayment(MatchingRequestPaymentStatus status) {
+        try {
+            Constructor<MatchingRequestPayment> constructor = MatchingRequestPayment.class.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            MatchingRequestPayment payment = constructor.newInstance();
+            ReflectionTestUtils.setField(payment, "status", status);
+            return payment;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
         }
