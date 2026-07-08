@@ -18,6 +18,9 @@ jobs:
     name: Send CodeRabbit Slack alert
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'status'
     runs-on: ubuntu-latest
+    environment:
+      name: dev
+      deployment: false
 
     steps:
       - name: Slack payload artifact 다운로드
@@ -47,6 +50,16 @@ jobs:
 
             fs.writeFileSync('slack-payload.json', JSON.stringify(envelope.payload));
             core.setOutput('should_notify', 'true');
+
+      - name: Slack webhook secret 확인
+        if: steps.slack-payload.outputs.should_notify == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::error title=Slack webhook secret 누락::dev environment의 SLACK_WEBHOOK_URL secret을 읽지 못했습니다."
+            exit 1
+          fi
 
       - name: Slack CodeRabbit 리뷰 완료 알림
         if: steps.slack-payload.outputs.should_notify == 'true'
