@@ -1,5 +1,7 @@
 package org.sopt.ssingserver.domain.matching.service;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,38 @@ class MatchingSearchSchedulerTest {
         );
 
         scheduler.runScheduledSearch();
+
+        verify(matchingOfferExpirationTriggerService).expireOverdueOffers();
+        verify(matchingSearchTriggerService).triggerAllRequested();
+    }
+
+    @Test
+    void runScheduledSearch는_제안만료_정리가_실패해도_SEARCHING_요청_재탐색을_계속한다() {
+        MatchingSearchScheduler scheduler = new MatchingSearchScheduler(
+                matchingOfferExpirationTriggerService,
+                matchingSearchTriggerService
+        );
+        doThrow(new IllegalStateException("expiration failed"))
+                .when(matchingOfferExpirationTriggerService)
+                .expireOverdueOffers();
+
+        assertThatCode(scheduler::runScheduledSearch).doesNotThrowAnyException();
+
+        verify(matchingOfferExpirationTriggerService).expireOverdueOffers();
+        verify(matchingSearchTriggerService).triggerAllRequested();
+    }
+
+    @Test
+    void runScheduledSearch는_SEARCHING_요청_재탐색이_실패해도_예외를_밖으로_던지지_않는다() {
+        MatchingSearchScheduler scheduler = new MatchingSearchScheduler(
+                matchingOfferExpirationTriggerService,
+                matchingSearchTriggerService
+        );
+        doThrow(new IllegalStateException("search failed"))
+                .when(matchingSearchTriggerService)
+                .triggerAllRequested();
+
+        assertThatCode(scheduler::runScheduledSearch).doesNotThrowAnyException();
 
         verify(matchingOfferExpirationTriggerService).expireOverdueOffers();
         verify(matchingSearchTriggerService).triggerAllRequested();
