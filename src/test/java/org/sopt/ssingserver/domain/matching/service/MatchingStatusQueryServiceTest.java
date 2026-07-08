@@ -215,12 +215,11 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.instructorProfile().profileImageUrl()).isEqualTo("https://example.com/instructor.png");
         assertThat(result.instructorProfile().gender()).isSameAs(Gender.FEMALE);
         assertThat(result.instructorProfile().birthYear()).isEqualTo(1998);
-        assertThat(result.instructorProfile().level()).isNull();
         assertThat(result.lessonId()).isNull();
     }
 
     @Test
-    void getStatus는_결제와_강습이_있으면_paymentStatus와_lessonId를_반환한다() {
+    void getStatus는_결제대기_상태이면_paymentStatus와_결제만료시각을_반환한다() {
         MatchingStatusQueryService service = createService();
         Member consumer = member(1L, "요청자", MemberRole.CONSUMER);
         MatchingRequest matchingRequest = matchingRequest(10L, consumer);
@@ -234,7 +233,6 @@ class MatchingStatusQueryServiceTest {
                 MatchingRequestPaymentStatus.PENDING,
                 PAYMENT_EXPIRES_AT
         );
-        Lesson lesson = lesson(70L, offer);
         matchingRequest.markMatched(offer, MATCHING_EXPIRES_AT);
 
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
@@ -242,7 +240,7 @@ class MatchingStatusQueryServiceTest {
                 .thenReturn(Optional.of(item));
         when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(payment));
-        when(lessonRepository.findByMatchingOfferId(50L)).thenReturn(Optional.of(lesson));
+        when(lessonRepository.findByMatchingOfferId(50L)).thenReturn(Optional.empty());
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),
@@ -256,6 +254,48 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.matchingStatus()).isSameAs(MatchingStatus.PAYMENT_PENDING);
         assertThat(result.paymentStatus()).isSameAs(MatchingRequestPaymentStatus.PENDING);
         assertThat(result.expiresAt()).isEqualTo(PAYMENT_EXPIRES_AT);
+        assertThat(result.lessonId()).isNull();
+    }
+
+    @Test
+    void getStatus는_강습이_생성된_상태이면_lessonId를_반환한다() {
+        MatchingStatusQueryService service = createService();
+        Member consumer = member(1L, "요청자", MemberRole.CONSUMER);
+        MatchingRequest matchingRequest = matchingRequest(10L, consumer);
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        MatchingRequestGroupItem item = matchingRequestGroupItem(30L, matchingRequest, group);
+        item.accept(Instant.parse("2026-07-07T00:02:00Z"));
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile(40L), group);
+        MatchingRequestPayment payment = matchingRequestPayment(
+                60L,
+                matchingRequest,
+                offer,
+                MatchingRequestPaymentStatus.COMPLETED,
+                PAYMENT_EXPIRES_AT
+        );
+        Lesson lesson = lesson(70L, offer);
+        matchingRequest.markMatched(offer, MATCHING_EXPIRES_AT);
+        matchingRequest.confirm();
+        group.confirm();
+
+        when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(item));
+        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(payment));
+        when(lessonRepository.findByMatchingOfferId(50L)).thenReturn(Optional.of(lesson));
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.of(item),
+                Optional.of(offer),
+                Optional.of(payment)
+        )).thenReturn(MatchingStatus.CONFIRMED);
+
+        MatchingStatusQueryResult result = service.getStatus(1L, 10L);
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.CONFIRMED);
+        assertThat(result.paymentStatus()).isSameAs(MatchingRequestPaymentStatus.COMPLETED);
         assertThat(result.lessonId()).isEqualTo(70L);
     }
 

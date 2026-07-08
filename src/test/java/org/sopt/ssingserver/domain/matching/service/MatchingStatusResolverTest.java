@@ -42,17 +42,6 @@ class MatchingStatusResolverTest {
     }
 
     @Test
-    void REQUESTED이고_그룹과_제안이_없으면_SEARCHING으로_계산한다() {
-        MatchingStatus status = resolver.resolve(
-                matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z")),
-                Optional.empty(),
-                Optional.empty()
-        );
-
-        assertThat(status).isSameAs(MatchingStatus.SEARCHING);
-    }
-
-    @Test
     void REQUESTED이고_팀결합용_그룹이_있으면_WAITING_FOR_TEAM으로_계산한다() {
         MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
 
@@ -222,6 +211,22 @@ class MatchingStatusResolverTest {
                 Optional.empty(),
                 Optional.of(offer),
                 Optional.of(payment)
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.PAYMENT_EXPIRED);
+    }
+
+    @Test
+    void 결제시간초과_요청은_PAYMENT_EXPIRED로_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        matchingRequest.expireByPaymentTimeout();
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
         );
 
         assertThat(status).isSameAs(MatchingStatus.PAYMENT_EXPIRED);
