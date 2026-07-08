@@ -12,7 +12,7 @@ permissions:
 jobs:
   build-coderabbit-slack-payload:
     name: Build CodeRabbit Slack payload
-    if: github.event.context == 'CodeRabbit' && github.event.state == 'success'
+    if: github.event.context == 'CodeRabbit' && github.event.state == 'success' && github.event.description == 'Review completed'
     runs-on: ubuntu-latest
 
     steps:
