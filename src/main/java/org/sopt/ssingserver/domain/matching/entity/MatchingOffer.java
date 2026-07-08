@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Duration;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -32,6 +33,8 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MatchingOffer extends BaseTimeEntity {
 
+    private static final Duration DEFAULT_RESPONSE_TIMEOUT = Duration.ofMinutes(1);
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -51,6 +54,9 @@ public class MatchingOffer extends BaseTimeEntity {
     @Column(nullable = false)
     private Instant exposedAt;
 
+    @Column(nullable = false)
+    private Instant expiresAt;
+
     private Instant respondedAt;
 
     public static MatchingOffer create(
@@ -58,15 +64,33 @@ public class MatchingOffer extends BaseTimeEntity {
             MatchingRequestGroup matchingRequestGroup,
             Instant exposedAt
     ) {
+        return create(
+                instructorProfile,
+                matchingRequestGroup,
+                exposedAt,
+                exposedAt.plus(DEFAULT_RESPONSE_TIMEOUT)
+        );
+    }
+
+    public static MatchingOffer create(
+            InstructorProfile instructorProfile,
+            MatchingRequestGroup matchingRequestGroup,
+            Instant exposedAt,
+            Instant expiresAt
+    ) {
         MatchingOffer matchingOffer = new MatchingOffer();
         matchingOffer.instructorProfile = instructorProfile;
         matchingOffer.matchingRequestGroup = matchingRequestGroup;
         matchingOffer.status = MatchingOfferStatus.OFFERED;
         matchingOffer.exposedAt = exposedAt;
+        matchingOffer.expiresAt = expiresAt;
         return matchingOffer;
     }
 
-    // TODO: PR 5 상태 전이 API에서 OFFERED 이후 재전이를 막는 guard 추가
+    public boolean isExpired(Instant now) {
+        return !expiresAt.isAfter(now);
+    }
+
     public void accept(Instant respondedAt) {
         respond(MatchingOfferStatus.ACCEPTED, respondedAt);
     }
@@ -84,6 +108,10 @@ public class MatchingOffer extends BaseTimeEntity {
     }
 
     private void respond(MatchingOfferStatus status, Instant respondedAt) {
+        if (this.status != MatchingOfferStatus.OFFERED) {
+            throw new IllegalStateException("Only offered matching offer can be responded.");
+        }
+
         this.status = status;
         this.respondedAt = respondedAt;
     }

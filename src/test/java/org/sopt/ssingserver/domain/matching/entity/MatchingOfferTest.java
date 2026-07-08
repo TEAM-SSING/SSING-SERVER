@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.matching.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
@@ -13,24 +14,42 @@ class MatchingOfferTest {
     @Test
     void create는_강사제안을_OFFERED_상태로_초기화한다() {
         Instant exposedAt = Instant.parse("2026-07-07T00:00:00Z");
+        Instant expiresAt = Instant.parse("2026-07-07T00:01:00Z");
 
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
                 MatchingRequestGroup.createCandidate(120),
-                exposedAt
+                exposedAt,
+                expiresAt
         );
 
         assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.OFFERED);
         assertThat(offer.getExposedAt()).isEqualTo(exposedAt);
+        assertThat(offer.getExpiresAt()).isEqualTo(expiresAt);
         assertThat(offer.getRespondedAt()).isNull();
     }
 
     @Test
-    void 응답_메서드는_상태와_응답시각을_저장한다() {
+    void isExpired는_만료시각이_지났거나_같으면_true를_반환한다() {
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
                 MatchingRequestGroup.createCandidate(120),
-                Instant.parse("2026-07-07T00:00:00Z")
+                Instant.parse("2026-07-07T00:00:00Z"),
+                Instant.parse("2026-07-07T00:01:00Z")
+        );
+
+        assertThat(offer.isExpired(Instant.parse("2026-07-07T00:00:59Z"))).isFalse();
+        assertThat(offer.isExpired(Instant.parse("2026-07-07T00:01:00Z"))).isTrue();
+        assertThat(offer.isExpired(Instant.parse("2026-07-07T00:01:01Z"))).isTrue();
+    }
+
+    @Test
+    void 응답_메서드는_OFFERED_상태에서만_상태와_응답시각을_저장한다() {
+        MatchingOffer offer = MatchingOffer.create(
+                instructorProfile(),
+                MatchingRequestGroup.createCandidate(120),
+                Instant.parse("2026-07-07T00:00:00Z"),
+                Instant.parse("2026-07-07T00:01:00Z")
         );
         Instant respondedAt = Instant.parse("2026-07-07T00:01:00Z");
 
@@ -38,9 +57,10 @@ class MatchingOfferTest {
         assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.ACCEPTED);
         assertThat(offer.getRespondedAt()).isEqualTo(respondedAt);
 
-        offer.reject(respondedAt.plusSeconds(1));
-        assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.REJECTED);
-        assertThat(offer.getRespondedAt()).isEqualTo(respondedAt.plusSeconds(1));
+        assertThatThrownBy(() -> offer.reject(respondedAt.plusSeconds(1)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.ACCEPTED);
+        assertThat(offer.getRespondedAt()).isEqualTo(respondedAt);
     }
 
     @Test

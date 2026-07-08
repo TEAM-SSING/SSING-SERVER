@@ -1,6 +1,5 @@
 package org.sopt.ssingserver.domain.matching.service;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,9 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MatchingStatusQueryService {
-
-    // 매칭 시간 정책의 MVP 기준: 강사 제안 응답 제한 시간 1분
-    private static final Duration INSTRUCTOR_RESPONSE_TIMEOUT = Duration.ofMinutes(1);
 
     private final MatchingRequestRepository matchingRequestRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
@@ -136,7 +132,7 @@ public class MatchingStatusQueryService {
     }
 
     private static Instant resolveInstructorResponseExpiresAt(MatchingOffer matchingOffer) {
-        return matchingOffer.getExposedAt().plus(INSTRUCTOR_RESPONSE_TIMEOUT);
+        return matchingOffer.getExpiresAt();
     }
 
     private static MatchingStatusQueryResult.InstructorProfileResult resolveInstructorProfile(

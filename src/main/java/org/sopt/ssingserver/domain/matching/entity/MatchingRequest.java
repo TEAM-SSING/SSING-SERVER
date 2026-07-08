@@ -154,6 +154,16 @@ public class MatchingRequest extends BaseTimeEntity {
         updateStatus(MatchingRequestStatus.GROUPED, null);
     }
 
+    // 현재 그룹은 실패했지만 소비자 요청은 유지한 채 다른 강사를 찾는 상태로 되돌림
+    public void rematchAfterInstructorRejected() {
+        updateStatus(MatchingRequestStatus.REQUESTED, MatchingRequestStatusReason.INSTRUCTOR_REJECTED);
+    }
+
+    // 강사 미응답으로 현재 그룹이 닫혔지만 기존 요청은 다음 후보 탐색에 재사용
+    public void rematchAfterInstructorTimeout() {
+        updateStatus(MatchingRequestStatus.REQUESTED, MatchingRequestStatusReason.INSTRUCTOR_TIMEOUT);
+    }
+
     // 강사 제안 수락 이후 수락 제안과 소비자 최종 확인 만료 시각 저장
     public void markMatched(MatchingOffer matchingOffer, Instant expiresAt) {
         this.matchingOffer = matchingOffer;

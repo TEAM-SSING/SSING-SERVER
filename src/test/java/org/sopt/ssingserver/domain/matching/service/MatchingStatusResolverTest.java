@@ -249,6 +249,24 @@ class MatchingStatusResolverTest {
     }
 
     @Test
+    void REQUESTED라도_이전_강사거절로_재탐색중이면_REMATCHING으로_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
+        matchingRequest.rematchAfterInstructorRejected();
+        MatchingRequestGroup oldGroup = MatchingRequestGroup.createCandidate(120);
+        oldGroup.cancel();
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest,
+                Optional.of(oldGroup),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.REMATCHING);
+    }
+
+    @Test
     void 후보없음_실패_요청은_NO_AVAILABLE_INSTRUCTOR로_계산한다() {
         MatchingRequest matchingRequest = matchingRequest(1, 120, Instant.parse("2026-07-07T00:05:00Z"));
         matchingRequest.failNoAvailableInstructor();

@@ -87,6 +87,12 @@ public class MatchingStatusResolver {
             return MatchingStatus.WAITING_FOR_OTHER_PAYMENTS;
         }
 
+        // 기존 요청을 유지한 채 현재 그룹 실패 후 다음 후보를 찾는 상태
+        if (matchingRequest.getStatus() == MatchingRequestStatus.REQUESTED
+                && isRematchingReason(matchingRequest.getStatusReason())) {
+            return MatchingStatus.REMATCHING;
+        }
+
         // 강사 수락 이후에는 소비자 개인 확인 여부에 따라 본인/다른 참여자 대기 상태를 구분
         if (matchingRequest.getStatus() == MatchingRequestStatus.MATCHED) {
             return resolveMatchedStatus(matchingRequestGroupItem);
