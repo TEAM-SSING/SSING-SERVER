@@ -13,7 +13,7 @@ import org.sopt.ssingserver.domain.matching.dto.command.MatchingParticipantComma
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.global.validation.ValidRequestedDurations;
 
-public record ConsumerMatchingRequestCreateRequest(
+public record CreateConsumerMatchingRequest(
         @Schema(description = "리조트 코드", example = "HIGH1")
         @NotNull(message = "리조트는 필수입니다.")
         String resort,

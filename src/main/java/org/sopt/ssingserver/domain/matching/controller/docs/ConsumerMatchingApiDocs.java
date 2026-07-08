@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.sopt.ssingserver.domain.matching.dto.request.ConsumerMatchingRequestCreateRequest;
+import org.sopt.ssingserver.domain.matching.dto.request.CreateConsumerMatchingRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerMatchingRequestCreateResponse;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
@@ -25,6 +25,6 @@ public interface ConsumerMatchingApiDocs {
     ResponseEntity<BaseResponse<ConsumerMatchingRequestCreateResponse>> createMatchingRequest(
             @Parameter(hidden = true)
             CurrentMember currentMember,
-            @Valid @RequestBody ConsumerMatchingRequestCreateRequest request
+            @Valid @RequestBody CreateConsumerMatchingRequest request
     );
 }

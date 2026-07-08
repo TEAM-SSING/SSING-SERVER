@@ -4,7 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.matching.controller.docs.ConsumerMatchingApiDocs;
 import org.sopt.ssingserver.domain.matching.dto.command.MatchingCreationCommand;
-import org.sopt.ssingserver.domain.matching.dto.request.ConsumerMatchingRequestCreateRequest;
+import org.sopt.ssingserver.domain.matching.dto.request.CreateConsumerMatchingRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerMatchingRequestCreateResponse;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingCreationResult;
 import org.sopt.ssingserver.domain.matching.response.MatchingSuccessCode;
@@ -32,7 +32,7 @@ public class ConsumerMatchingController implements ConsumerMatchingApiDocs {
     @PostMapping
     public ResponseEntity<BaseResponse<ConsumerMatchingRequestCreateResponse>> createMatchingRequest(
             CurrentMember currentMember,
-            @Valid @RequestBody ConsumerMatchingRequestCreateRequest request
+            @Valid @RequestBody CreateConsumerMatchingRequest request
     ) {
         MatchingCreationCommand command = request.toCommand(currentMember.memberId());
         MatchingCreationResult result = matchingOrchestrationService.createImmediateMatchingRequest(command);
