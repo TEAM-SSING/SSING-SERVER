@@ -5,6 +5,7 @@ import org.sopt.ssingserver.domain.auth.repository.OAuthAccountRepository;
 import org.sopt.ssingserver.domain.auth.repository.RefreshTokenRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
+import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
@@ -43,6 +44,9 @@ class SsingServerApplicationTests {
 
 	@MockitoBean
 	private LessonRepository lessonRepository;
+
+	@MockitoBean
+	private LessonParticipantRepository lessonParticipantRepository;
 
 	@MockitoBean
 	private MatchingRequestRepository matchingRequestRepository;

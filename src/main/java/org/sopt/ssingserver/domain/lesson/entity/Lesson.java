@@ -63,6 +63,9 @@ public class Lesson extends BaseTimeEntity {
     @Column(length = 200)
     private String meetingPlace;
 
+    @Column(nullable = false)
+    private Instant scheduledAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private LessonStatus status;
