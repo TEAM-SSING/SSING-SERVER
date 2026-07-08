@@ -1,6 +1,7 @@
-name: CodeRabbit Slack Alert
+name: CodeRabbit Slack Payload
 
-# CodeRabbit commit status가 성공으로 바뀌면 PR 리뷰 완료를 Slack에 알립니다.
+# CodeRabbit commit status가 성공으로 바뀌면 Slack 전송용 payload를 만듭니다.
+# Slack secret은 bot-triggered status workflow에서 직접 사용하지 않습니다.
 on:
   status:
 
@@ -9,8 +10,8 @@ permissions:
   pull-requests: read
 
 jobs:
-  notify-coderabbit-review:
-    name: Slack CodeRabbit review alert
+  build-coderabbit-slack-payload:
+    name: Build CodeRabbit Slack payload
     if: github.event.context == 'CodeRabbit' && github.event.state == 'success'
     runs-on: ubuntu-latest
 
@@ -25,6 +26,10 @@ jobs:
             const { owner, repo } = context.repo;
             const sha = context.payload.sha;
             const serverUrl = process.env.GITHUB_SERVER_URL || 'https://github.com';
+            const payloadDirectory = 'coderabbit-slack-payload';
+            const payloadPath = `${payloadDirectory}/slack-payload.json`;
+
+            fs.mkdirSync(payloadDirectory, { recursive: true });
 
             const { data: pullRequests } =
               await github.rest.repos.listPullRequestsAssociatedWithCommit({
@@ -37,7 +42,17 @@ jobs:
 
             if (!pullRequest) {
               core.notice(`No open pull request found for CodeRabbit status commit ${sha}.`);
-              core.setOutput('has_pull_request', 'false');
+              fs.writeFileSync(
+                payloadPath,
+                JSON.stringify(
+                  {
+                    should_notify: false,
+                    reason: `No open pull request found for CodeRabbit status commit ${sha}.`,
+                  },
+                  null,
+                  2,
+                ),
+              );
               return;
             }
 
@@ -81,14 +96,21 @@ jobs:
               ],
             };
 
-            fs.writeFileSync('slack-payload.json', JSON.stringify(payload));
-            core.setOutput('has_pull_request', 'true');
+            fs.writeFileSync(
+              payloadPath,
+              JSON.stringify(
+                {
+                  should_notify: true,
+                  payload,
+                },
+                null,
+                2,
+              ),
+            );
 
-      - name: Slack CodeRabbit 리뷰 완료 알림
-        if: steps.slack-payload.outputs.has_pull_request == 'true'
-        continue-on-error: true
-        uses: slackapi/slack-github-action@v3.0.3
+      - name: Slack payload artifact 업로드
+        uses: actions/upload-artifact@v4
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload-file-path: slack-payload.json
+          name: coderabbit-slack-payload
+          path: coderabbit-slack-payload/slack-payload.json
+          retention-days: 1

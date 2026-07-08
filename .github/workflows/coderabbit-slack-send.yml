@@ -1,0 +1,57 @@
+name: CodeRabbit Slack Sender
+
+# CodeRabbit Slack Payload workflow가 끝난 뒤 artifact를 읽어서 Slack 알림을 보냅니다.
+# 이 workflow_run 단계에서 Slack secret을 사용합니다.
+on:
+  workflow_run:
+    workflows:
+      - CodeRabbit Slack Payload
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  send-coderabbit-slack-alert:
+    name: Send CodeRabbit Slack alert
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'status'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Slack payload artifact 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          name: coderabbit-slack-payload
+          path: coderabbit-slack-payload
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Slack payload 준비
+        id: slack-payload
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const envelope = JSON.parse(
+              fs.readFileSync('coderabbit-slack-payload/slack-payload.json', 'utf8'),
+            );
+
+            if (!envelope.should_notify) {
+              core.notice(envelope.reason || 'No Slack notification requested.');
+              core.setOutput('should_notify', 'false');
+              return;
+            }
+
+            fs.writeFileSync('slack-payload.json', JSON.stringify(envelope.payload));
+            core.setOutput('should_notify', 'true');
+
+      - name: Slack CodeRabbit 리뷰 완료 알림
+        if: steps.slack-payload.outputs.should_notify == 'true'
+        uses: slackapi/slack-github-action@v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload-file-path: slack-payload.json
