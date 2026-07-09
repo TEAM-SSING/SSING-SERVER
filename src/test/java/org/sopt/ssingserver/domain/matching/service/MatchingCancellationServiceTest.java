@@ -218,7 +218,7 @@ class MatchingCancellationServiceTest {
         MatchingRequestGroupItem item = item(21L, matchingRequest, group);
         MatchingOffer offer = offer(30L, group);
         offer.accept(FIXED_CLOCK.instant().minusSeconds(30));
-        matchingRequest.markMatched(offer, FIXED_CLOCK.instant().plusSeconds(60));
+        matchingRequest.markMatched(offer);
         MatchingRequestPayment payment = payment(40L, matchingRequest, MatchingRequestPaymentStatus.COMPLETED);
 
         when(matchingRequestRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(matchingRequest));
@@ -266,8 +266,7 @@ class MatchingCancellationServiceTest {
                 LessonLevel.FIRST_TIME,
                 2,
                 List.of(120, 180),
-                true,
-                FIXED_CLOCK.instant().plusSeconds(300)
+                true
         );
         ReflectionTestUtils.setField(matchingRequest, "id", id);
         return matchingRequest;
