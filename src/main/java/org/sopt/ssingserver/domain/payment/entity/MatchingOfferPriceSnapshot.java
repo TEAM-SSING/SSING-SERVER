@@ -67,4 +67,34 @@ public class MatchingOfferPriceSnapshot {
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    public static MatchingOfferPriceSnapshot create(
+            MatchingOffer matchingOffer,
+            InstructorPricePolicy instructorPricePolicy,
+            PlatformFeePolicy platformFeePolicy,
+            int totalHeadcount
+    ) {
+        // 강사 제안 수락 이후에도 금액 기준이 흔들리지 않도록 제안 시점 금액 보존
+        validateTotalHeadcount(totalHeadcount);
+
+        MatchingOfferPriceSnapshot snapshot = new MatchingOfferPriceSnapshot();
+        snapshot.instructorPricePolicy = instructorPricePolicy;
+        snapshot.matchingOffer = matchingOffer;
+        snapshot.platformFeePolicy = platformFeePolicy;
+        snapshot.totalHeadcount = totalHeadcount;
+        snapshot.basePriceAmount = instructorPricePolicy.getBasePriceAmount();
+        snapshot.additionalPersonPriceAmount = instructorPricePolicy.getAdditionalPersonPriceAmount();
+        snapshot.consumerTotalAmount = snapshot.basePriceAmount
+                + snapshot.additionalPersonPriceAmount * Math.max(0, totalHeadcount - 1);
+        snapshot.platformFeeAmount = 0;
+        snapshot.feeRateBps = platformFeePolicy.getFeeRateBps();
+        snapshot.instructorSettlementAmount = snapshot.consumerTotalAmount - snapshot.platformFeeAmount;
+        return snapshot;
+    }
+
+    private static void validateTotalHeadcount(int totalHeadcount) {
+        if (totalHeadcount <= 0) {
+            throw new IllegalArgumentException("totalHeadcount must be positive.");
+        }
+    }
 }

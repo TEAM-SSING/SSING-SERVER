@@ -53,4 +53,17 @@ public class MatchingRequestPriceSnapshot {
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    public static MatchingRequestPriceSnapshot create(
+            MatchingRequest matchingRequest,
+            MatchingOfferPriceSnapshot matchingOfferPriceSnapshot,
+            int consumerPaymentAmount
+    ) {
+        MatchingRequestPriceSnapshot snapshot = new MatchingRequestPriceSnapshot();
+        snapshot.matchingRequest = matchingRequest;
+        snapshot.matchingOfferPriceSnapshot = matchingOfferPriceSnapshot;
+        snapshot.headcount = matchingRequest.getHeadcount();
+        snapshot.consumerPaymentAmount = consumerPaymentAmount;
+        return snapshot;
+    }
 }

@@ -152,6 +152,10 @@ public class MatchingRequest extends BaseTimeEntity {
         updateStatus(MatchingRequestStatus.REQUESTED, MatchingRequestStatusReason.INSTRUCTOR_REJECTED);
     }
 
+    public void rematchAfterConsumerRejected() {
+        updateStatus(MatchingRequestStatus.REQUESTED, MatchingRequestStatusReason.CONSUMER_REJECTED_INSTRUCTOR);
+    }
+
     // 과거/운영 보정용 강사 미응답 재탐색 상태. 신규 제안은 무기한 대기로 자동 호출하지 않음
     public void rematchAfterInstructorTimeout() {
         updateStatus(MatchingRequestStatus.REQUESTED, MatchingRequestStatusReason.INSTRUCTOR_TIMEOUT);

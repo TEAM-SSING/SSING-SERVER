@@ -7,7 +7,9 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorPricePolicy;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingSearchResult;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
@@ -17,6 +19,7 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
+import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferCreatedEvent;
@@ -24,6 +27,10 @@ import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
+import org.sopt.ssingserver.domain.payment.entity.MatchingOfferPriceSnapshot;
+import org.sopt.ssingserver.domain.payment.entity.PlatformFeePolicy;
+import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
+import org.sopt.ssingserver.domain.payment.repository.PlatformFeePolicyRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.stereotype.Service;
@@ -39,6 +46,9 @@ public class MatchingSearchService {
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingOfferRepository matchingOfferRepository;
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+    private final InstructorPricePolicyRepository instructorPricePolicyRepository;
+    private final PlatformFeePolicyRepository platformFeePolicyRepository;
+    private final MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
     private final MatchingStatusResolver matchingStatusResolver;
     private final MatchingTimeoutPolicy matchingTimeoutPolicy;
     private final MatchingEventPublisher matchingEventPublisher;
@@ -225,11 +235,35 @@ public class MatchingSearchService {
             OfferableCandidate candidate,
             Instant now
     ) {
+        // 강사 제안 시점 가격 스냅샷 생성을 위한 현재 그룹 인원과 활성 정책 확보
+        List<MatchingRequestGroupItem> groupItems = matchingRequestGroupItemRepository
+                .findByMatchingRequestGroupIdOrderByIdAsc(matchingRequestGroup.getId());
+        if (groupItems.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
+        }
+        int totalHeadcount = groupItems.stream()
+                .map(MatchingRequestGroupItem::getMatchingRequest)
+                .mapToInt(MatchingRequest::getHeadcount)
+                .sum();
+        InstructorPricePolicy instructorPricePolicy = instructorPricePolicyRepository
+                .findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(
+                        candidate.setting().getInstructorProfile().getId()
+                )
+                .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_PRICE_POLICY_NOT_FOUND));
+        PlatformFeePolicy platformFeePolicy = platformFeePolicyRepository.findFirstByIsActiveTrueOrderByIdDesc()
+                .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_PRICE_POLICY_NOT_FOUND));
+
         MatchingOffer matchingOffer = matchingOfferRepository.save(MatchingOffer.create(
                 candidate.setting().getInstructorProfile(),
                 matchingRequestGroup,
                 now,
                 matchingTimeoutPolicy.instructorOfferExpiresAt(now).orElse(null)
+        ));
+        matchingOfferPriceSnapshotRepository.save(MatchingOfferPriceSnapshot.create(
+                matchingOffer,
+                instructorPricePolicy,
+                platformFeePolicy,
+                totalHeadcount
         ));
 
         // 실제 WebSocket/FCM 부재 상태의 제안 생성 이벤트 포트 전달과 후속 구현 연결 지점

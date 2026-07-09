@@ -19,6 +19,11 @@ public enum MatchingErrorCode implements ErrorCode {
     MATCHING_CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "취소할 수 없는 매칭 요청 상태입니다."),
     MATCHING_OFFER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 매칭 제안입니다."),
     MATCHING_OFFER_ALREADY_RESPONDED(HttpStatus.CONFLICT, "이미 응답한 매칭 제안입니다."),
+    MATCHING_PRICE_POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "매칭 가격 정책을 찾을 수 없습니다."),
+    MATCHING_REQUEST_NOT_CONFIRMABLE(HttpStatus.CONFLICT, "최종 응답을 반영할 수 없는 매칭 요청 상태입니다."),
+    MATCHING_CONFIRMATION_EXPIRED(HttpStatus.CONFLICT, "최종 응답 가능 시간이 만료되었습니다."),
+    MATCHING_PAYMENT_NOT_PENDING(HttpStatus.CONFLICT, "결제 대기 상태가 아닌 매칭 요청입니다."),
+    MATCHING_PAYMENT_EXPIRED(HttpStatus.CONFLICT, "결제 가능 시간이 만료되었습니다."),
     MATCHING_GROUP_ALREADY_CLOSED(HttpStatus.CONFLICT, "이미 종료된 매칭 그룹입니다.");
 
     private final HttpStatus status;

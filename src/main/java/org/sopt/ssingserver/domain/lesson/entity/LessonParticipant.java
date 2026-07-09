@@ -58,4 +58,19 @@ public class LessonParticipant extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Gender gender;
+
+    public static LessonParticipant create(
+            Lesson lesson,
+            MatchingRequest matchingRequest,
+            MatchingRequestParticipant matchingRequestParticipant
+    ) {
+        LessonParticipant lessonParticipant = new LessonParticipant();
+        lessonParticipant.lesson = lesson;
+        lessonParticipant.matchingRequest = matchingRequest;
+        lessonParticipant.matchingRequestParticipant = matchingRequestParticipant;
+        lessonParticipant.member = null;
+        lessonParticipant.age = matchingRequestParticipant.getAge();
+        lessonParticipant.gender = matchingRequestParticipant.getGender();
+        return lessonParticipant;
+    }
 }
