@@ -174,7 +174,7 @@ class ConsumerMatchingProgressServiceTest {
     }
 
     @Test
-    void completePayment는_마지막_결제완료시_즉시강습을_scheduledAt_null로_생성하고_요청을_CONFIRMED로_전환한다() {
+    void completePayment는_마지막_결제완료시_즉시강습_확정시각과_카드기준시각을_저장한다() {
         ConsumerMatchingProgressService service = createService();
         MatchingFixture fixture = paymentPendingFixture();
         MatchingRequestPriceSnapshot requestPriceSnapshot = requestPriceSnapshot(80L, fixture.matchingRequest(), 80_000);
@@ -213,7 +213,8 @@ class ConsumerMatchingProgressServiceTest {
         assertThat(lesson.getLessonLevel()).isSameAs(LessonLevel.FIRST_TIME);
         assertThat(lesson.getTotalHeadcount()).isEqualTo(2);
         assertThat(lesson.getDurationMinutes()).isEqualTo(120);
-        assertThat(lesson.getScheduledAt()).isNull();
+        assertThat(lesson.getConfirmedAt()).isEqualTo(FIXED_CLOCK.instant());
+        assertThat(lesson.getScheduledAt()).isEqualTo(FIXED_CLOCK.instant());
         assertThat(lesson.getStatus()).isSameAs(LessonStatus.CONFIRMED);
 
         ArgumentCaptor<Iterable<LessonParticipant>> lessonParticipantsCaptor = ArgumentCaptor.forClass(Iterable.class);

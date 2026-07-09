@@ -122,7 +122,7 @@ public class ConsumerMatchingProgressService {
         for (MatchingRequestGroupItem groupItem : context.groupItems()) {
             groupItem.getMatchingRequest().confirm();
         }
-        Lesson lesson = createConfirmedLesson(context, matchingOffer);
+        Lesson lesson = createConfirmedLesson(context, matchingOffer, now);
 
         return new ConsumerMatchingPaymentResult(
                 matchingRequest.getId(),
@@ -250,7 +250,8 @@ public class ConsumerMatchingProgressService {
     // 결제 전체 완료 시 매칭 그룹 정보를 강습과 강습 참가자 row로 확정 복사
     private Lesson createConfirmedLesson(
             MatchingProgressContext context,
-            MatchingOffer matchingOffer
+            MatchingOffer matchingOffer,
+            Instant confirmedAt
     ) {
         MatchingRequest firstRequest = context.groupItems().getFirst().getMatchingRequest();
         int totalHeadcount = context.groupItems().stream()
@@ -264,7 +265,8 @@ public class ConsumerMatchingProgressService {
                 firstRequest.getSport(),
                 firstRequest.getLessonLevel(),
                 totalHeadcount,
-                context.group().getDurationMinutes()
+                context.group().getDurationMinutes(),
+                confirmedAt
         ));
 
         List<Long> matchingRequestIds = context.groupItems().stream()
