@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.matching.service;
 
 import lombok.RequiredArgsConstructor;
+import org.sopt.ssingserver.domain.matching.config.MatchingSearchSchedulerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,7 +20,10 @@ public class MatchingSearchScheduler {
     private final MatchingSearchTriggerService matchingSearchTriggerService;
 
     // REQUESTED 요청을 주기적으로 재탐색한다. 무기한 정책에서는 제안 만료 트리거가 no-op으로 동작한다.
-    @Scheduled(fixedDelay = 60_000)
+    @Scheduled(
+            fixedDelay = 60_000,
+            scheduler = MatchingSearchSchedulerConfig.MATCHING_SEARCH_TASK_SCHEDULER
+    )
     public void runScheduledSearch() {
         try {
             matchingOfferExpirationTriggerService.expireOverdueOffers();

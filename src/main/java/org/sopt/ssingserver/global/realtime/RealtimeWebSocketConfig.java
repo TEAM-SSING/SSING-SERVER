@@ -21,10 +21,12 @@ public class RealtimeWebSocketConfig implements WebSocketMessageBrokerConfigurer
     private static final long HEARTBEAT_INTERVAL_MILLIS = 10_000L;
 
     private final RealtimeStompChannelInterceptor realtimeStompChannelInterceptor;
+    private final RealtimeStompErrorHandler realtimeStompErrorHandler;
     private final RealtimeWebSocketProperties realtimeWebSocketProperties;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.setErrorHandler(realtimeStompErrorHandler);
         // Android STOMP 클라이언트가 처음 연결하는 WebSocket handshake endpoint
         registry.addEndpoint("/ws/realtime")
                 .setAllowedOriginPatterns(realtimeWebSocketProperties.allowedOriginPatterns());
