@@ -415,7 +415,7 @@ class InstructorHomeServiceTest {
             int headcount,
             String requesterNickname
     ) {
-        MatchingRequest matchingRequest = matchingRequest(id, status, resort, headcount, (Instant) null);
+        MatchingRequest matchingRequest = matchingRequest(id, status, resort, headcount);
         Member member = mock(Member.class);
         when(member.getNickname()).thenReturn(requesterNickname);
         when(matchingRequest.getMember()).thenReturn(member);
@@ -434,20 +434,15 @@ class InstructorHomeServiceTest {
             Long id,
             MatchingRequestStatus status,
             Resort resort,
-            int headcount,
-            Instant updatedAt
+            int headcount
     ) {
         MatchingRequest matchingRequest = mock(MatchingRequest.class);
-        when(matchingRequest.getId()).thenReturn(id);
         if (status != null) {
             when(matchingRequest.getStatus()).thenReturn(status);
         }
         when(matchingRequest.getResort()).thenReturn(resort);
         if (headcount > 0) {
             when(matchingRequest.getHeadcount()).thenReturn(headcount);
-        }
-        if (updatedAt != null) {
-            when(matchingRequest.getUpdatedAt()).thenReturn(updatedAt);
         }
         return matchingRequest;
     }
