@@ -153,6 +153,7 @@ public class ConsumerLessonDetailResponseMapper {
             Optional<LessonCancellation> instructorCancellation
     ) {
         // 내 팀 취소와 강사 취소가 모두 있을 수 있으므로 가장 최근 취소 정보를 보여줌
+        // TODO: 관리자 취소 기능 추가시 수정 필여
         // TODO: 취소 및 환불 정책 결정 후 수정 필요
         LessonCancellation cancellation = Stream.of(myCancellation, instructorCancellation)
                 .flatMap(Optional::stream)
