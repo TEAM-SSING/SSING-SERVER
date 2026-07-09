@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import org.sopt.ssingserver.domain.matching.dto.request.InstructorMatchingOfferDecisionRequest;
+import org.sopt.ssingserver.domain.matching.dto.request.RespondInstructorMatchingOfferRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDecisionResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffersResponse;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
@@ -60,6 +60,6 @@ public interface InstructorMatchingOfferApiDocs {
             CurrentMember currentMember,
             @Parameter(description = "매칭 제안 ID")
             @PathVariable Long offerId,
-            @Valid @RequestBody InstructorMatchingOfferDecisionRequest request
+            @Valid @RequestBody RespondInstructorMatchingOfferRequest request
     );
 }

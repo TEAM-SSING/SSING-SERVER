@@ -3,6 +3,7 @@ package org.sopt.ssingserver.domain.matching.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
@@ -31,16 +32,14 @@ public class MatchingOfferExpirationService {
     // OFFERED 제안 하나를 만료 처리하고, 가능하면 같은 그룹에서 다음 우선순위 강사에게 넘김
     @Transactional
     public void expireOffer(Long matchingOfferId) {
-        MatchingOffer matchingOffer = matchingOfferRepository.findByIdForUpdate(matchingOfferId)
-                .orElse(null);
-        if (matchingOffer == null || matchingOffer.getStatus() != MatchingOfferStatus.OFFERED) {
-            return;
-        }
-
         Instant now = clock.instant();
-        if (!matchingOffer.isExpired(now)) {
+        Optional<MatchingOffer> offerToExpire = matchingOfferRepository.findByIdForUpdate(matchingOfferId)
+                .filter(matchingOffer -> matchingOffer.getStatus() == MatchingOfferStatus.OFFERED)
+                .filter(matchingOffer -> matchingOffer.isExpired(now));
+        if (offerToExpire.isEmpty()) {
             return;
         }
+        MatchingOffer matchingOffer = offerToExpire.get();
 
         MatchingRequestGroup matchingRequestGroup = matchingRequestGroupRepository.findByIdForUpdate(
                         matchingOffer.getMatchingRequestGroup().getId()

@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.matching.controller.docs.InstructorMatchingOfferApiDocs;
-import org.sopt.ssingserver.domain.matching.dto.request.InstructorMatchingOfferDecisionRequest;
+import org.sopt.ssingserver.domain.matching.dto.request.RespondInstructorMatchingOfferRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDecisionResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffersResponse;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
@@ -61,7 +61,7 @@ public class InstructorMatchingOfferController implements InstructorMatchingOffe
     public ResponseEntity<BaseResponse<InstructorMatchingOfferDecisionResponse>> respond(
             CurrentMember currentMember,
             @PathVariable Long offerId,
-            @Valid @RequestBody InstructorMatchingOfferDecisionRequest request
+            @Valid @RequestBody RespondInstructorMatchingOfferRequest request
     ) {
         InstructorMatchingOfferDecisionResult result = instructorMatchingOfferService.respond(
                 currentMember.memberId(),
