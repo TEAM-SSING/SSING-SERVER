@@ -63,7 +63,6 @@ public class Lesson extends BaseTimeEntity {
     @Column(length = 200)
     private String meetingPlace;
 
-    @Column(nullable = false)
     private Instant scheduledAt;
 
     @Enumerated(EnumType.STRING)
@@ -75,4 +74,27 @@ public class Lesson extends BaseTimeEntity {
     private Instant completedAt;
 
     private Instant canceledAt;
+
+    public static Lesson createImmediateConfirmed(
+            InstructorProfile instructorProfile,
+            Resort resort,
+            MatchingOffer matchingOffer,
+            Sport sport,
+            LessonLevel lessonLevel,
+            int totalHeadcount,
+            int durationMinutes
+    ) {
+        // 즉시 매칭 확정 강습의 예약 시간 없음 표현
+        Lesson lesson = new Lesson();
+        lesson.instructorProfile = instructorProfile;
+        lesson.resort = resort;
+        lesson.matchingOffer = matchingOffer;
+        lesson.sport = sport;
+        lesson.lessonLevel = lessonLevel;
+        lesson.totalHeadcount = totalHeadcount;
+        lesson.durationMinutes = durationMinutes;
+        lesson.scheduledAt = null;
+        lesson.status = LessonStatus.CONFIRMED;
+        return lesson;
+    }
 }

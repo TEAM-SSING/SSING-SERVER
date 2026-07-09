@@ -52,12 +52,40 @@ public class MatchingRequestPayment extends BaseTimeEntity {
     @Column(nullable = false)
     private Instant paymentRequestedAt;
 
-    @Column(nullable = false)
     private Instant paymentExpiresAt;
 
     private Instant paidAt;
 
     private Instant canceledAt;
+
+    public static MatchingRequestPayment createPending(
+            MatchingRequest matchingRequest,
+            MatchingRequestPriceSnapshot matchingRequestPriceSnapshot,
+            MatchingOffer matchingOffer,
+            int amount,
+            Instant paymentRequestedAt,
+            Instant paymentExpiresAt
+    ) {
+        // MVP 무기한 결제 대기 정책의 paymentExpiresAt null 허용
+        MatchingRequestPayment payment = new MatchingRequestPayment();
+        payment.matchingRequest = matchingRequest;
+        payment.matchingRequestPriceSnapshot = matchingRequestPriceSnapshot;
+        payment.matchingOffer = matchingOffer;
+        payment.amount = amount;
+        payment.status = MatchingRequestPaymentStatus.PENDING;
+        payment.paymentRequestedAt = paymentRequestedAt;
+        payment.paymentExpiresAt = paymentExpiresAt;
+        return payment;
+    }
+
+    public void complete(Instant paidAt) {
+        if (status != MatchingRequestPaymentStatus.PENDING) {
+            throw new IllegalStateException("Only pending payment can be completed.");
+        }
+
+        this.status = MatchingRequestPaymentStatus.COMPLETED;
+        this.paidAt = paidAt;
+    }
 
     // 매칭 중지 API에서 아직 완료되지 않은 결제 요청을 함께 종료할 때 사용
     public void cancel(Instant canceledAt) {
