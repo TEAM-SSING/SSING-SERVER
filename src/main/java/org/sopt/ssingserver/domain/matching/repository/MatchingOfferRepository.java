@@ -74,6 +74,7 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
             from MatchingOffer matchingOffer
             where matchingOffer.matchingRequestGroup.id = :matchingRequestGroupId
               and matchingOffer.status = :status
+            order by matchingOffer.id asc
             """)
     List<MatchingOffer> findByMatchingRequestGroupIdAndStatusForUpdate(
             @Param("matchingRequestGroupId") Long matchingRequestGroupId,
