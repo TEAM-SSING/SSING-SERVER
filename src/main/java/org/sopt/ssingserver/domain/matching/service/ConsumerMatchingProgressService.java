@@ -349,6 +349,10 @@ public class ConsumerMatchingProgressService {
             MatchingRequestGroup group,
             MatchingRequestGroupItem currentItem
     ) {
+        if (isClosedGroup(group.getStatus())) {
+            throw new BusinessException(MatchingErrorCode.MATCHING_GROUP_ALREADY_CLOSED);
+        }
+
         if (matchingRequest.getStatus() != MatchingRequestStatus.MATCHED
                 || group.getStatus() != MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED
                 || currentItem.getStatus() != MatchingRequestGroupItemStatus.PENDING
@@ -362,6 +366,10 @@ public class ConsumerMatchingProgressService {
             MatchingRequestGroup group,
             MatchingRequestGroupItem currentItem
     ) {
+        if (isClosedGroup(group.getStatus())) {
+            throw new BusinessException(MatchingErrorCode.MATCHING_GROUP_ALREADY_CLOSED);
+        }
+
         if (matchingRequest.getStatus() != MatchingRequestStatus.MATCHED
                 || group.getStatus() != MatchingRequestGroupStatus.PAYMENT_PENDING
                 || currentItem.getStatus() != MatchingRequestGroupItemStatus.ACCEPTED
@@ -380,6 +388,14 @@ public class ConsumerMatchingProgressService {
 
     private boolean isAcceptedOffer(MatchingOffer matchingOffer) {
         return matchingOffer != null && matchingOffer.getStatus() == MatchingOfferStatus.ACCEPTED;
+    }
+
+    private boolean isClosedGroup(MatchingRequestGroupStatus groupStatus) {
+        return groupStatus == MatchingRequestGroupStatus.PAYMENT_EXPIRED
+                || groupStatus == MatchingRequestGroupStatus.CONFIRMED
+                || groupStatus == MatchingRequestGroupStatus.LOST
+                || groupStatus == MatchingRequestGroupStatus.CANCELED
+                || groupStatus == MatchingRequestGroupStatus.EXPIRED;
     }
 
     private int countAcceptedItems(List<MatchingRequestGroupItem> groupItems) {

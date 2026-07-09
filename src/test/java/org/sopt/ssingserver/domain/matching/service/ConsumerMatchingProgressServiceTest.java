@@ -242,6 +242,40 @@ class ConsumerMatchingProgressServiceTest {
         verifyNoInteractions(lessonParticipantRepository);
     }
 
+    @Test
+    void respond는_이미_닫힌_그룹이면_MATCHING_GROUP_ALREADY_CLOSED를_던진다() {
+        ConsumerMatchingProgressService service = createService();
+        MatchingFixture fixture = matchedFixture();
+        fixture.group().cancel();
+        givenProgressContext(fixture);
+
+        assertThatExceptionOfType(BusinessException.class)
+                .isThrownBy(() -> service.respond(1L, 10L, MatchingConfirmationDecision.ACCEPTED))
+                .satisfies(exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(MatchingErrorCode.MATCHING_GROUP_ALREADY_CLOSED));
+
+        verifyNoInteractions(matchingOfferPriceSnapshotRepository);
+        verifyNoInteractions(matchingRequestPriceSnapshotRepository);
+        verifyNoInteractions(matchingRequestPaymentRepository);
+    }
+
+    @Test
+    void completePayment는_이미_닫힌_그룹이면_MATCHING_GROUP_ALREADY_CLOSED를_던진다() {
+        ConsumerMatchingProgressService service = createService();
+        MatchingFixture fixture = paymentPendingFixture();
+        fixture.group().confirm();
+        givenProgressContext(fixture);
+
+        assertThatExceptionOfType(BusinessException.class)
+                .isThrownBy(() -> service.completePayment(1L, 10L))
+                .satisfies(exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(MatchingErrorCode.MATCHING_GROUP_ALREADY_CLOSED));
+
+        verifyNoInteractions(matchingRequestPaymentRepository);
+        verifyNoInteractions(lessonRepository);
+        verifyNoInteractions(lessonParticipantRepository);
+    }
+
     private ConsumerMatchingProgressService createService() {
         return new ConsumerMatchingProgressService(
                 matchingRequestRepository,
@@ -258,28 +292,27 @@ class ConsumerMatchingProgressServiceTest {
     }
 
     private void givenConfirmableRequest(MatchingFixture fixture) {
-        when(matchingRequestRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(fixture.matchingRequest()));
-        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
-                .thenReturn(Optional.of(fixture.item()));
-        when(matchingRequestGroupRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(fixture.group()));
-        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdForUpdate(20L))
-                .thenReturn(List.of(fixture.item()));
+        givenProgressContext(fixture);
     }
 
     private void givenPaymentCompletableRequest(
             MatchingFixture fixture,
             MatchingRequestPayment payment
     ) {
+        givenProgressContext(fixture);
+        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdAndStatusOrderByIdDesc(
+                10L,
+                MatchingRequestPaymentStatus.PENDING
+        )).thenReturn(Optional.ofNullable(payment));
+    }
+
+    private void givenProgressContext(MatchingFixture fixture) {
         when(matchingRequestRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(fixture.matchingRequest()));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(fixture.item()));
         when(matchingRequestGroupRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(fixture.group()));
         when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdForUpdate(20L))
                 .thenReturn(List.of(fixture.item()));
-        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdAndStatusOrderByIdDesc(
-                10L,
-                MatchingRequestPaymentStatus.PENDING
-        )).thenReturn(Optional.ofNullable(payment));
     }
 
     private MatchingFixture matchedFixture() {
