@@ -78,6 +78,8 @@ public class MatchingSearchService {
             return NextMatchingOfferResult.alreadyActive(activeOffers.getFirst());
         }
 
+        // TODO: 운영 부하나 다중 서버 경쟁이 커지면 active OFFERED 중복 방지를 DB 제약 또는 상태 조건 update로 보강한다.
+        // 현재 MVP는 그룹 row lock과 활성 제안 잠금 조회로 같은 그룹의 동시 노출을 방어한다.
         List<InstructorMatchingSetting> candidates = instructorMatchingSettingRepository.findExposedCandidates(
                 matchingRequest.getResort(),
                 matchingRequest.getSport(),
