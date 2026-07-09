@@ -16,7 +16,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Long> {
 
-    // 강사별 활성 제안 현재값 확인과 같은 강사 중복 제안 생성을 막기 위한 제안 row 잠금 조회함
+    // 강사별 활성 제안 현재값 확인과 같은 강사 중복 제안 생성을 막기 위한 제안 row 잠금 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
     @Query("""
@@ -32,7 +32,7 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
 
     Optional<MatchingOffer> findFirstByMatchingRequestGroupIdOrderByIdDesc(Long matchingRequestGroupId);
 
-    // 매칭 중지 시 현재 그룹의 활성 제안을 같은 트랜잭션에서 종료하기 위한 잠금 조회함
+    // 매칭 중지 시 현재 그룹의 활성 제안을 같은 트랜잭션에서 종료하기 위한 잠금 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
     @Query("""
@@ -46,7 +46,7 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
             @Param("statuses") Collection<MatchingOfferStatus> statuses
     );
 
-    // 강사 홈에 노출할 응답 대기/수락 이후 진행 중 제안 조회함
+    // 강사 홈에 노출할 응답 대기/수락 이후 진행 중 제안 조회
     @Query("""
             select matchingOffer
             from MatchingOffer matchingOffer

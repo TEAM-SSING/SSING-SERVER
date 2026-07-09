@@ -12,7 +12,7 @@ public interface MatchingRequestGroupItemRepository extends JpaRepository<Matchi
 
     Optional<MatchingRequestGroupItem> findFirstByMatchingRequestIdOrderByIdDesc(Long matchingRequestId);
 
-    // 강사 홈 카드 목록의 그룹 요청들을 한 번에 조회함
+    // 강사 홈 카드 목록의 그룹 요청들을 한 번에 조회
     @EntityGraph(attributePaths = {
             "matchingRequestGroup",
             "matchingRequest",
