@@ -47,14 +47,13 @@ public class InstructorMatchingOfferService {
     @Transactional(readOnly = true)
     public InstructorMatchingOffersResult getCurrentOffers(
             Long memberId,
-            MatchingOfferStatus status,
             int page,
             int size
     ) {
         InstructorProfile instructorProfile = findInstructorProfile(memberId);
         Page<MatchingOffer> matchingOffers = matchingOfferRepository.findByInstructorProfileIdAndStatusOrderByIdAsc(
                 instructorProfile.getId(),
-                status,
+                MatchingOfferStatus.OFFERED,
                 PageRequest.of(page, size)
         );
 

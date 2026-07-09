@@ -10,7 +10,6 @@ import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffer
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffersResponse;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
-import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.response.MatchingSuccessCode;
 import org.sopt.ssingserver.domain.matching.service.InstructorMatchingOfferService;
 import org.sopt.ssingserver.global.response.BaseResponse;
@@ -42,13 +41,11 @@ public class InstructorMatchingOfferController implements InstructorMatchingOffe
     @GetMapping
     public ResponseEntity<BaseResponse<InstructorMatchingOffersResponse>> getCurrentOffers(
             CurrentMember currentMember,
-            @RequestParam(defaultValue = "OFFERED") MatchingOfferStatus status,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
         InstructorMatchingOffersResult result = instructorMatchingOfferService.getCurrentOffers(
                 currentMember.memberId(),
-                status,
                 page,
                 size
         );

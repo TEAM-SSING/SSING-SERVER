@@ -217,7 +217,7 @@ class InstructorMatchingOfferServiceTest {
     }
 
     @Test
-    void getCurrentOffers는_여러_제안의_그룹아이템을_한번에_조회해_강습요약을_반환한다() {
+    void getCurrentOffers는_현재_노출중인_OFFERED_제안만_조회하고_그룹아이템을_한번에_조회한다() {
         InstructorMatchingOfferService service = createService();
         InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
         MatchingRequestGroup firstGroup = exposedGroup(20L);
@@ -238,7 +238,7 @@ class InstructorMatchingOfferServiceTest {
                 List.of(20L, 21L)
         )).thenReturn(List.of(firstItem, secondItem));
 
-        InstructorMatchingOffersResult result = service.getCurrentOffers(1L, MatchingOfferStatus.OFFERED, 0, 20);
+        InstructorMatchingOffersResult result = service.getCurrentOffers(1L, 0, 20);
 
         assertThat(result.items()).hasSize(2);
         InstructorMatchingOffersResult.ItemResult firstItemResult = result.items().getFirst();

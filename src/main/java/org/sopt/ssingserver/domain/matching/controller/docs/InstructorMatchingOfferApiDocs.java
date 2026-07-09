@@ -11,7 +11,6 @@ import jakarta.validation.constraints.Min;
 import org.sopt.ssingserver.domain.matching.dto.request.RespondInstructorMatchingOfferRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDecisionResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffersResponse;
-import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.http.ResponseEntity;
@@ -35,8 +34,6 @@ public interface InstructorMatchingOfferApiDocs {
     ResponseEntity<BaseResponse<InstructorMatchingOffersResponse>> getCurrentOffers(
             @Parameter(hidden = true)
             CurrentMember currentMember,
-            @Parameter(description = "조회할 제안 상태. 생략 시 OFFERED")
-            @RequestParam(defaultValue = "OFFERED") MatchingOfferStatus status,
             @Parameter(description = "페이지 번호. 0부터 시작")
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "페이지 크기")
