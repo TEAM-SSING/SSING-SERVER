@@ -43,6 +43,8 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferCanceledEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
@@ -128,15 +130,22 @@ class MatchingCancellationServiceTest {
             assertThat(payment.getStatus()).isSameAs(MatchingRequestPaymentStatus.CANCELED);
             assertThat(payment.getCanceledAt()).isEqualTo(FIXED_CLOCK.instant());
 
-            ArgumentCaptor<MatchingRequestStatusChangedEvent> eventCaptor =
-                    ArgumentCaptor.forClass(MatchingRequestStatusChangedEvent.class);
-            verify(matchingEventPublisher).publish(eventCaptor.capture());
-            assertThat(eventCaptor.getValue().matchingRequestId()).isEqualTo(1L);
-            assertThat(eventCaptor.getValue().requestStatus()).isSameAs(MatchingRequestStatus.CANCELED);
-            assertThat(eventCaptor.getValue().requestStatusReason())
+            ArgumentCaptor<MatchingDomainEvent> eventCaptor = ArgumentCaptor.forClass(MatchingDomainEvent.class);
+            verify(matchingEventPublisher, org.mockito.Mockito.times(2)).publish(eventCaptor.capture());
+            MatchingRequestStatusChangedEvent statusEvent = eventCaptor.getAllValues().stream()
+                    .filter(MatchingRequestStatusChangedEvent.class::isInstance)
+                    .map(MatchingRequestStatusChangedEvent.class::cast)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(statusEvent.matchingRequestId()).isEqualTo(1L);
+            assertThat(statusEvent.requestStatus()).isSameAs(MatchingRequestStatus.CANCELED);
+            assertThat(statusEvent.requestStatusReason())
                     .isSameAs(MatchingRequestStatusReason.CONSUMER_CANCELED);
-            assertThat(eventCaptor.getValue().matchingStatus()).isSameAs(MatchingStatus.CANCELED);
-            assertThat(eventCaptor.getValue().occurredAt()).isEqualTo(FIXED_CLOCK.instant());
+            assertThat(statusEvent.matchingStatus()).isSameAs(MatchingStatus.CANCELED);
+            assertThat(statusEvent.occurredAt()).isEqualTo(FIXED_CLOCK.instant());
+            assertThat(eventCaptor.getAllValues())
+                    .anyMatch(event -> event instanceof MatchingOfferCanceledEvent canceledEvent
+                            && canceledEvent.matchingOfferId().equals(30L));
 
             ILoggingEvent logEvent = appender.list.getFirst();
             assertThat(logEvent.getLevel()).isSameAs(Level.INFO);

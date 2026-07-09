@@ -12,7 +12,7 @@ class MatchingRealtimeNotifierTest {
     @Test
     void send는_memberId_문자열과_매칭_개인큐로_전송한다() {
         SimpMessageSendingOperations messagingTemplate = mock(SimpMessageSendingOperations.class);
-        MatchingRealtimeNotifier notifier = new MatchingRealtimeNotifier(messagingTemplate);
+        MatchingRealtimeNotifier notifier = new StompMatchingRealtimeNotifier(messagingTemplate);
         MatchingRealtimeEvent event = mock(MatchingRealtimeEvent.class);
 
         notifier.send(new MatchingRealtimeDelivery(12L, event));

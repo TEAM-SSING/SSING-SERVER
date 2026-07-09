@@ -21,8 +21,10 @@ import org.springframework.web.socket.config.annotation.StompWebSocketEndpointRe
 class RealtimeWebSocketConfigTest {
 
     private final RealtimeStompChannelInterceptor interceptor = mock(RealtimeStompChannelInterceptor.class);
+    private final RealtimeStompErrorHandler errorHandler = mock(RealtimeStompErrorHandler.class);
     private final RealtimeWebSocketConfig config = new RealtimeWebSocketConfig(
             interceptor,
+            errorHandler,
             new RealtimeWebSocketProperties(List.of("https://ssing.example"))
     );
 
@@ -35,6 +37,7 @@ class RealtimeWebSocketConfigTest {
 
         config.registerStompEndpoints(registry);
 
+        verify(registry).setErrorHandler(errorHandler);
         verify(registry).addEndpoint("/ws/realtime");
         verify(registration).setAllowedOriginPatterns("https://ssing.example");
     }

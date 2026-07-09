@@ -2,6 +2,10 @@ package org.sopt.ssingserver.domain.matching.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
@@ -28,6 +32,10 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
+import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
+import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
@@ -58,6 +66,9 @@ class MatchingOfferExpirationServiceTest {
     @Mock
     private MatchingSearchService matchingSearchService;
 
+    @Mock
+    private MatchingEventPublisher matchingEventPublisher;
+
     @Test
     void expireOffer는_유한정책의_만료된_OFFERED_제안을_EXPIRED로_바꾸고_다음_후보가_있으면_그룹을_EXPOSED로_유지한다() {
         MatchingOfferExpirationService service = createService();
@@ -76,6 +87,10 @@ class MatchingOfferExpirationServiceTest {
         assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.EXPIRED);
         assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.GROUPED);
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof MatchingOfferClosedEvent closedEvent
+                        && closedEvent.closedReason() == MatchingOfferClosedReason.EXPIRED
+        ));
     }
 
     @Test
@@ -118,6 +133,8 @@ class MatchingOfferExpirationServiceTest {
         assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.EXPIRED);
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         assertThat(matchingRequest.getStatusReason()).isSameAs(MatchingRequestStatusReason.INSTRUCTOR_TIMEOUT);
+        verify(matchingEventPublisher, times(2)).publish(any());
+        verify(matchingEventPublisher).publish(argThat(event -> event instanceof MatchingRequestStatusChangedEvent));
     }
 
     @Test
@@ -145,6 +162,8 @@ class MatchingOfferExpirationServiceTest {
                 matchingRequestGroupRepository,
                 matchingRequestGroupItemRepository,
                 matchingSearchService,
+                matchingEventPublisher,
+                new MatchingAfterCommitExecutor(),
                 FIXED_CLOCK
         );
     }
