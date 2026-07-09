@@ -424,9 +424,6 @@ public record ConsumerLessonDetailResponse(
             @Schema(description = "해당 팀의 강습 시작 준비 완료 여부", example = "true")
             boolean startConfirmed,
 
-            @Schema(description = "해당 팀의 강습 시작 준비 완료 시각. 미확인 시 null", example = "2026-01-01T10:03:00+09:00")
-            OffsetDateTime confirmedAt,
-
             @Schema(description = "해당 팀 참여자 목록")
             List<ParticipantResponse> participants
     ) {
@@ -437,7 +434,6 @@ public record ConsumerLessonDetailResponse(
                 String representativeMemberName,
                 int headcount,
                 boolean startConfirmed,
-                OffsetDateTime confirmedAt,
                 List<ParticipantResponse> participants
         ) {
             return new ConfirmedMatchingRequestResponse(
@@ -446,7 +442,6 @@ public record ConsumerLessonDetailResponse(
                     representativeMemberName,
                     headcount,
                     startConfirmed,
-                    confirmedAt,
                     participants
             );
         }

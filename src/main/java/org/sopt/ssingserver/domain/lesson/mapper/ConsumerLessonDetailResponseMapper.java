@@ -240,9 +240,6 @@ public class ConsumerLessonDetailResponseMapper {
         MatchingRequest matchingRequest = firstParticipant.getMatchingRequest();
         Member representativeMember = matchingRequest.getMember();
         LessonStartConfirmation confirmation = confirmedByMatchingRequestId.get(matchingRequest.getId());
-        OffsetDateTime startConfirmedAt = confirmation != null
-                ? toOffsetDateTime(confirmation.getConfirmedAt())
-                : null;
         List<ConsumerLessonDetailResponse.ParticipantResponse> participantResponses = participants.stream()
                 .map(participant -> ConsumerLessonDetailResponse.ParticipantResponse.of(
                         participant.getId(),
@@ -257,7 +254,6 @@ public class ConsumerLessonDetailResponseMapper {
                 representativeMember.getNickname(),
                 matchingRequest.getHeadcount(),
                 confirmation != null,
-                startConfirmedAt,
                 participantResponses
         );
     }

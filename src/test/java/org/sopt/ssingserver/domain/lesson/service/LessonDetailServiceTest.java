@@ -141,7 +141,7 @@ class LessonDetailServiceTest {
     }
 
     @Test
-    void getDetail은_CONFIRMED_응답에서_팀별_준비완료_필드를_포함한다() throws Exception {
+    void getDetail은_CONFIRMED_응답에서_팀별_준비완료_여부만_포함한다() throws Exception {
         LessonDetailService service = createService();
         Fixture fixture = fixture(LessonStatus.CONFIRMED);
         givenAccessibleLesson(fixture);
@@ -160,7 +160,9 @@ class LessonDetailServiceTest {
         assertThat(data.has("cancelInfo")).isFalse();
         assertThat(data.has("matchingRequests")).isTrue();
         assertThat(data.get("matchingRequests").get(0).has("startConfirmed")).isTrue();
-        assertThat(data.get("matchingRequests").get(0).has("confirmedAt")).isTrue();
+        assertThat(data.get("matchingRequests").get(0).has("confirmedAt")).isFalse();
+        assertThat(data.get("matchingRequests").get(1).has("startConfirmed")).isTrue();
+        assertThat(data.get("matchingRequests").get(1).has("confirmedAt")).isFalse();
     }
 
     @Test
