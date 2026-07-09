@@ -84,6 +84,20 @@ jobs:
             exit 1
           fi
 
+          if [ "$SSING_DEV_DOMAIN" != ":80" ]; then
+            if [[ "$SSING_DEV_DOMAIN" == *"://"* || "$SSING_DEV_DOMAIN" == *"/"* || "$SSING_DEV_DOMAIN" == *":"* ]]; then
+              echo "::error title=dev 도메인 형식 오류::SSING_DEV_DOMAIN에는 https://, 경로, 포트 없이 도메인만 입력하세요. 예: dev-api.ssing.app"
+              echo "::endgroup::"
+              exit 1
+            fi
+
+            if [[ ! "$SSING_DEV_DOMAIN" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]]; then
+              echo "::error title=dev 도메인 형식 오류::SSING_DEV_DOMAIN 값이 올바른 도메인 형식이 아닙니다. 예: dev-api.ssing.app"
+              echo "::endgroup::"
+              exit 1
+            fi
+          fi
+
           echo "::notice title=배포 입력값 사전 점검 완료::필수 GitHub Variables와 Secrets가 모두 설정되어 있습니다."
           echo "::endgroup::"
 
@@ -292,6 +306,20 @@ jobs:
             exit 1
           fi
 
+          if [ "$SSING_DEV_DOMAIN" != ":80" ]; then
+            if [[ "$SSING_DEV_DOMAIN" == *"://"* || "$SSING_DEV_DOMAIN" == *"/"* || "$SSING_DEV_DOMAIN" == *":"* ]]; then
+              echo "::error title=dev 도메인 형식 오류::SSING_DEV_DOMAIN에는 https://, 경로, 포트 없이 도메인만 입력하세요. 예: dev-api.ssing.app"
+              echo "::endgroup::"
+              exit 1
+            fi
+
+            if [[ ! "$SSING_DEV_DOMAIN" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]]; then
+              echo "::error title=dev 도메인 형식 오류::SSING_DEV_DOMAIN 값이 올바른 도메인 형식이 아닙니다. 예: dev-api.ssing.app"
+              echo "::endgroup::"
+              exit 1
+            fi
+          fi
+
           SSING_JPA_DDL_AUTO="${SSING_JPA_DDL_AUTO:-update}"
           JAVA_OPTS="${JAVA_OPTS:--XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=40.0}"
 
@@ -402,6 +430,39 @@ jobs:
 
           echo "::notice title=애플리케이션 헬스체크 완료::/actuator/health 응답이 UP입니다."
           echo "::endgroup::"
+
+      # 외부 도메인 HTTPS 헬스체크
+      - name: 외부 도메인 HTTPS 헬스체크
+        env:
+          SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::외부 도메인 HTTPS 헬스체크"
+
+          if [ "$SSING_DEV_DOMAIN" = ":80" ]; then
+            echo "::notice title=외부 도메인 헬스체크 생략::SSING_DEV_DOMAIN=:80 IP-only 임시 배포 모드입니다."
+            echo "::endgroup::"
+            exit 0
+          fi
+
+          HEALTH_URL="https://${SSING_DEV_DOMAIN}/actuator/health"
+
+          for attempt in {1..30}; do
+            echo "외부 헬스체크 시도: ${attempt}/30 (${HEALTH_URL})"
+            if curl -fsS --max-time 10 "$HEALTH_URL" | grep -q '"status":"UP"'; then
+              echo "외부 헬스체크 성공: ${HEALTH_URL} status UP"
+              echo "::notice title=외부 도메인 HTTPS 헬스체크 완료::${HEALTH_URL} 응답이 UP입니다."
+              echo "::endgroup::"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "::error title=외부 도메인 HTTPS 헬스체크 실패::${HEALTH_URL} 응답이 UP이 아닙니다. DNS A 레코드, EC2 80/443 인바운드, Caddy 인증서 발급, reverse proxy 상태를 확인하세요."
+          echo "::endgroup::"
+          exit 1
 
       # dev 배포 성공 Slack 알림
       - name: Slack 배포 성공 알림
