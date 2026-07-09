@@ -132,6 +132,35 @@ class InstructorMatchingOfferServiceTest {
     }
 
     @Test
+    void respond는_강사_거절시_다른_활성_제안이_이미_있으면_그룹을_EXPOSED로_유지한다() {
+        InstructorMatchingOfferService service = createService();
+        InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
+        MatchingRequestGroup group = exposedGroup(20L);
+        MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
+        matchingRequest.markGrouped();
+        MatchingRequestGroupItem item = item(40L, matchingRequest, group);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
+        MatchingOffer activeOffer = offeredOffer(51L, instructorProfile(11L, member(3L, MemberRole.INSTRUCTOR)), group);
+        givenRespondableOffer(instructorProfile, offer, group, List.of(item));
+        when(matchingSearchService.ensureNextOfferForGroup(matchingRequest, group, FIXED_CLOCK.instant()))
+                .thenReturn(NextMatchingOfferResult.alreadyActive(activeOffer));
+
+        InstructorMatchingOfferDecisionResult result = service.respond(
+                1L,
+                50L,
+                MatchingOfferDecision.REJECTED
+        );
+
+        assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.REJECTED);
+        assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
+        assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.REJECTED);
+        assertThat(activeOffer.getStatus()).isSameAs(MatchingOfferStatus.OFFERED);
+        assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
+        assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.GROUPED);
+        assertThat(matchingRequest.getStatusReason()).isNull();
+    }
+
+    @Test
     void respond는_강사_거절시_다음_후보가_없으면_그룹을_닫고_요청을_REMATCHING용_REQUESTED로_되돌린다() {
         InstructorMatchingOfferService service = createService();
         InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
