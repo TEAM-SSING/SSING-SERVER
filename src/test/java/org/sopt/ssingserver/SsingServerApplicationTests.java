@@ -16,6 +16,7 @@ import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.domain.resort.repository.ResortRepository;
+import org.sopt.ssingserver.domain.review.repository.ReviewRepository;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -69,6 +70,9 @@ class SsingServerApplicationTests {
 
 	@MockitoBean
 	private FcmTokenRepository fcmTokenRepository;
+
+	@MockitoBean
+	private ReviewRepository reviewRepository;
 
 	@MockitoBean
 	private PlatformTransactionManager transactionManager;
