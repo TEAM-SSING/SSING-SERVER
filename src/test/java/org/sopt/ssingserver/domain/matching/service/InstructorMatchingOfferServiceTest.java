@@ -3,6 +3,7 @@ package org.sopt.ssingserver.domain.matching.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -242,39 +243,49 @@ class InstructorMatchingOfferServiceTest {
     }
 
     @Test
-    void getCurrentOffers는_현재_강사의_제안과_강습요약을_반환한다() {
+    void getCurrentOffers는_여러_제안의_그룹아이템을_한번에_조회해_강습요약을_반환한다() {
         InstructorMatchingOfferService service = createService();
         InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
-        MatchingRequestGroup group = exposedGroup(20L);
-        MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
-        MatchingRequestGroupItem item = item(40L, matchingRequest, group);
-        MatchingOffer offer = offeredOffer(50L, instructorProfile, group, OFFER_EXPIRES_AT);
+        MatchingRequestGroup firstGroup = exposedGroup(20L);
+        MatchingRequestGroup secondGroup = exposedGroup(21L);
+        MatchingRequest firstRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
+        MatchingRequest secondRequest = matchingRequest(31L, member(3L, MemberRole.CONSUMER));
+        MatchingRequestGroupItem firstItem = item(40L, firstRequest, firstGroup);
+        MatchingRequestGroupItem secondItem = item(41L, secondRequest, secondGroup);
+        MatchingOffer firstOffer = offeredOffer(50L, instructorProfile, firstGroup, OFFER_EXPIRES_AT);
+        MatchingOffer secondOffer = offeredOffer(51L, instructorProfile, secondGroup, OFFER_EXPIRES_AT);
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(instructorProfile));
         when(matchingOfferRepository.findByInstructorProfileIdAndStatusOrderByIdAsc(
                 10L,
                 MatchingOfferStatus.OFFERED,
                 PageRequest.of(0, 20)
-        )).thenReturn(new PageImpl<>(List.of(offer), PageRequest.of(0, 20), 1));
-        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
-                .thenReturn(List.of(item));
+        )).thenReturn(new PageImpl<>(List.of(firstOffer, secondOffer), PageRequest.of(0, 20), 2));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdInOrderByGroupIdAscItemIdAsc(
+                List.of(20L, 21L)
+        )).thenReturn(List.of(firstItem, secondItem));
 
         InstructorMatchingOffersResult result = service.getCurrentOffers(1L, MatchingOfferStatus.OFFERED, 0, 20);
 
-        assertThat(result.items()).hasSize(1);
-        InstructorMatchingOffersResult.ItemResult itemResult = result.items().getFirst();
-        assertThat(itemResult.offerId()).isEqualTo(50L);
-        assertThat(itemResult.groupId()).isEqualTo(20L);
-        assertThat(itemResult.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
-        assertThat(itemResult.expiresAt()).isEqualTo(OFFER_EXPIRES_AT);
-        assertThat(itemResult.lessonSummary().resort().code()).isEqualTo("HIGH1");
-        assertThat(itemResult.lessonSummary().resort().displayName()).isEqualTo("하이원");
-        assertThat(itemResult.lessonSummary().sport()).isSameAs(Sport.SNOWBOARD);
-        assertThat(itemResult.lessonSummary().lessonLevel()).isSameAs(LessonLevel.FIRST_TIME);
-        assertThat(itemResult.lessonSummary().headcount()).isEqualTo(2);
-        assertThat(itemResult.lessonSummary().durationMinutes()).isEqualTo(120);
+        assertThat(result.items()).hasSize(2);
+        InstructorMatchingOffersResult.ItemResult firstItemResult = result.items().getFirst();
+        assertThat(firstItemResult.offerId()).isEqualTo(50L);
+        assertThat(firstItemResult.groupId()).isEqualTo(20L);
+        assertThat(firstItemResult.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
+        assertThat(firstItemResult.expiresAt()).isEqualTo(OFFER_EXPIRES_AT);
+        assertThat(firstItemResult.lessonSummary().resort().code()).isEqualTo("HIGH1");
+        assertThat(firstItemResult.lessonSummary().resort().displayName()).isEqualTo("하이원");
+        assertThat(firstItemResult.lessonSummary().sport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(firstItemResult.lessonSummary().lessonLevel()).isSameAs(LessonLevel.FIRST_TIME);
+        assertThat(firstItemResult.lessonSummary().headcount()).isEqualTo(2);
+        assertThat(firstItemResult.lessonSummary().durationMinutes()).isEqualTo(120);
+        assertThat(result.items().get(1).offerId()).isEqualTo(51L);
+        assertThat(result.items().get(1).groupId()).isEqualTo(21L);
         assertThat(result.currentPage()).isZero();
         assertThat(result.size()).isEqualTo(20);
         assertThat(result.hasNext()).isFalse();
+        verify(matchingRequestGroupItemRepository).findByMatchingRequestGroupIdInOrderByGroupIdAscItemIdAsc(
+                List.of(20L, 21L)
+        );
     }
 
     private InstructorMatchingOfferService createService() {

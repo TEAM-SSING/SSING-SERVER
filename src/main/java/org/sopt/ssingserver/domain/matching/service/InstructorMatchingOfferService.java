@@ -4,7 +4,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
@@ -59,9 +61,18 @@ public class InstructorMatchingOfferService {
                 PageRequest.of(page, size)
         );
 
+        List<MatchingOffer> offerItems = matchingOffers.getContent();
+        Map<Long, List<MatchingRequestGroupItem>> groupItemsByGroupId = findGroupItemsByGroupId(offerItems);
+
         return new InstructorMatchingOffersResult(
-                matchingOffers.getContent().stream()
-                        .map(this::toItemResult)
+                offerItems.stream()
+                        .map(matchingOffer -> toItemResult(
+                                matchingOffer,
+                                groupItemsByGroupId.getOrDefault(
+                                        matchingOffer.getMatchingRequestGroup().getId(),
+                                        List.of()
+                                )
+                        ))
                         .toList(),
                 matchingOffers.getNumber(),
                 matchingOffers.getSize(),
@@ -168,9 +179,24 @@ public class InstructorMatchingOfferService {
         }
     }
 
-    private InstructorMatchingOffersResult.ItemResult toItemResult(MatchingOffer matchingOffer) {
-        List<MatchingRequestGroupItem> groupItems = matchingRequestGroupItemRepository
-                .findByMatchingRequestGroupIdOrderByIdAsc(matchingOffer.getMatchingRequestGroup().getId());
+    private Map<Long, List<MatchingRequestGroupItem>> findGroupItemsByGroupId(List<MatchingOffer> matchingOffers) {
+        List<Long> groupIds = matchingOffers.stream()
+                .map(matchingOffer -> matchingOffer.getMatchingRequestGroup().getId())
+                .distinct()
+                .toList();
+        if (groupIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return matchingRequestGroupItemRepository.findByMatchingRequestGroupIdInOrderByGroupIdAscItemIdAsc(groupIds)
+                .stream()
+                .collect(Collectors.groupingBy(item -> item.getMatchingRequestGroup().getId()));
+    }
+
+    private InstructorMatchingOffersResult.ItemResult toItemResult(
+            MatchingOffer matchingOffer,
+            List<MatchingRequestGroupItem> groupItems
+    ) {
         if (groupItems.isEmpty()) {
             throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
         }

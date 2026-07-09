@@ -18,6 +18,7 @@ public class MatchingOfferExpirationTriggerService {
 
     private static final Logger log = LoggerFactory.getLogger(MatchingOfferExpirationTriggerService.class);
     private static final String JOB_NAME = "matching-offer-expiration";
+    // TODO: 만료 대기 제안이 계속 100개를 넘으면 backlog metric 추가 후 배치 크기 증대나 다중 페이지 처리로 확장한다.
     private static final int OFFER_EXPIRATION_SCAN_BATCH_SIZE = 100;
 
     private final MatchingOfferRepository matchingOfferRepository;
