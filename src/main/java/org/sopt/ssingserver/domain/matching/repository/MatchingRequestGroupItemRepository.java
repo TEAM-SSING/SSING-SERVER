@@ -28,6 +28,21 @@ public interface MatchingRequestGroupItemRepository extends JpaRepository<Matchi
             @Param("matchingRequestGroupId") Long matchingRequestGroupId
     );
 
+    // 커밋 이후 WebSocket 제안 이벤트 payload 구성용 요청/소비자/리조트 요약 조회
+    @Query("""
+            select item
+            from MatchingRequestGroupItem item
+            join fetch item.matchingRequestGroup matchingRequestGroup
+            join fetch item.matchingRequest matchingRequest
+            join fetch matchingRequest.member
+            join fetch matchingRequest.resort
+            where matchingRequestGroup.id = :matchingRequestGroupId
+            order by item.id asc
+            """)
+    List<MatchingRequestGroupItem> findRealtimeContextByMatchingRequestGroupIdOrderByIdAsc(
+            @Param("matchingRequestGroupId") Long matchingRequestGroupId
+    );
+
     // 제안 목록 조회에서 페이지 안 그룹들의 강습 요약을 한 번에 구성하기 위한 배치 조회
     @Query("""
             select item

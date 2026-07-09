@@ -1,0 +1,15 @@
+package org.sopt.ssingserver.domain.matching.dto.realtime;
+
+public enum MatchingRealtimeEventType {
+
+    MATCHING_STATUS_CHANGED,
+    MATCHING_OFFER_RECEIVED,
+    MATCHING_OFFER_CLOSED,
+    INSTRUCTOR_ACCEPTED,
+    REQUESTER_CONFIRMATION_UPDATED,
+    PAYMENT_PENDING,
+    PAYMENT_STATUS_CHANGED,
+    MATCHING_CONFIRMED,
+    MATCHING_FAILED,
+    MATCHING_CANCELED
+}
