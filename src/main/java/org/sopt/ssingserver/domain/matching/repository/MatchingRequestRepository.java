@@ -26,6 +26,15 @@ public interface MatchingRequestRepository extends JpaRepository<MatchingRequest
             """)
     Optional<MatchingRequest> findByIdForUpdate(@Param("id") Long id);
 
+    // 커밋 이후 WebSocket 상태 변경 이벤트 수신자 식별용 요청/소비자 조회
+    @Query("""
+            select matchingRequest
+            from MatchingRequest matchingRequest
+            join fetch matchingRequest.member
+            where matchingRequest.id = :id
+            """)
+    Optional<MatchingRequest> findRealtimeStatusContextById(@Param("id") Long id);
+
     // 즉시 트리거와 스케줄러의 같은 REQUESTED 요청 동시 처리 방지용 비관적 락 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))

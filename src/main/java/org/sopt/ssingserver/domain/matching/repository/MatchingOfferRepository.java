@@ -29,6 +29,17 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
             """)
     Optional<MatchingOffer> findByIdForUpdate(@Param("id") Long id);
 
+    // 커밋 이후 WebSocket 제안 이벤트 payload 구성용 강사/그룹 요약 조회
+    @Query("""
+            select matchingOffer
+            from MatchingOffer matchingOffer
+            join fetch matchingOffer.instructorProfile instructorProfile
+            join fetch instructorProfile.member
+            join fetch matchingOffer.matchingRequestGroup
+            where matchingOffer.id = :id
+            """)
+    Optional<MatchingOffer> findRealtimeContextById(@Param("id") Long id);
+
     // 제안 목록 응답에서 그룹 id와 확정 강습 시간을 추가 lazy loading 없이 사용하기 위한 조회
     @Query(
             value = """

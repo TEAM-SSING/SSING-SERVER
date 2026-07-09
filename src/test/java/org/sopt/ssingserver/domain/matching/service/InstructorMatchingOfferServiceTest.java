@@ -3,6 +3,8 @@ package org.sopt.ssingserver.domain.matching.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -37,6 +39,11 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
+import org.sopt.ssingserver.domain.matching.event.InstructorAcceptedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
+import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
@@ -73,6 +80,9 @@ class InstructorMatchingOfferServiceTest {
     @Mock
     private MatchingSearchService matchingSearchService;
 
+    @Mock
+    private MatchingEventPublisher matchingEventPublisher;
+
     @Test
     void respond는_강사_수락시_제안과_그룹과_요청을_최종확인_대기로_전환한다() {
         InstructorMatchingOfferService service = createService();
@@ -102,6 +112,11 @@ class InstructorMatchingOfferServiceTest {
         assertThat(matchingRequest.getMatchingOffer()).isSameAs(offer);
         assertThat(matchingRequest.getExpiresAt()).isNull();
         verifyNoInteractions(matchingSearchService);
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof InstructorAcceptedEvent acceptedEvent
+                        && acceptedEvent.matchingRequestGroupId().equals(20L)
+                        && acceptedEvent.matchingOfferId().equals(50L)
+        ));
     }
 
     @Test
@@ -129,6 +144,11 @@ class InstructorMatchingOfferServiceTest {
         assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.REJECTED);
         assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.GROUPED);
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof MatchingOfferClosedEvent closedEvent
+                        && closedEvent.matchingOfferId().equals(50L)
+                        && closedEvent.closedReason() == MatchingOfferClosedReason.REJECTED
+        ));
     }
 
     @Test
@@ -184,6 +204,12 @@ class InstructorMatchingOfferServiceTest {
         assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.CANCELED);
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         assertThat(matchingRequest.getStatusReason()).isSameAs(MatchingRequestStatusReason.INSTRUCTOR_REJECTED);
+        verify(matchingEventPublisher, times(2)).publish(any());
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof MatchingRequestStatusChangedEvent statusEvent
+                        && statusEvent.matchingRequestId().equals(30L)
+                        && statusEvent.matchingStatus() == org.sopt.ssingserver.domain.matching.enums.MatchingStatus.REMATCHING
+        ));
     }
 
     @Test
@@ -299,6 +325,8 @@ class InstructorMatchingOfferServiceTest {
                 matchingRequestGroupItemRepository,
                 matchingSearchService,
                 new MatchingTimeoutPolicy(),
+                matchingEventPublisher,
+                new MatchingAfterCommitExecutor(),
                 FIXED_CLOCK
         );
     }

@@ -3,6 +3,8 @@ package org.sopt.ssingserver.domain.matching.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -43,6 +45,13 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
+import org.sopt.ssingserver.domain.matching.event.MatchingConfirmedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
+import org.sopt.ssingserver.domain.matching.event.PaymentPendingEvent;
+import org.sopt.ssingserver.domain.matching.event.PaymentStatusChangedEvent;
+import org.sopt.ssingserver.domain.matching.event.RequesterConfirmationUpdatedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipantRepository;
@@ -97,6 +106,9 @@ class ConsumerMatchingProgressServiceTest {
     @Mock
     private LessonParticipantRepository lessonParticipantRepository;
 
+    @Mock
+    private MatchingEventPublisher matchingEventPublisher;
+
     @Test
     void respond는_소비자_수락시_요청가격스냅샷과_PENDING_결제를_생성한다() {
         ConsumerMatchingProgressService service = createService();
@@ -146,6 +158,11 @@ class ConsumerMatchingProgressServiceTest {
         assertThat(payment.getStatus()).isSameAs(MatchingRequestPaymentStatus.PENDING);
         assertThat(payment.getPaymentRequestedAt()).isEqualTo(FIXED_CLOCK.instant());
         assertThat(payment.getPaymentExpiresAt()).isNull();
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof PaymentPendingEvent paymentPendingEvent
+                        && paymentPendingEvent.matchingRequestGroupId().equals(20L)
+                        && paymentPendingEvent.matchingOfferId().equals(50L)
+        ));
     }
 
     @Test
@@ -170,6 +187,43 @@ class ConsumerMatchingProgressServiceTest {
                 .isSameAs(MatchingRequestStatusReason.CONSUMER_REJECTED_INSTRUCTOR);
         verifyNoInteractions(matchingOfferPriceSnapshotRepository);
         verifyNoInteractions(matchingRequestPriceSnapshotRepository);
+        verifyNoInteractions(matchingRequestPaymentRepository);
+        verify(matchingEventPublisher, times(2)).publish(any());
+        verify(matchingEventPublisher).publish(argThat(event -> event instanceof MatchingOfferClosedEvent));
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof MatchingRequestStatusChangedEvent statusEvent
+                        && statusEvent.matchingStatus() == MatchingStatus.REMATCHING
+        ));
+    }
+
+    @Test
+    void respond는_다인그룹의_일부_수락이면_확정진행_이벤트를_발행한다() {
+        ConsumerMatchingProgressService service = createService();
+        MatchingFixture fixture = matchedFixture();
+        MatchingRequest secondRequest = matchingRequest(11L, member(3L, MemberRole.CONSUMER));
+        secondRequest.markMatched(fixture.offer());
+        MatchingRequestGroupItem secondItem = MatchingRequestGroupItem.createNotRequested(
+                secondRequest,
+                fixture.group()
+        );
+        ReflectionTestUtils.setField(secondItem, "id", 31L);
+        secondItem.requestConfirmation();
+        givenProgressContext(fixture, List.of(fixture.item(), secondItem));
+
+        ConsumerMatchingConfirmationResult result = service.respond(
+                1L,
+                10L,
+                MatchingConfirmationDecision.ACCEPTED
+        );
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_OTHER_CONFIRMATIONS);
+        assertThat(result.confirmedCount()).isEqualTo(1);
+        assertThat(result.requiredCount()).isEqualTo(2);
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof RequesterConfirmationUpdatedEvent updatedEvent
+                        && updatedEvent.acceptedRequesterCount() == 1
+                        && updatedEvent.totalRequesterCount() == 2
+        ));
         verifyNoInteractions(matchingRequestPaymentRepository);
     }
 
@@ -216,6 +270,11 @@ class ConsumerMatchingProgressServiceTest {
         assertThat(lesson.getConfirmedAt()).isEqualTo(FIXED_CLOCK.instant());
         assertThat(lesson.getScheduledAt()).isEqualTo(FIXED_CLOCK.instant());
         assertThat(lesson.getStatus()).isSameAs(LessonStatus.CONFIRMED);
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof MatchingConfirmedEvent confirmedEvent
+                        && confirmedEvent.lessonId().equals(110L)
+                        && confirmedEvent.matchingOfferId().equals(50L)
+        ));
 
         ArgumentCaptor<Iterable<LessonParticipant>> lessonParticipantsCaptor = ArgumentCaptor.forClass(Iterable.class);
         verify(lessonParticipantRepository).saveAll(lessonParticipantsCaptor.capture());
@@ -225,6 +284,49 @@ class ConsumerMatchingProgressServiceTest {
         assertThat(lessonParticipants)
                 .extracting(LessonParticipant::getMatchingRequestParticipant)
                 .containsExactly(firstParticipant, secondParticipant);
+    }
+
+    @Test
+    void completePayment는_다인그룹의_일부_결제이면_결제진행_이벤트를_발행한다() {
+        ConsumerMatchingProgressService service = createService();
+        MatchingFixture fixture = paymentPendingFixture();
+        MatchingRequestPriceSnapshot firstSnapshot = requestPriceSnapshot(80L, fixture.matchingRequest(), 40_000);
+        MatchingRequestPayment firstPayment = pendingPayment(
+                90L,
+                fixture.matchingRequest(),
+                firstSnapshot,
+                fixture.offer()
+        );
+        MatchingRequest secondRequest = matchingRequest(11L, member(3L, MemberRole.CONSUMER));
+        secondRequest.markMatched(fixture.offer());
+        MatchingRequestGroupItem secondItem = MatchingRequestGroupItem.createNotRequested(
+                secondRequest,
+                fixture.group()
+        );
+        ReflectionTestUtils.setField(secondItem, "id", 31L);
+        secondItem.requestConfirmation();
+        secondItem.accept(FIXED_CLOCK.instant().minusSeconds(30));
+        MatchingRequestPriceSnapshot secondSnapshot = requestPriceSnapshot(81L, secondRequest, 40_000);
+        MatchingRequestPayment secondPayment = pendingPayment(91L, secondRequest, secondSnapshot, fixture.offer());
+        givenProgressContext(fixture, List.of(fixture.item(), secondItem));
+        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdAndStatusOrderByIdDesc(
+                10L,
+                MatchingRequestPaymentStatus.PENDING
+        )).thenReturn(Optional.of(firstPayment));
+        when(matchingRequestPaymentRepository.findByMatchingOfferIdForUpdate(50L))
+                .thenReturn(List.of(firstPayment, secondPayment));
+
+        ConsumerMatchingPaymentResult result = service.completePayment(1L, 10L);
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_OTHER_PAYMENTS);
+        assertThat(result.paidCount()).isEqualTo(1);
+        assertThat(result.requiredCount()).isEqualTo(2);
+        verify(matchingEventPublisher).publish(argThat(event ->
+                event instanceof PaymentStatusChangedEvent changedEvent
+                        && changedEvent.paidRequesterCount() == 1
+                        && changedEvent.totalRequesterCount() == 2
+        ));
+        verifyNoInteractions(lessonRepository, lessonParticipantRepository);
     }
 
     @Test
@@ -287,6 +389,8 @@ class ConsumerMatchingProgressServiceTest {
                 matchingRequestParticipantRepository,
                 lessonRepository,
                 lessonParticipantRepository,
+                matchingEventPublisher,
+                new MatchingAfterCommitExecutor(),
                 FIXED_CLOCK
         );
     }
@@ -307,12 +411,19 @@ class ConsumerMatchingProgressServiceTest {
     }
 
     private void givenProgressContext(MatchingFixture fixture) {
+        givenProgressContext(fixture, List.of(fixture.item()));
+    }
+
+    private void givenProgressContext(
+            MatchingFixture fixture,
+            List<MatchingRequestGroupItem> groupItems
+    ) {
         when(matchingRequestRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(fixture.matchingRequest()));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(fixture.item()));
         when(matchingRequestGroupRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(fixture.group()));
         when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdForUpdate(20L))
-                .thenReturn(List.of(fixture.item()));
+                .thenReturn(groupItems);
     }
 
     private MatchingFixture matchedFixture() {
