@@ -23,8 +23,6 @@ import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationActor;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationStatus;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.error.LessonErrorCode;
-import org.sopt.ssingserver.domain.lesson.repository.LessonCancellationRepository;
-import org.sopt.ssingserver.domain.lesson.repository.LessonStartConfirmationRepository;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
@@ -36,8 +34,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsumerLessonDetailResponseMapper {
 
-    private final LessonStartConfirmationRepository lessonStartConfirmationRepository;
-    private final LessonCancellationRepository lessonCancellationRepository;
     private final Clock clock;
 
     public ConsumerLessonDetailResponse toResponse(
@@ -45,15 +41,18 @@ public class ConsumerLessonDetailResponseMapper {
             List<LessonParticipant> participants,
             Long myMatchingRequestId,
             int myTeamLessonPrice,
-            Optional<LessonCancellation> myCancellation
+            List<LessonStartConfirmation> confirmations,
+            Optional<LessonCancellation> myCancellation,
+            Optional<LessonCancellation> instructorCancellation
     ) {
-        // 취소 이력이 있으면 강습 상태를 CANCELED로 보여줌
         LessonStatus responseStatus = myCancellation.isPresent() ? LessonStatus.CANCELED : lesson.getStatus();
         return switch (responseStatus) {
-            case CONFIRMED -> confirmedResponse(lesson, participants, myMatchingRequestId, myTeamLessonPrice);
+            case CONFIRMED -> confirmedResponse(
+                    lesson, participants, myMatchingRequestId, myTeamLessonPrice, confirmations);
             case IN_PROGRESS -> inProgressResponse(lesson, participants, myTeamLessonPrice);
             case COMPLETED -> completedResponse(lesson, participants, myTeamLessonPrice);
-            case CANCELED -> canceledResponse(lesson, participants, myTeamLessonPrice, myCancellation);
+            case CANCELED -> canceledResponse(
+                    lesson, participants, myTeamLessonPrice, myCancellation, instructorCancellation);
         };
     }
 
@@ -61,10 +60,10 @@ public class ConsumerLessonDetailResponseMapper {
             Lesson lesson,
             List<LessonParticipant> participants,
             Long myMatchingRequestId,
-            int myTeamLessonPrice
+            int myTeamLessonPrice,
+            List<LessonStartConfirmation> confirmations
     ) {
         // 강습 시작 전 강사와 각 팀이 준비 완료를 눌렀는지 확인
-        List<LessonStartConfirmation> confirmations = lessonStartConfirmationRepository.findByLessonId(lesson.getId());
         Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId = confirmedConsumerConfirmationsByRequestId(
                 confirmations
         );
@@ -150,14 +149,11 @@ public class ConsumerLessonDetailResponseMapper {
             Lesson lesson,
             List<LessonParticipant> participants,
             int myTeamLessonPrice,
-            Optional<LessonCancellation> myCancellation
+            Optional<LessonCancellation> myCancellation,
+            Optional<LessonCancellation> instructorCancellation
     ) {
         // 내 팀 취소와 강사 취소가 모두 있을 수 있으므로 가장 최근 취소 정보를 보여줌
         // TODO: 취소 및 환불 정책 결정 후 수정 필요
-        Optional<LessonCancellation> instructorCancellation = lessonCancellationRepository
-                .findByLessonIdAndCanceledBy(lesson.getId(), LessonCancellationActor.INSTRUCTOR)
-                .stream()
-                .max(Comparator.comparing(LessonCancellation::getCanceledAt));
         LessonCancellation cancellation = Stream.of(myCancellation, instructorCancellation)
                 .flatMap(Optional::stream)
                 .max(Comparator.comparing(LessonCancellation::getCanceledAt))

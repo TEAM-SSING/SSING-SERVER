@@ -288,15 +288,12 @@ class LessonDetailServiceTest {
     }
 
     private LessonDetailService createService() {
-        ConsumerLessonDetailResponseMapper responseMapper = new ConsumerLessonDetailResponseMapper(
-                lessonStartConfirmationRepository,
-                lessonCancellationRepository,
-                FIXED_CLOCK
-        );
+        ConsumerLessonDetailResponseMapper responseMapper = new ConsumerLessonDetailResponseMapper(FIXED_CLOCK);
         return new LessonDetailService(
                 lessonRepository,
                 lessonParticipantRepository,
                 lessonCancellationRepository,
+                lessonStartConfirmationRepository,
                 matchingRequestPaymentRepository,
                 responseMapper
         );

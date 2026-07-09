@@ -8,11 +8,15 @@ import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailRespo
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.entity.LessonCancellation;
 import org.sopt.ssingserver.domain.lesson.entity.LessonParticipant;
+import org.sopt.ssingserver.domain.lesson.entity.LessonStartConfirmation;
+import org.sopt.ssingserver.domain.lesson.enums.LessonCancellationActor;
+import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.error.LessonErrorCode;
 import org.sopt.ssingserver.domain.lesson.mapper.ConsumerLessonDetailResponseMapper;
 import org.sopt.ssingserver.domain.lesson.repository.LessonCancellationRepository;
 import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
+import org.sopt.ssingserver.domain.lesson.repository.LessonStartConfirmationRepository;
 import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -26,6 +30,7 @@ public class LessonDetailService {
     private final LessonRepository lessonRepository;
     private final LessonParticipantRepository lessonParticipantRepository;
     private final LessonCancellationRepository lessonCancellationRepository;
+    private final LessonStartConfirmationRepository lessonStartConfirmationRepository;
     private final MatchingRequestPaymentRepository matchingRequestPaymentRepository;
     private final ConsumerLessonDetailResponseMapper responseMapper;
 
@@ -57,13 +62,28 @@ public class LessonDetailService {
                 .findByLessonIdAndMatchingRequestId(lessonId, myMatchingRequestId)
                 .stream()
                 .max(Comparator.comparing(LessonCancellation::getCanceledAt));
+        LessonStatus responseStatus = myCancellation.isPresent() ? LessonStatus.CANCELED : lesson.getStatus();
+
+        // 시작 전 상태에서만 강사와 각 팀의 준비 완료 이력을 조회
+        List<LessonStartConfirmation> confirmations = responseStatus == LessonStatus.CONFIRMED
+                ? lessonStartConfirmationRepository.findByLessonId(lessonId)
+                : List.of();
+
+        // 취소 상태에서만 강사 취소 이력을 조회
+        Optional<LessonCancellation> instructorCancellation = responseStatus == LessonStatus.CANCELED
+                ? lessonCancellationRepository.findByLessonIdAndCanceledBy(lessonId, LessonCancellationActor.INSTRUCTOR)
+                        .stream()
+                        .max(Comparator.comparing(LessonCancellation::getCanceledAt))
+                : Optional.empty();
 
         return responseMapper.toResponse(
                 lesson,
                 participants,
                 myMatchingRequestId,
                 myTeamLessonPrice,
-                myCancellation
+                confirmations,
+                myCancellation,
+                instructorCancellation
         );
     }
 }
