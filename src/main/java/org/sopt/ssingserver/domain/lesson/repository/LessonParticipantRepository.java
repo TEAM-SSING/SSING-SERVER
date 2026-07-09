@@ -35,4 +35,29 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
             @Param("statuses") Collection<LessonStatus> statuses
     );
 
+    // 강습 상세에 표시할 전체 강습생을 팀별 순서로 조회
+    @Query("""
+            select lessonParticipant
+            from LessonParticipant lessonParticipant
+            join fetch lessonParticipant.matchingRequest matchingRequest
+            join fetch matchingRequest.member
+            where lessonParticipant.lesson.id = :lessonId
+            order by matchingRequest.id asc, lessonParticipant.id asc
+            """)
+    List<LessonParticipant> findDetailParticipantsByLessonId(@Param("lessonId") Long lessonId);
+
+    // 로그인한 회원이 해당 강습에 참여한 팀의 매칭 요청 ID를 조회
+    @Query("""
+            select distinct matchingRequest.id
+            from LessonParticipant lessonParticipant
+            join lessonParticipant.matchingRequest matchingRequest
+            join matchingRequest.member member
+            where lessonParticipant.lesson.id = :lessonId
+              and member.id = :memberId
+            """)
+    List<Long> findMatchingRequestIdsByLessonIdAndMemberId(
+            @Param("lessonId") Long lessonId,
+            @Param("memberId") Long memberId
+    );
+
 }

@@ -17,6 +17,11 @@ public interface MatchingRequestPaymentRepository extends JpaRepository<Matching
 
     Optional<MatchingRequestPayment> findFirstByMatchingRequestIdOrderByIdDesc(Long matchingRequestId);
 
+    Optional<MatchingRequestPayment> findFirstByMatchingRequestIdAndMatchingOfferIdOrderByIdDesc(
+            Long matchingRequestId,
+            Long matchingOfferId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
     Optional<MatchingRequestPayment> findFirstByMatchingRequestIdAndStatusOrderByIdDesc(

@@ -8,6 +8,8 @@ import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRe
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
+import org.sopt.ssingserver.domain.lesson.repository.LessonCancellationRepository;
+import org.sopt.ssingserver.domain.lesson.repository.LessonStartConfirmationRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
@@ -56,6 +58,12 @@ class SsingServerApplicationTests {
 
 	@MockitoBean
 	private LessonParticipantRepository lessonParticipantRepository;
+
+	@MockitoBean
+	private LessonStartConfirmationRepository lessonStartConfirmationRepository;
+
+	@MockitoBean
+	private LessonCancellationRepository lessonCancellationRepository;
 
 	@MockitoBean
 	private MatchingRequestRepository matchingRequestRepository;
