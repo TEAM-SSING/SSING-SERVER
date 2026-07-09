@@ -17,8 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse;
-import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse.LessonCardResponse;
 import org.sopt.ssingserver.domain.home.dto.response.InstructorHomeResponse;
 import org.sopt.ssingserver.domain.home.enums.InstructorHomeDisplayStatus;
 import org.sopt.ssingserver.domain.home.error.HomeErrorCode;
@@ -29,9 +27,7 @@ import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSetti
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
-import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
-import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
@@ -53,7 +49,7 @@ import org.sopt.ssingserver.global.error.BusinessException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
-class HomeServiceTest {
+class InstructorHomeServiceTest {
 
     private static final Clock FIXED_CLOCK = Clock.fixed(
             Instant.parse("2026-07-09T00:00:00Z"),
@@ -63,9 +59,6 @@ class HomeServiceTest {
             LessonStatus.CONFIRMED,
             LessonStatus.IN_PROGRESS
     );
-
-    @Mock
-    private LessonParticipantRepository lessonParticipantRepository;
 
     @Mock
     private LessonRepository lessonRepository;
@@ -89,95 +82,8 @@ class HomeServiceTest {
     private ReviewRepository reviewRepository;
 
     @Test
-    void getConsumerHome은_예정된_강습을_D_day와_함께_반환한다() {
-        HomeService service = createService();
-        HomeLessonCardProjection lessonCard = lessonCard(
-                1L,
-                LessonStatus.CONFIRMED,
-                Instant.parse("2026-07-11T10:00:00Z"),
-                4,
-                "김철수"
-        );
-        when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
-                .thenReturn(List.of(lessonCard));
-
-        ConsumerHomeResponse response = service.getConsumerHome(1L);
-
-        assertThat(response.hasUnreadNotification()).isFalse();
-        assertThat(response.lessonCards()).hasSize(1);
-        LessonCardResponse lesson = response.lessonCards().get(0);
-        assertThat(lesson.lessonId()).isEqualTo(1L);
-        assertThat(lesson.displayStatus()).isSameAs(LessonStatus.CONFIRMED);
-        assertThat(lesson.remainingDays()).isEqualTo(2);
-        assertThat(lesson.title()).isEqualTo("김철수님 팀 4명");
-        assertThat(lesson.scheduledAt()).isEqualTo(OffsetDateTime.of(2026, 7, 11, 19, 0, 0, 0, ZoneOffset.ofHours(9)));
-        assertThat(lesson.resort().code()).isEqualTo("HIGH1");
-        assertThat(lesson.resort().displayName()).isEqualTo("하이원");
-    }
-
-    @Test
-    void getConsumerHome은_진행중인_강습의_remainingDays를_0으로_고정한다() {
-        HomeService service = createService();
-        HomeLessonCardProjection lessonCard = lessonCard(
-                2L,
-                LessonStatus.IN_PROGRESS,
-                Instant.parse("2026-07-09T05:00:00Z"),
-                2,
-                "박영희"
-        );
-        when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
-                .thenReturn(List.of(lessonCard));
-
-        ConsumerHomeResponse response = service.getConsumerHome(1L);
-
-        LessonCardResponse lesson = response.lessonCards().get(0);
-        assertThat(lesson.displayStatus()).isSameAs(LessonStatus.IN_PROGRESS);
-        assertThat(lesson.remainingDays()).isZero();
-        assertThat(lesson.title()).isEqualTo("박영희님 팀 2명");
-    }
-
-    @Test
-    void getConsumerHome은_조회된_강습_카드를_순서대로_반환한다() {
-        HomeService service = createService();
-        HomeLessonCardProjection firstLessonCard = lessonCard(
-                1L,
-                LessonStatus.CONFIRMED,
-                Instant.parse("2026-07-11T10:00:00Z"),
-                4,
-                "김철수"
-        );
-        HomeLessonCardProjection secondLessonCard = lessonCard(
-                2L,
-                LessonStatus.CONFIRMED,
-                Instant.parse("2026-07-12T10:00:00Z"),
-                1,
-                "박영희"
-        );
-        when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
-                .thenReturn(List.of(firstLessonCard, secondLessonCard));
-
-        ConsumerHomeResponse response = service.getConsumerHome(1L);
-
-        assertThat(response.lessonCards())
-                .extracting(LessonCardResponse::lessonId)
-                .containsExactly(1L, 2L);
-    }
-
-    @Test
-    void getConsumerHome은_예약된_강습이_없으면_빈_배열을_반환한다() {
-        HomeService service = createService();
-        when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
-                .thenReturn(List.of());
-
-        ConsumerHomeResponse response = service.getConsumerHome(1L);
-
-        assertThat(response.lessonCards()).isEmpty();
-        assertThat(response.hasUnreadNotification()).isFalse();
-    }
-
-    @Test
     void getInstructorHome은_리뷰가_없으면_리뷰_요약을_빈_객체로_반환한다() {
-        HomeService service = createService();
+        InstructorHomeService service = createService();
         when(instructorProfileRepository.findByMemberId(1L))
                 .thenReturn(Optional.of(instructorProfile()));
         stubReviewSummary(null);
@@ -208,7 +114,7 @@ class HomeServiceTest {
 
     @Test
     void getInstructorHome은_리뷰가_있으면_평균평점_강사레벨_경험치를_반환한다() {
-        HomeService service = createService();
+        InstructorHomeService service = createService();
         InstructorProfile instructorProfile = instructorProfile(4, 88);
         when(instructorProfileRepository.findByMemberId(1L))
                 .thenReturn(Optional.of(instructorProfile));
@@ -237,7 +143,7 @@ class HomeServiceTest {
 
     @Test
     void getInstructorHome은_강사_제안_상태를_홈_displayStatus로_변환한다() {
-        HomeService service = createService();
+        InstructorHomeService service = createService();
         Resort resort = resortDisplayOnly();
         MatchingRequest offeredRequest = matchingRequest(10L, MatchingRequestStatus.GROUPED, resort, 3, "김철수");
         MatchingRequest acceptedRequest = matchingRequest(11L, MatchingRequestStatus.MATCHED, resort, 2, "박영희");
@@ -288,7 +194,7 @@ class HomeServiceTest {
 
     @Test
     void getInstructorHome은_강사가_즉시노출_중이면_MATCHING_카드로_반환한다() {
-        HomeService service = createService();
+        InstructorHomeService service = createService();
         Resort resort = resortWithDetails();
         InstructorProfile instructorProfile = instructorProfileWithResort(resort);
         InstructorMatchingSetting matchingSetting = instructorMatchingSetting(true, Instant.parse("2026-07-09T00:30:00Z"));
@@ -326,7 +232,7 @@ class HomeServiceTest {
 
     @Test
     void getInstructorHome은_제안_카드가_있으면_즉시노출_MATCHING_카드를_함께_반환하지_않는다() {
-        HomeService service = createService();
+        InstructorHomeService service = createService();
         Resort resort = resortDisplayOnly();
         MatchingRequest matchingRequest = matchingRequest(10L, MatchingRequestStatus.GROUPED, resort, 3, "김철수");
         MatchingRequestGroup matchingRequestGroup = matchingRequestGroup(20L, MatchingRequestGroupStatus.EXPOSED);
@@ -364,7 +270,7 @@ class HomeServiceTest {
 
     @Test
     void getInstructorHome은_강사에게_배정된_확정_강습을_카드로_반환한다() {
-        HomeService service = createService();
+        InstructorHomeService service = createService();
         Resort resort = resortDisplayOnly();
         MatchingRequest matchingRequest = matchingRequestWithRequesterNickname("김철수");
         MatchingRequestGroup matchingRequestGroup = matchingRequestGroupWithId(20L);
@@ -416,7 +322,7 @@ class HomeServiceTest {
 
     @Test
     void getInstructorHome은_그룹_item이_없으면_명확한_홈_예외를_던진다() {
-        HomeService service = createService();
+        InstructorHomeService service = createService();
         MatchingRequestGroup matchingRequestGroup = matchingRequestGroupWithId(20L);
         MatchingOffer matchingOffer = matchingOfferWithGroup(matchingRequestGroup);
         when(instructorProfileRepository.findByMemberId(1L))
@@ -441,9 +347,8 @@ class HomeServiceTest {
                         .isSameAs(HomeErrorCode.INSTRUCTOR_HOME_GROUP_ITEM_NOT_FOUND));
     }
 
-    private HomeService createService() {
-        return new HomeService(
-                lessonParticipantRepository,
+    private InstructorHomeService createService() {
+        return new InstructorHomeService(
                 lessonRepository,
                 matchingOfferRepository,
                 matchingRequestGroupItemRepository,
@@ -621,69 +526,5 @@ class HomeServiceTest {
 
     private void stubReviewSummary(Double averageRating) {
         when(reviewRepository.findAverageRatingByInstructorProfileId(1L)).thenReturn(averageRating);
-    }
-
-    private HomeLessonCardProjection lessonCard(
-            Long lessonId,
-            LessonStatus lessonStatus,
-            Instant scheduledAt,
-            int totalHeadcount,
-            String requesterNickname
-    ) {
-        return new TestHomeLessonCardProjection(
-                lessonId,
-                lessonStatus,
-                scheduledAt,
-                requesterNickname,
-                totalHeadcount,
-                "HIGH1",
-                "하이원"
-        );
-    }
-
-    private record TestHomeLessonCardProjection(
-            Long lessonId,
-            LessonStatus lessonStatus,
-            Instant scheduledAt,
-            String requesterNickname,
-            int totalHeadcount,
-            String resortCode,
-            String resortDisplayName
-    ) implements HomeLessonCardProjection {
-
-        @Override
-        public Long getLessonId() {
-            return lessonId;
-        }
-
-        @Override
-        public LessonStatus getLessonStatus() {
-            return lessonStatus;
-        }
-
-        @Override
-        public Instant getScheduledAt() {
-            return scheduledAt;
-        }
-
-        @Override
-        public String getRequesterNickname() {
-            return requesterNickname;
-        }
-
-        @Override
-        public int getTotalHeadcount() {
-            return totalHeadcount;
-        }
-
-        @Override
-        public String getResortCode() {
-            return resortCode;
-        }
-
-        @Override
-        public String getResortDisplayName() {
-            return resortDisplayName;
-        }
     }
 }

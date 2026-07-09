@@ -4,7 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.home.controller.docs.HomeApiDocs;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse;
 import org.sopt.ssingserver.domain.home.dto.response.InstructorHomeResponse;
-import org.sopt.ssingserver.domain.home.service.HomeService;
+import org.sopt.ssingserver.domain.home.service.ConsumerHomeService;
+import org.sopt.ssingserver.domain.home.service.InstructorHomeService;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.response.CommonSuccessCode;
 import org.sopt.ssingserver.global.response.SuccessResponseFactory;
@@ -21,13 +22,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class HomeController implements HomeApiDocs {
 
-    private final HomeService homeService;
+    private final ConsumerHomeService consumerHomeService;
+    private final InstructorHomeService instructorHomeService;
 
     @Override
     @RequireAccess(AccessPolicy.CONSUMER)
     @GetMapping("/consumer/home")
     public ResponseEntity<BaseResponse<ConsumerHomeResponse>> getConsumerHome(CurrentMember currentMember) {
-        ConsumerHomeResponse response = homeService.getConsumerHome(currentMember.memberId());
+        ConsumerHomeResponse response = consumerHomeService.getConsumerHome(currentMember.memberId());
         return SuccessResponseFactory.success(CommonSuccessCode.SUCCESS, response);
     }
 
@@ -35,7 +37,7 @@ public class HomeController implements HomeApiDocs {
     @RequireAccess(AccessPolicy.APPROVED_INSTRUCTOR)
     @GetMapping("/instructor/home")
     public ResponseEntity<BaseResponse<InstructorHomeResponse>> getInstructorHome(CurrentMember currentMember) {
-        InstructorHomeResponse response = homeService.getInstructorHome(currentMember.memberId());
+        InstructorHomeResponse response = instructorHomeService.getInstructorHome(currentMember.memberId());
         return SuccessResponseFactory.success(CommonSuccessCode.SUCCESS, response);
     }
 }

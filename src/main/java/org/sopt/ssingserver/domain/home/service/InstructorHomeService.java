@@ -10,8 +10,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse;
-import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse.LessonCardResponse;
 import org.sopt.ssingserver.domain.home.dto.response.InstructorHomeResponse;
 import org.sopt.ssingserver.domain.home.enums.InstructorHomeDisplayStatus;
 import org.sopt.ssingserver.domain.home.error.HomeErrorCode;
@@ -21,9 +19,7 @@ import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSetti
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
-import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
-import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
@@ -46,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class HomeService {
+public class InstructorHomeService {
 
     private static final List<LessonStatus> UPCOMING_LESSON_STATUSES = List.of(
             LessonStatus.CONFIRMED,
@@ -56,7 +52,7 @@ public class HomeService {
             MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
             MatchingRequestGroupStatus.PAYMENT_PENDING
     );
-    private final LessonParticipantRepository lessonParticipantRepository;
+
     private final LessonRepository lessonRepository;
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
@@ -66,27 +62,6 @@ public class HomeService {
     private final ReviewRepository reviewRepository;
     private final MatchingStatusResolver matchingStatusResolver;
     private final Clock clock;
-
-    // 소비자 홈에 표시할 예약/진행 강습 카드 조회함
-    @Transactional(readOnly = true)
-    public ConsumerHomeResponse getConsumerHome(Long memberId) {
-        List<HomeLessonCardProjection> lessonCards = lessonParticipantRepository
-                .findHomeLessonCardsByMemberIdAndLessonStatusIn(memberId, UPCOMING_LESSON_STATUSES);
-
-        Instant now = clock.instant();
-        List<LessonCardResponse> lessonCardResponses = lessonCards.stream()
-                .map(lessonCard -> LessonCardResponse.from(
-                        lessonCard,
-                        resolveRemainingDays(lessonCard.getLessonStatus(), lessonCard.getScheduledAt(), now),
-                        resolveTitle(lessonCard)
-                ))
-                .toList();
-
-        // TODO: 알림 읽음 여부 정책 확정 후 실제 조회로 교체함
-        boolean hasUnreadNotification = false;
-
-        return ConsumerHomeResponse.from(lessonCardResponses, hasUnreadNotification);
-    }
 
     // 강사 홈에 표시할 매칭중, 제안, 예약/진행 강습 카드 구성함
     @Transactional(readOnly = true)
@@ -334,11 +309,6 @@ public class HomeService {
         LocalDate today = now.atZone(AppZoneId.SEOUL).toLocalDate();
         LocalDate scheduledDate = scheduledAt.atZone(AppZoneId.SEOUL).toLocalDate();
         return (int) Math.max(0, ChronoUnit.DAYS.between(today, scheduledDate));
-    }
-
-    // 소비자 홈 카드 제목을 대표 소비자 닉네임과 전체 인원으로 생성함
-    private String resolveTitle(HomeLessonCardProjection lessonCard) {
-        return lessonCard.getRequesterNickname() + "님 팀 " + lessonCard.getTotalHeadcount() + "명";
     }
 
     // 강사 홈 매칭/강습 카드 제목을 대표 소비자 닉네임과 전체 인원으로 생성함
