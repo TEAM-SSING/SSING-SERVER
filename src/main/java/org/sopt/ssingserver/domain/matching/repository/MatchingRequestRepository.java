@@ -51,4 +51,17 @@ public interface MatchingRequestRepository extends JpaRepository<MatchingRequest
             @Param("status") MatchingRequestStatus status,
             Pageable pageable
     );
+
+    // 강사 홈 상단에 표시할 리조트별 매칭 중 소비자 수 합산
+    @Query("""
+            select coalesce(sum(matchingRequest.headcount), 0)
+            from MatchingRequest matchingRequest
+            where matchingRequest.resort.id = :resortId
+              and matchingRequest.status = :status
+            """)
+    long sumHeadcountByResortIdAndStatus(
+            @Param("resortId") Long resortId,
+            @Param("status") MatchingRequestStatus status
+    );
+
 }

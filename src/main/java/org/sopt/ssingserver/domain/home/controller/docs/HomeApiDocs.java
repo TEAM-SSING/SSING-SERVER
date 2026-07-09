@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse;
+import org.sopt.ssingserver.domain.home.dto.response.InstructorHomeResponse;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,18 @@ public interface HomeApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "회원 홈화면 조회 성공")
-    ResponseEntity<BaseResponse<ConsumerHomeResponse>> getHome(
+    ResponseEntity<BaseResponse<ConsumerHomeResponse>> getConsumerHome(
+            @Parameter(hidden = true)
+            CurrentMember currentMember
+    );
+
+    @Operation(
+            summary = "강사 홈 화면 조회",
+            description = "강사 앱 홈화면에 표시할 매칭/강습 정보를 조회합니다.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponse(responseCode = "200", description = "강사 홈화면 조회 성공")
+    ResponseEntity<BaseResponse<InstructorHomeResponse>> getInstructorHome(
             @Parameter(hidden = true)
             CurrentMember currentMember
     );

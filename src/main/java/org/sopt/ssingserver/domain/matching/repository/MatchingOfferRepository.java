@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -125,5 +126,27 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
     List<MatchingOffer> findByMatchingRequestGroupIdAndStatusIn(
             @Param("matchingRequestGroupId") Long matchingRequestGroupId,
             @Param("statuses") Collection<MatchingOfferStatus> statuses
+    );
+
+    // 강사 홈에 노출할 응답 대기/수락 이후 진행 중 제안 조회
+    @Query("""
+            select matchingOffer
+            from MatchingOffer matchingOffer
+            join fetch matchingOffer.matchingRequestGroup matchingRequestGroup
+            where matchingOffer.instructorProfile.id = :instructorProfileId
+              and (
+                  matchingOffer.status = :offeredStatus
+                  or (
+                      matchingOffer.status = :acceptedStatus
+                      and matchingRequestGroup.status in :acceptedGroupStatuses
+                  )
+              )
+            order by matchingOffer.exposedAt desc, matchingOffer.id desc
+            """)
+    List<MatchingOffer> findInstructorHomeOffers(
+            @Param("instructorProfileId") Long instructorProfileId,
+            @Param("offeredStatus") MatchingOfferStatus offeredStatus,
+            @Param("acceptedStatus") MatchingOfferStatus acceptedStatus,
+            @Param("acceptedGroupStatuses") Collection<MatchingRequestGroupStatus> acceptedGroupStatuses
     );
 }

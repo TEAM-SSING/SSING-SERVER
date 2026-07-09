@@ -67,6 +67,12 @@ public class InstructorProfile extends BaseTimeEntity {
     @Column(nullable = false)
     private LocalDate careerStartDate;
 
+    @Column(nullable = false)
+    private int level = 1;
+
+    @Column(nullable = false)
+    private int experience = 0;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private InstructorApprovalStatus approvalStatus;
