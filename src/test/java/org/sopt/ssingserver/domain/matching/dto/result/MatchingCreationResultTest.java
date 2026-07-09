@@ -3,7 +3,6 @@ package org.sopt.ssingserver.domain.matching.dto.result;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Constructor;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
@@ -18,8 +17,6 @@ import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class MatchingCreationResultTest {
-
-    private static final Instant EXPIRES_AT = Instant.parse("2026-07-07T00:05:00Z");
 
     @Test
     void searching은_무제한탐색_요청의_최초응답에서_만료시각을_비운다() {
@@ -38,12 +35,12 @@ class MatchingCreationResultTest {
     }
 
     @Test
-    void searching은_fallback_만료시각이_있는_요청이면_만료시각을_전달한다() {
-        MatchingRequest matchingRequest = fallbackSearchRequest();
+    void searching은_일반생성_요청이어도_만료시각을_비운다() {
+        MatchingRequest matchingRequest = createdSearchRequest();
 
         MatchingCreationResult result = MatchingCreationResult.searching(matchingRequest);
 
-        assertThat(result.expiresAt()).isEqualTo(EXPIRES_AT);
+        assertThat(result.expiresAt()).isNull();
     }
 
     private MatchingRequest unlimitedSearchRequest() {
@@ -58,7 +55,7 @@ class MatchingCreationResultTest {
         );
     }
 
-    private MatchingRequest fallbackSearchRequest() {
+    private MatchingRequest createdSearchRequest() {
         return MatchingRequest.create(
                 member(),
                 resort(),
@@ -66,8 +63,7 @@ class MatchingCreationResultTest {
                 LessonLevel.FIRST_TIME,
                 2,
                 List.of(120, 180),
-                true,
-                EXPIRES_AT
+                true
         );
     }
 

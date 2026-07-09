@@ -43,7 +43,7 @@ public class MatchingStatusResolver {
             Optional<MatchingOffer> matchingOffer,
             Optional<MatchingRequestPayment> matchingRequestPayment
     ) {
-        // fallback 탐색 만료 실패 요청의 앱 최종 후보 없음 상태 표시
+        // 운영자가 명시 실패 처리한 요청의 앱 최종 후보 없음 상태 표시
         if (matchingRequest.getStatus() == MatchingRequestStatus.FAILED
                 && matchingRequest.getStatusReason() == MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR) {
             return MatchingStatus.NO_AVAILABLE_INSTRUCTOR;
@@ -85,6 +85,12 @@ public class MatchingStatusResolver {
 
         if (isWaitingForOtherPayments(matchingRequestGroup, matchingRequestPayment)) {
             return MatchingStatus.WAITING_FOR_OTHER_PAYMENTS;
+        }
+
+        // 기존 요청을 유지한 채 현재 그룹 실패 후 다음 후보를 찾는 상태
+        if (matchingRequest.getStatus() == MatchingRequestStatus.REQUESTED
+                && isRematchingReason(matchingRequest.getStatusReason())) {
+            return MatchingStatus.REMATCHING;
         }
 
         // 강사 수락 이후에는 소비자 개인 확인 여부에 따라 본인/다른 참여자 대기 상태를 구분

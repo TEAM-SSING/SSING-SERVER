@@ -6,7 +6,7 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 
-// 탐색 만료 실패 등 요청 상태 변경 시 알림 계층 전달 이벤트
+// 취소/실패 등 요청 상태 변경 시 알림 계층 전달 이벤트
 public record MatchingRequestStatusChangedEvent(
         // 알림 계층의 중복 발행 방어와 추적용 이벤트 id
         UUID eventId,

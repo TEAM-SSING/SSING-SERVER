@@ -51,6 +51,8 @@ public class MatchingOffer extends BaseTimeEntity {
     @Column(nullable = false)
     private Instant exposedAt;
 
+    private Instant expiresAt;
+
     private Instant respondedAt;
 
     public static MatchingOffer create(
@@ -58,15 +60,28 @@ public class MatchingOffer extends BaseTimeEntity {
             MatchingRequestGroup matchingRequestGroup,
             Instant exposedAt
     ) {
+        return create(instructorProfile, matchingRequestGroup, exposedAt, null);
+    }
+
+    public static MatchingOffer create(
+            InstructorProfile instructorProfile,
+            MatchingRequestGroup matchingRequestGroup,
+            Instant exposedAt,
+            Instant expiresAt
+    ) {
         MatchingOffer matchingOffer = new MatchingOffer();
         matchingOffer.instructorProfile = instructorProfile;
         matchingOffer.matchingRequestGroup = matchingRequestGroup;
         matchingOffer.status = MatchingOfferStatus.OFFERED;
         matchingOffer.exposedAt = exposedAt;
+        matchingOffer.expiresAt = expiresAt;
         return matchingOffer;
     }
 
-    // TODO: PR 5 상태 전이 API에서 OFFERED 이후 재전이를 막는 guard 추가
+    public boolean isExpired(Instant now) {
+        return expiresAt != null && !expiresAt.isAfter(now);
+    }
+
     public void accept(Instant respondedAt) {
         respond(MatchingOfferStatus.ACCEPTED, respondedAt);
     }
@@ -84,6 +99,10 @@ public class MatchingOffer extends BaseTimeEntity {
     }
 
     private void respond(MatchingOfferStatus status, Instant respondedAt) {
+        if (this.status != MatchingOfferStatus.OFFERED) {
+            throw new IllegalStateException("Only offered matching offer can be responded.");
+        }
+
         this.status = status;
         this.respondedAt = respondedAt;
     }

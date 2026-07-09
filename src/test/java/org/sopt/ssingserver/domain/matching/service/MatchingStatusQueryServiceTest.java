@@ -49,10 +49,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class MatchingStatusQueryServiceTest {
 
-    private static final Instant MATCHING_EXPIRES_AT = Instant.parse("2026-07-07T00:10:00Z");
     private static final Instant PAYMENT_EXPIRES_AT = Instant.parse("2026-07-07T00:15:00Z");
     private static final Instant OFFER_EXPOSED_AT = Instant.parse("2026-07-07T00:00:00Z");
-    private static final Instant INSTRUCTOR_RESPONSE_EXPIRES_AT = Instant.parse("2026-07-07T00:01:00Z");
+    private static final Instant OFFER_RESPONDED_AT = Instant.parse("2026-07-07T00:01:00Z");
 
     @Mock
     private MatchingRequestRepository matchingRequestRepository;
@@ -174,7 +173,7 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
         assertThat(result.itemStatus()).isSameAs(MatchingRequestGroupItemStatus.NOT_REQUESTED);
         assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
-        assertThat(result.expiresAt()).isEqualTo(INSTRUCTOR_RESPONSE_EXPIRES_AT);
+        assertThat(result.expiresAt()).isNull();
         assertThat(result.instructorProfile()).isNull();
         verifyNoInteractions(lessonRepository);
     }
@@ -188,7 +187,7 @@ class MatchingStatusQueryServiceTest {
         MatchingRequestGroupItem item = matchingRequestGroupItem(30L, matchingRequest, group);
         InstructorProfile instructorProfile = instructorProfile(40L);
         MatchingOffer offer = acceptedOffer(50L, instructorProfile, group);
-        matchingRequest.markMatched(offer, MATCHING_EXPIRES_AT);
+        matchingRequest.markMatched(offer);
 
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
@@ -210,7 +209,7 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED);
         assertThat(result.itemStatus()).isSameAs(MatchingRequestGroupItemStatus.PENDING);
         assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.ACCEPTED);
-        assertThat(result.expiresAt()).isEqualTo(MATCHING_EXPIRES_AT);
+        assertThat(result.expiresAt()).isNull();
         assertThat(result.instructorProfile()).isNotNull();
         assertThat(result.instructorProfile().instructorId()).isEqualTo(40L);
         assertThat(result.instructorProfile().name()).isEqualTo("김강사");
@@ -222,7 +221,7 @@ class MatchingStatusQueryServiceTest {
     }
 
     @Test
-    void getStatus는_결제대기_상태이면_paymentStatus와_결제만료시각을_반환한다() {
+    void getStatus는_결제대기_상태여도_무기한정책으로_expiresAt을_비운다() {
         MatchingStatusQueryService service = createService();
         Member consumer = member(1L, "요청자", MemberRole.CONSUMER);
         MatchingRequest matchingRequest = matchingRequest(10L, consumer);
@@ -236,7 +235,7 @@ class MatchingStatusQueryServiceTest {
                 MatchingRequestPaymentStatus.PENDING,
                 PAYMENT_EXPIRES_AT
         );
-        matchingRequest.markMatched(offer, MATCHING_EXPIRES_AT);
+        matchingRequest.markMatched(offer);
 
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
@@ -255,7 +254,7 @@ class MatchingStatusQueryServiceTest {
 
         assertThat(result.matchingStatus()).isSameAs(MatchingStatus.PAYMENT_PENDING);
         assertThat(result.paymentStatus()).isSameAs(MatchingRequestPaymentStatus.PENDING);
-        assertThat(result.expiresAt()).isEqualTo(PAYMENT_EXPIRES_AT);
+        assertThat(result.expiresAt()).isNull();
         assertThat(result.lessonId()).isNull();
         verifyNoInteractions(lessonRepository);
     }
@@ -277,7 +276,7 @@ class MatchingStatusQueryServiceTest {
                 PAYMENT_EXPIRES_AT
         );
         Lesson lesson = lesson(70L, offer);
-        matchingRequest.markMatched(offer, MATCHING_EXPIRES_AT);
+        matchingRequest.markMatched(offer);
         matchingRequest.confirm();
         group.confirm();
 
@@ -310,7 +309,8 @@ class MatchingStatusQueryServiceTest {
                 matchingOfferRepository,
                 matchingRequestPaymentRepository,
                 lessonRepository,
-                matchingStatusResolver
+                matchingStatusResolver,
+                new MatchingTimeoutPolicy()
         );
     }
 
@@ -360,7 +360,7 @@ class MatchingStatusQueryServiceTest {
             MatchingRequestGroup group
     ) {
         MatchingOffer offer = MatchingOffer.create(instructorProfile, group, OFFER_EXPOSED_AT);
-        offer.accept(INSTRUCTOR_RESPONSE_EXPIRES_AT);
+        offer.accept(OFFER_RESPONDED_AT);
         ReflectionTestUtils.setField(offer, "id", id);
         return offer;
     }

@@ -34,7 +34,7 @@ public interface InstructorMatchingSettingRepository extends JpaRepository<Instr
               and setting.maxHeadcount >= :headcount
               and setting.isEquipmentReady = :isEquipmentReady
               and setting.isExposed = true
-            order by setting.id asc
+            order by setting.instructorProfile.id asc, setting.id asc
             """)
     List<InstructorMatchingSetting> findExposedCandidates(
             @Param("resort") Resort resort,

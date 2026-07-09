@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.matching.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Constructor;
 import java.time.Instant;
@@ -22,11 +23,23 @@ class MatchingOfferTest {
 
         assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.OFFERED);
         assertThat(offer.getExposedAt()).isEqualTo(exposedAt);
+        assertThat(offer.getExpiresAt()).isNull();
         assertThat(offer.getRespondedAt()).isNull();
     }
 
     @Test
-    void 응답_메서드는_상태와_응답시각을_저장한다() {
+    void isExpired는_무기한_제안이면_false를_반환한다() {
+        MatchingOffer offer = MatchingOffer.create(
+                instructorProfile(),
+                MatchingRequestGroup.createCandidate(120),
+                Instant.parse("2026-07-07T00:00:00Z")
+        );
+
+        assertThat(offer.isExpired(Instant.parse("2026-07-07T00:01:00Z"))).isFalse();
+    }
+
+    @Test
+    void 응답_메서드는_OFFERED_상태에서만_상태와_응답시각을_저장한다() {
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
                 MatchingRequestGroup.createCandidate(120),
@@ -38,9 +51,10 @@ class MatchingOfferTest {
         assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.ACCEPTED);
         assertThat(offer.getRespondedAt()).isEqualTo(respondedAt);
 
-        offer.reject(respondedAt.plusSeconds(1));
-        assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.REJECTED);
-        assertThat(offer.getRespondedAt()).isEqualTo(respondedAt.plusSeconds(1));
+        assertThatThrownBy(() -> offer.reject(respondedAt.plusSeconds(1)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.ACCEPTED);
+        assertThat(offer.getRespondedAt()).isEqualTo(respondedAt);
     }
 
     @Test

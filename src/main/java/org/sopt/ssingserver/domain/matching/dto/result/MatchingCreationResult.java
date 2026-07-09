@@ -27,7 +27,7 @@ public record MatchingCreationResult(
                 matchingRequest.getStatusReason(),
                 null,
                 null,
-                matchingRequest.getExpiresAt()
+                null
         );
     }
 }

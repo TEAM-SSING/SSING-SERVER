@@ -40,7 +40,7 @@ public interface MatchingRequestRepository extends JpaRepository<MatchingRequest
             @Param("status") MatchingRequestStatus status
     );
 
-    // 1분 스케줄러의 재탐색 대상 REQUESTED 요청 id 오름차순 배치 조회
+    // 주기 스케줄러의 재탐색 대상 REQUESTED 요청 id 오름차순 배치 조회
     @Query("""
             select matchingRequest.id
             from MatchingRequest matchingRequest
