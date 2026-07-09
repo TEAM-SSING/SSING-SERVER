@@ -21,10 +21,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorPricePolicy;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingSearchResult;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
@@ -46,6 +48,10 @@ import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
+import org.sopt.ssingserver.domain.payment.entity.MatchingOfferPriceSnapshot;
+import org.sopt.ssingserver.domain.payment.entity.PlatformFeePolicy;
+import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
+import org.sopt.ssingserver.domain.payment.repository.PlatformFeePolicyRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -73,6 +79,15 @@ class MatchingSearchServiceTest {
 
     @Mock
     private InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+
+    @Mock
+    private InstructorPricePolicyRepository instructorPricePolicyRepository;
+
+    @Mock
+    private PlatformFeePolicyRepository platformFeePolicyRepository;
+
+    @Mock
+    private MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
 
     @Mock
     private MatchingEventPublisher matchingEventPublisher;
@@ -162,6 +177,21 @@ class MatchingSearchServiceTest {
         assertThat(groupCaptor.getValue().getDurationMinutes()).isEqualTo(180);
         verify(matchingRequestGroupItemRepository).save(any(MatchingRequestGroupItem.class));
         verify(matchingOfferRepository).save(any(MatchingOffer.class));
+        ArgumentCaptor<MatchingOfferPriceSnapshot> priceSnapshotCaptor =
+                ArgumentCaptor.forClass(MatchingOfferPriceSnapshot.class);
+        verify(matchingOfferPriceSnapshotRepository).save(priceSnapshotCaptor.capture());
+        MatchingOfferPriceSnapshot priceSnapshot = priceSnapshotCaptor.getValue();
+        assertThat(priceSnapshot.getMatchingOffer().getId()).isEqualTo(30L);
+        assertThat(priceSnapshot.getInstructorPricePolicy().getInstructorProfile())
+                .isSameAs(setting.getInstructorProfile());
+        assertThat(priceSnapshot.getPlatformFeePolicy().getFeeRateBps()).isZero();
+        assertThat(priceSnapshot.getTotalHeadcount()).isEqualTo(2);
+        assertThat(priceSnapshot.getBasePriceAmount()).isEqualTo(70_000);
+        assertThat(priceSnapshot.getAdditionalPersonPriceAmount()).isEqualTo(10_000);
+        assertThat(priceSnapshot.getConsumerTotalAmount()).isEqualTo(80_000);
+        assertThat(priceSnapshot.getInstructorSettlementAmount()).isEqualTo(80_000);
+        assertThat(priceSnapshot.getPlatformFeeAmount()).isZero();
+        assertThat(priceSnapshot.getFeeRateBps()).isZero();
         ArgumentCaptor<MatchingOfferCreatedEvent> eventCaptor =
                 ArgumentCaptor.forClass(MatchingOfferCreatedEvent.class);
         verify(matchingEventPublisher).publish(eventCaptor.capture());
@@ -518,6 +548,9 @@ class MatchingSearchServiceTest {
                 matchingRequestGroupItemRepository,
                 matchingOfferRepository,
                 instructorMatchingSettingRepository,
+                instructorPricePolicyRepository,
+                platformFeePolicyRepository,
+                matchingOfferPriceSnapshotRepository,
                 new MatchingStatusResolver(),
                 new MatchingTimeoutPolicy(),
                 matchingEventPublisher,
@@ -561,6 +594,16 @@ class MatchingSearchServiceTest {
                 setting.getInstructorProfile().getId(),
                 MatchingOfferStatus.OFFERED
         )).thenReturn(List.of());
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(any()))
+                .thenAnswer(invocation -> List.of(MatchingRequestGroupItem.createNotRequested(
+                        matchingRequest,
+                        MatchingRequestGroup.createCandidate(120)
+                )));
+        when(instructorPricePolicyRepository.findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(
+                setting.getInstructorProfile().getId()
+        )).thenReturn(Optional.of(instructorPricePolicy(setting.getInstructorProfile())));
+        when(platformFeePolicyRepository.findFirstByIsActiveTrueOrderByIdDesc())
+                .thenReturn(Optional.of(platformFeePolicy()));
     }
 
     private InstructorMatchingSetting instructorMatchingSetting(
@@ -600,15 +643,37 @@ class MatchingSearchServiceTest {
         return instructorProfile;
     }
 
+    private InstructorPricePolicy instructorPricePolicy(InstructorProfile instructorProfile) {
+        InstructorPricePolicy instructorPricePolicy = construct(InstructorPricePolicy.class);
+        ReflectionTestUtils.setField(instructorPricePolicy, "id", 301L);
+        ReflectionTestUtils.setField(instructorPricePolicy, "instructorProfile", instructorProfile);
+        ReflectionTestUtils.setField(instructorPricePolicy, "basePriceAmount", 70_000);
+        ReflectionTestUtils.setField(instructorPricePolicy, "additionalPersonPriceAmount", 10_000);
+        ReflectionTestUtils.setField(instructorPricePolicy, "isActive", true);
+        return instructorPricePolicy;
+    }
+
+    private PlatformFeePolicy platformFeePolicy() {
+        PlatformFeePolicy platformFeePolicy = construct(PlatformFeePolicy.class);
+        ReflectionTestUtils.setField(platformFeePolicy, "id", 401L);
+        ReflectionTestUtils.setField(platformFeePolicy, "feeRateBps", 0);
+        ReflectionTestUtils.setField(platformFeePolicy, "isActive", true);
+        return platformFeePolicy;
+    }
+
     private Resort resort() {
+        Resort resort = construct(Resort.class);
+        ReflectionTestUtils.setField(resort, "code", "HIGH1");
+        ReflectionTestUtils.setField(resort, "name", "하이원리조트");
+        ReflectionTestUtils.setField(resort, "displayName", "하이원");
+        return resort;
+    }
+
+    private <T> T construct(Class<T> type) {
         try {
-            Constructor<Resort> constructor = Resort.class.getDeclaredConstructor();
+            Constructor<T> constructor = type.getDeclaredConstructor();
             constructor.setAccessible(true);
-            Resort resort = constructor.newInstance();
-            ReflectionTestUtils.setField(resort, "code", "HIGH1");
-            ReflectionTestUtils.setField(resort, "name", "하이원리조트");
-            ReflectionTestUtils.setField(resort, "displayName", "하이원");
-            return resort;
+            return constructor.newInstance();
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
         }
