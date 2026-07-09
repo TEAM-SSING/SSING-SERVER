@@ -14,33 +14,28 @@ class MatchingOfferTest {
     @Test
     void create는_강사제안을_OFFERED_상태로_초기화한다() {
         Instant exposedAt = Instant.parse("2026-07-07T00:00:00Z");
-        Instant expiresAt = Instant.parse("2026-07-07T00:01:00Z");
 
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
                 MatchingRequestGroup.createCandidate(120),
-                exposedAt,
-                expiresAt
+                exposedAt
         );
 
         assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.OFFERED);
         assertThat(offer.getExposedAt()).isEqualTo(exposedAt);
-        assertThat(offer.getExpiresAt()).isEqualTo(expiresAt);
+        assertThat(offer.getExpiresAt()).isNull();
         assertThat(offer.getRespondedAt()).isNull();
     }
 
     @Test
-    void isExpired는_만료시각이_지났거나_같으면_true를_반환한다() {
+    void isExpired는_무기한_제안이면_false를_반환한다() {
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
                 MatchingRequestGroup.createCandidate(120),
-                Instant.parse("2026-07-07T00:00:00Z"),
-                Instant.parse("2026-07-07T00:01:00Z")
+                Instant.parse("2026-07-07T00:00:00Z")
         );
 
-        assertThat(offer.isExpired(Instant.parse("2026-07-07T00:00:59Z"))).isFalse();
-        assertThat(offer.isExpired(Instant.parse("2026-07-07T00:01:00Z"))).isTrue();
-        assertThat(offer.isExpired(Instant.parse("2026-07-07T00:01:01Z"))).isTrue();
+        assertThat(offer.isExpired(Instant.parse("2026-07-07T00:01:00Z"))).isFalse();
     }
 
     @Test
@@ -48,8 +43,7 @@ class MatchingOfferTest {
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile(),
                 MatchingRequestGroup.createCandidate(120),
-                Instant.parse("2026-07-07T00:00:00Z"),
-                Instant.parse("2026-07-07T00:01:00Z")
+                Instant.parse("2026-07-07T00:00:00Z")
         );
         Instant respondedAt = Instant.parse("2026-07-07T00:01:00Z");
 

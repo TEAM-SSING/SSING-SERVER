@@ -1,7 +1,6 @@
 package org.sopt.ssingserver.domain.matching.service;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -36,14 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class InstructorMatchingOfferService {
 
-    // 매칭 시간 정책의 MVP 기준: 강사 수락 후 대표 소비자 최종 확인 제한 시간 1분
-    private static final Duration REQUESTER_CONFIRMATION_TIMEOUT = Duration.ofMinutes(1);
-
     private final InstructorProfileRepository instructorProfileRepository;
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingSearchService matchingSearchService;
+    private final MatchingTimeoutPolicy matchingTimeoutPolicy;
     private final Clock clock;
 
     // 강사 앱 재진입/WebSocket 유실 복구 시 현재 강사에게 노출된 제안만 조회
@@ -105,10 +102,6 @@ public class InstructorMatchingOfferService {
         }
 
         Instant now = clock.instant();
-        if (matchingOffer.isExpired(now)) {
-            throw new BusinessException(MatchingErrorCode.MATCHING_OFFER_EXPIRED);
-        }
-
         return switch (decision) {
             case ACCEPTED -> accept(matchingOffer, matchingRequestGroup, groupItems, now);
             case REJECTED -> reject(matchingOffer, matchingRequestGroup, groupItems, now);
@@ -122,7 +115,7 @@ public class InstructorMatchingOfferService {
             List<MatchingRequestGroupItem> groupItems,
             Instant now
     ) {
-        Instant requesterConfirmationExpiresAt = now.plus(REQUESTER_CONFIRMATION_TIMEOUT);
+        Instant requesterConfirmationExpiresAt = matchingTimeoutPolicy.requesterConfirmationExpiresAt(now).orElse(null);
         matchingOffer.accept(now);
         matchingRequestGroup.markInstructorAccepted();
         for (MatchingRequestGroupItem groupItem : groupItems) {
@@ -255,10 +248,6 @@ public class InstructorMatchingOfferService {
             MatchingOffer matchingOffer,
             MatchingRequestGroup matchingRequestGroup
     ) {
-        if (matchingOffer.getStatus() == MatchingOfferStatus.EXPIRED) {
-            throw new BusinessException(MatchingErrorCode.MATCHING_OFFER_EXPIRED);
-        }
-
         if (matchingOffer.getStatus() != MatchingOfferStatus.OFFERED) {
             throw new BusinessException(MatchingErrorCode.MATCHING_OFFER_ALREADY_RESPONDED);
         }

@@ -41,13 +41,13 @@ class InstructorMatchingOfferResponseTest {
     }
 
     @Test
-    void currentOffers는_expiresAt이_있으면_JSON에_포함한다() throws Exception {
+    void currentOffers는_OFFERED여도_expiresAt이_null이면_JSON에서_제외한다() throws Exception {
         InstructorMatchingOffersResult result = new InstructorMatchingOffersResult(
                 List.of(new InstructorMatchingOffersResult.ItemResult(
                         21L,
                         3L,
                         MatchingOfferStatus.OFFERED,
-                        Instant.parse("2026-07-07T00:01:00Z"),
+                        null,
                         lessonSummary()
                 )),
                 0,
@@ -59,8 +59,7 @@ class InstructorMatchingOfferResponseTest {
         String json = objectMapper.writeValueAsString(response);
 
         assertThat(json).contains("\"offerStatus\":\"OFFERED\"");
-        assertThat(json).contains("expiresAt");
-        assertThat(json).contains("2026-07-07T00:01:00Z");
+        assertThat(json).doesNotContain("expiresAt");
     }
 
     @Test

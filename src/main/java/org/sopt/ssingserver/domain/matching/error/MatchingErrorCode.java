@@ -18,7 +18,6 @@ public enum MatchingErrorCode implements ErrorCode {
     // 이미 종료되었거나 MVP 범위 밖 결제 완료 요청을 소비자 중지 API로 취소하려는 경우
     MATCHING_CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "취소할 수 없는 매칭 요청 상태입니다."),
     MATCHING_OFFER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 매칭 제안입니다."),
-    MATCHING_OFFER_EXPIRED(HttpStatus.CONFLICT, "매칭 제안 응답 가능 시간이 만료되었습니다."),
     MATCHING_OFFER_ALREADY_RESPONDED(HttpStatus.CONFLICT, "이미 응답한 매칭 제안입니다."),
     MATCHING_GROUP_ALREADY_CLOSED(HttpStatus.CONFLICT, "이미 종료된 매칭 그룹입니다.");
 

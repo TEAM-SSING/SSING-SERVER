@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-// 요청 생성 직후 트리거와 1분 스케줄러의 공통 재탐색 입구
+// 요청 생성 직후 트리거와 주기 스케줄러의 공통 재탐색 입구
 @Service
 @RequiredArgsConstructor
 public class MatchingSearchTriggerService {

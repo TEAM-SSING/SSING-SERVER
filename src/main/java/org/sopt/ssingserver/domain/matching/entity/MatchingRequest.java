@@ -87,7 +87,7 @@ public class MatchingRequest extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     private MatchingOffer matchingOffer;
 
-    // 요청, 최종 확인, 결제처럼 현재 진행 단계에서 앱이 참고할 만료 시각
+    // 현재 매칭 정책은 사용자 응답 대기를 무기한으로 두므로 새 요청/수락 흐름에서는 null 유지
     private Instant expiresAt;
 
     // 소비자 직접 중지 시 API 응답과 운영 추적에 사용할 취소 시각
@@ -110,12 +110,11 @@ public class MatchingRequest extends BaseTimeEntity {
                 lessonLevel,
                 headcount,
                 requestedDurationMinutes,
-                isEquipmentReady,
-                null
+                isEquipmentReady
         );
     }
 
-    // 매칭 요청 생성 시 DB REQUESTED 시작 및 fallback 탐색 만료 시각 선택 저장
+    // 매칭 요청 생성 시 DB REQUESTED 시작, 사용자 행동 타임아웃은 무기한 정책으로 저장하지 않음
     public static MatchingRequest create(
             Member member,
             Resort resort,
@@ -123,8 +122,7 @@ public class MatchingRequest extends BaseTimeEntity {
             LessonLevel lessonLevel,
             int headcount,
             Collection<Integer> requestedDurationMinutes,
-            boolean isEquipmentReady,
-            Instant expiresAt
+            boolean isEquipmentReady
     ) {
         MatchingRequest matchingRequest = new MatchingRequest();
         matchingRequest.member = member;
@@ -135,18 +133,13 @@ public class MatchingRequest extends BaseTimeEntity {
         matchingRequest.replaceRequestedDurationMinutes(requestedDurationMinutes);
         matchingRequest.isEquipmentReady = isEquipmentReady;
         matchingRequest.status = MatchingRequestStatus.REQUESTED;
-        matchingRequest.expiresAt = expiresAt;
+        matchingRequest.expiresAt = null;
         return matchingRequest;
     }
 
     // 후보 조회와 API 응답에서 사용할 소비자 희망 시간 읽기 전용 view 반환
     public Set<Integer> getRequestedDurationMinutes() {
         return Collections.unmodifiableSet(requestedDurationMinutes);
-    }
-
-    // fallback 만료 시각이 있는 요청만 현재 시각 기준 SEARCHING 종료 여부 판단
-    public boolean isSearchExpired(Instant now) {
-        return expiresAt != null && !expiresAt.isAfter(now);
     }
 
     // 요청의 그룹 편입 이후 순수 탐색 대상 제외를 위한 GROUPED 전환
@@ -159,12 +152,17 @@ public class MatchingRequest extends BaseTimeEntity {
         updateStatus(MatchingRequestStatus.REQUESTED, MatchingRequestStatusReason.INSTRUCTOR_REJECTED);
     }
 
-    // 강사 미응답으로 현재 그룹이 닫혔지만 기존 요청은 다음 후보 탐색에 재사용
+    // 과거/운영 보정용 강사 미응답 재탐색 상태. 신규 제안은 무기한 대기로 자동 호출하지 않음
     public void rematchAfterInstructorTimeout() {
         updateStatus(MatchingRequestStatus.REQUESTED, MatchingRequestStatusReason.INSTRUCTOR_TIMEOUT);
     }
 
-    // 강사 제안 수락 이후 수락 제안과 소비자 최종 확인 만료 시각 저장
+    // 강사 제안 수락 이후 수락 제안 저장, 현 정책은 소비자 최종 확인도 무기한 대기
+    public void markMatched(MatchingOffer matchingOffer) {
+        markMatched(matchingOffer, null);
+    }
+
+    // 유한 확인 시간 정책 재도입 시 수락 제안과 함께 소비자 확인 만료 시각 저장
     public void markMatched(MatchingOffer matchingOffer, Instant expiresAt) {
         this.matchingOffer = matchingOffer;
         this.expiresAt = expiresAt;
@@ -192,22 +190,22 @@ public class MatchingRequest extends BaseTimeEntity {
         updateStatus(MatchingRequestStatus.CANCELED, MatchingRequestStatusReason.CONSUMER_CANCELED);
     }
 
-    // SEARCHING 만료까지 후보 없음인 경우의 최종 실패 상태 저장
+    // 운영자/후속 정책에서 후보 없음 최종 실패가 필요할 때 상태 저장
     public void failNoAvailableInstructor() {
         updateStatus(MatchingRequestStatus.FAILED, MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR);
     }
 
-    // 강사 응답 제한 시간 초과 요청의 강사 타임아웃 사유 만료 처리
+    // 과거/운영 보정용 상태 전환. 신규 강사 응답 흐름에서는 무기한 정책으로 자동 호출하지 않음
     public void expireByInstructorTimeout() {
         expireWithReason(MatchingRequestStatusReason.INSTRUCTOR_TIMEOUT);
     }
 
-    // 소비자 최종 확인 제한 시간 초과 요청의 확인 타임아웃 사유 만료 처리
+    // 과거/운영 보정용 상태 전환. 신규 소비자 확인 흐름에서는 무기한 정책으로 자동 호출하지 않음
     public void expireByConfirmationTimeout() {
         expireWithReason(MatchingRequestStatusReason.CONFIRMATION_TIMEOUT);
     }
 
-    // 결제 제한 시간 초과 요청의 결제 타임아웃 사유 만료 처리
+    // 과거/운영 보정용 상태 전환. 신규 결제 흐름에서는 무기한 정책으로 자동 호출하지 않음
     public void expireByPaymentTimeout() {
         expireWithReason(MatchingRequestStatusReason.PAYMENT_TIMEOUT);
     }

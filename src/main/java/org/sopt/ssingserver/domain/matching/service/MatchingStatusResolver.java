@@ -43,7 +43,7 @@ public class MatchingStatusResolver {
             Optional<MatchingOffer> matchingOffer,
             Optional<MatchingRequestPayment> matchingRequestPayment
     ) {
-        // fallback 탐색 만료 실패 요청의 앱 최종 후보 없음 상태 표시
+        // 운영자가 명시 실패 처리한 요청의 앱 최종 후보 없음 상태 표시
         if (matchingRequest.getStatus() == MatchingRequestStatus.FAILED
                 && matchingRequest.getStatusReason() == MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR) {
             return MatchingStatus.NO_AVAILABLE_INSTRUCTOR;

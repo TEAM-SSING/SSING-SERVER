@@ -19,7 +19,7 @@ class MatchingSearchSchedulerTest {
     private MatchingSearchTriggerService matchingSearchTriggerService;
 
     @Test
-    void runScheduledSearch는_제안만료를_정리한_뒤_SEARCHING_요청_재탐색을_위임한다() {
+    void runScheduledSearch는_제안만료_트리거와_SEARCHING_요청_재탐색을_위임한다() {
         MatchingSearchScheduler scheduler = new MatchingSearchScheduler(
                 matchingOfferExpirationTriggerService,
                 matchingSearchTriggerService
@@ -32,7 +32,7 @@ class MatchingSearchSchedulerTest {
     }
 
     @Test
-    void runScheduledSearch는_제안만료_정리가_실패해도_SEARCHING_요청_재탐색을_계속한다() {
+    void runScheduledSearch는_제안만료_트리거가_실패해도_SEARCHING_요청_재탐색을_계속한다() {
         MatchingSearchScheduler scheduler = new MatchingSearchScheduler(
                 matchingOfferExpirationTriggerService,
                 matchingSearchTriggerService

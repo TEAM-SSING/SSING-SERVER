@@ -79,6 +79,21 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
             @Param("status") MatchingOfferStatus status
     );
 
+    // 유한 응답 시간 정책 재도입 시 만료 대상 OFFERED 제안 id 배치 조회
+    @Query("""
+            select matchingOffer.id
+            from MatchingOffer matchingOffer
+            where matchingOffer.status = :status
+              and matchingOffer.expiresAt is not null
+              and matchingOffer.expiresAt <= :now
+            order by matchingOffer.id asc
+            """)
+    List<Long> findIdsByStatusAndExpiresAtLessThanEqualOrderByIdAsc(
+            @Param("status") MatchingOfferStatus status,
+            @Param("now") Instant now,
+            Pageable pageable
+    );
+
     Optional<MatchingOffer> findFirstByMatchingRequestGroupIdOrderByIdDesc(Long matchingRequestGroupId);
 
     // 같은 소비자 매칭 요청이 살아있는 동안 이미 제안을 받은 강사를 다시 후보로 고르지 않기 위한 이력 확인
@@ -96,20 +111,6 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
     boolean existsByMatchingRequestIdAndInstructorProfileId(
             @Param("matchingRequestId") Long matchingRequestId,
             @Param("instructorProfileId") Long instructorProfileId
-    );
-
-    // 만료 스케줄러가 응답 제한 시간이 지난 활성 제안만 작은 배치로 수집
-    @Query("""
-            select matchingOffer.id
-            from MatchingOffer matchingOffer
-            where matchingOffer.status = :status
-              and matchingOffer.expiresAt <= :now
-            order by matchingOffer.id asc
-            """)
-    List<Long> findIdsByStatusAndExpiresAtLessThanEqualOrderByIdAsc(
-            @Param("status") MatchingOfferStatus status,
-            @Param("now") Instant now,
-            Pageable pageable
     );
 
     // 매칭 중지 시 현재 그룹의 활성 제안을 같은 트랜잭션에서 종료하기 위한 잠금 조회

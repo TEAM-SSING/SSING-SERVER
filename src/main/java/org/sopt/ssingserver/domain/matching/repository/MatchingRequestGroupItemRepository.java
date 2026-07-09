@@ -42,7 +42,7 @@ public interface MatchingRequestGroupItemRepository extends JpaRepository<Matchi
             @Param("matchingRequestGroupIds") Collection<Long> matchingRequestGroupIds
     );
 
-    // 강사 수락/만료로 그룹 안 요청 상태를 함께 바꿀 때 항목 row를 잠금 조회
+    // 강사 수락/거절로 그룹 안 요청 상태를 함께 바꿀 때 항목 row를 잠금 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
     @Query("""

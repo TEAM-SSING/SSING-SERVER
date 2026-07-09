@@ -53,7 +53,7 @@ public interface InstructorMatchingOfferApiDocs {
     @ApiResponse(responseCode = "401", description = "인증 실패 - UNAUTHENTICATED, AUTH_INVALID_TOKEN, AUTH_TOKEN_EXPIRED")
     @ApiResponse(responseCode = "403", description = "승인된 강사 권한 없음 - FORBIDDEN")
     @ApiResponse(responseCode = "404", description = "존재하지 않는 매칭 제안 - MATCHING_OFFER_NOT_FOUND")
-    @ApiResponse(responseCode = "409", description = "제안 만료, 이미 응답, 또는 그룹 종료 - MATCHING_OFFER_EXPIRED, MATCHING_OFFER_ALREADY_RESPONDED, MATCHING_GROUP_ALREADY_CLOSED")
+    @ApiResponse(responseCode = "409", description = "이미 응답했거나 그룹 종료 - MATCHING_OFFER_ALREADY_RESPONDED, MATCHING_GROUP_ALREADY_CLOSED")
     @ApiResponse(responseCode = "500", description = "서버 내부 오류 - INTERNAL_ERROR")
     ResponseEntity<BaseResponse<InstructorMatchingOfferDecisionResponse>> respond(
             @Parameter(hidden = true)

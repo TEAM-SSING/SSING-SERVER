@@ -1,6 +1,5 @@
 package org.sopt.ssingserver.domain.matching.service;
 
-import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +33,7 @@ public class MatchingStatusQueryService {
     private final MatchingRequestPaymentRepository matchingRequestPaymentRepository;
     private final LessonRepository lessonRepository;
     private final MatchingStatusResolver matchingStatusResolver;
+    private final MatchingTimeoutPolicy matchingTimeoutPolicy;
 
     @Transactional(readOnly = true)
     public MatchingStatusQueryResult getStatus(
@@ -74,7 +74,7 @@ public class MatchingStatusQueryService {
         );
     }
 
-    private static MatchingStatusQueryResult toQueryResult(
+    private MatchingStatusQueryResult toQueryResult(
             MatchingRequest matchingRequest,
             MatchingStatus matchingStatus,
             Optional<MatchingRequestGroup> matchingRequestGroup,
@@ -96,43 +96,15 @@ public class MatchingStatusQueryService {
                 matchingRequestGroupItem.map(MatchingRequestGroupItem::getStatus).orElse(null),
                 matchingOffer.map(MatchingOffer::getStatus).orElse(null),
                 matchingRequestPayment.map(MatchingRequestPayment::getStatus).orElse(null),
-                resolveExpiresAt(matchingStatus, matchingRequest, matchingOffer, matchingRequestPayment),
+                matchingTimeoutPolicy.matchingStatusExpiresAt(
+                        matchingStatus,
+                        matchingRequest,
+                        matchingOffer,
+                        matchingRequestPayment
+                ).orElse(null),
                 resolveInstructorProfile(matchingOffer),
                 resolveLessonId(matchingStatus, lesson)
         );
-    }
-
-    private static Instant resolveExpiresAt(
-            MatchingStatus matchingStatus,
-            MatchingRequest matchingRequest,
-            Optional<MatchingOffer> matchingOffer,
-            Optional<MatchingRequestPayment> matchingRequestPayment
-    ) {
-        // 현재 앱 표시 상태에 맞는 다음 전환 기준 시각만 선택
-        return switch (matchingStatus) {
-            case SEARCHING,
-                 WAITING_FOR_TEAM -> matchingRequest.getExpiresAt();
-            case WAITING_FOR_INSTRUCTOR -> matchingOffer
-                    .map(MatchingStatusQueryService::resolveInstructorResponseExpiresAt)
-                    .orElse(null);
-            // TODO: 강습생 응답 타임아웃 정책이 MatchingRequest.expiresAt과 분리되면 별도 계산 기준 추가
-            case WAITING_FOR_CONFIRMATION,
-                 WAITING_FOR_OTHER_CONFIRMATIONS -> matchingRequest.getExpiresAt();
-            case PAYMENT_PENDING,
-                 WAITING_FOR_OTHER_PAYMENTS,
-                 PAYMENT_EXPIRED -> matchingRequestPayment
-                    .map(MatchingRequestPayment::getPaymentExpiresAt)
-                    .orElse(null);
-            case CONFIRMED,
-                 NO_AVAILABLE_INSTRUCTOR,
-                 REMATCHING,
-                 CANCELED,
-                 FAILED -> null;
-        };
-    }
-
-    private static Instant resolveInstructorResponseExpiresAt(MatchingOffer matchingOffer) {
-        return matchingOffer.getExpiresAt();
     }
 
     private static MatchingStatusQueryResult.InstructorProfileResult resolveInstructorProfile(

@@ -57,8 +57,6 @@ class InstructorMatchingOfferServiceTest {
             Instant.parse("2026-07-07T00:00:00Z"),
             ZoneOffset.UTC
     );
-    private static final Instant OFFER_EXPIRES_AT = Instant.parse("2026-07-07T00:01:00Z");
-    private static final Instant CONFIRMATION_EXPIRES_AT = Instant.parse("2026-07-07T00:01:00Z");
 
     @Mock
     private InstructorProfileRepository instructorProfileRepository;
@@ -83,7 +81,7 @@ class InstructorMatchingOfferServiceTest {
         MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
         matchingRequest.markGrouped();
         MatchingRequestGroupItem item = item(40L, matchingRequest, group);
-        MatchingOffer offer = offeredOffer(50L, instructorProfile, group, OFFER_EXPIRES_AT);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
         givenRespondableOffer(instructorProfile, offer, group, List.of(item));
 
         InstructorMatchingOfferDecisionResult result = service.respond(
@@ -95,14 +93,14 @@ class InstructorMatchingOfferServiceTest {
         assertThat(result.offerId()).isEqualTo(50L);
         assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.ACCEPTED);
         assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED);
-        assertThat(result.requesterConfirmationExpiresAt()).isEqualTo(CONFIRMATION_EXPIRES_AT);
+        assertThat(result.requesterConfirmationExpiresAt()).isNull();
         assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.ACCEPTED);
         assertThat(offer.getRespondedAt()).isEqualTo(FIXED_CLOCK.instant());
         assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED);
         assertThat(item.getStatus()).isSameAs(MatchingRequestGroupItemStatus.PENDING);
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.MATCHED);
         assertThat(matchingRequest.getMatchingOffer()).isSameAs(offer);
-        assertThat(matchingRequest.getExpiresAt()).isEqualTo(CONFIRMATION_EXPIRES_AT);
+        assertThat(matchingRequest.getExpiresAt()).isNull();
         verifyNoInteractions(matchingSearchService);
     }
 
@@ -114,8 +112,8 @@ class InstructorMatchingOfferServiceTest {
         MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
         matchingRequest.markGrouped();
         MatchingRequestGroupItem item = item(40L, matchingRequest, group);
-        MatchingOffer offer = offeredOffer(50L, instructorProfile, group, OFFER_EXPIRES_AT);
-        MatchingOffer nextOffer = offeredOffer(51L, instructorProfile(11L, member(3L, MemberRole.INSTRUCTOR)), group, OFFER_EXPIRES_AT);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
+        MatchingOffer nextOffer = offeredOffer(51L, instructorProfile(11L, member(3L, MemberRole.INSTRUCTOR)), group);
         givenRespondableOffer(instructorProfile, offer, group, List.of(item));
         when(matchingSearchService.ensureNextOfferForGroup(matchingRequest, group, FIXED_CLOCK.instant()))
                 .thenReturn(NextMatchingOfferResult.created(nextOffer));
@@ -141,7 +139,7 @@ class InstructorMatchingOfferServiceTest {
         MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
         matchingRequest.markGrouped();
         MatchingRequestGroupItem item = item(40L, matchingRequest, group);
-        MatchingOffer offer = offeredOffer(50L, instructorProfile, group, OFFER_EXPIRES_AT);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
         givenRespondableOffer(instructorProfile, offer, group, List.of(item));
         when(matchingSearchService.ensureNextOfferForGroup(matchingRequest, group, FIXED_CLOCK.instant()))
                 .thenReturn(NextMatchingOfferResult.noCandidate());
@@ -164,7 +162,7 @@ class InstructorMatchingOfferServiceTest {
         InstructorMatchingOfferService service = createService();
         InstructorProfile currentInstructor = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
         InstructorProfile otherInstructor = instructorProfile(11L, member(3L, MemberRole.INSTRUCTOR));
-        MatchingOffer offer = offeredOffer(50L, otherInstructor, exposedGroup(20L), OFFER_EXPIRES_AT);
+        MatchingOffer offer = offeredOffer(50L, otherInstructor, exposedGroup(20L));
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(currentInstructor));
         when(matchingOfferRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(offer));
 
@@ -179,35 +177,11 @@ class InstructorMatchingOfferServiceTest {
     }
 
     @Test
-    void respond는_응답시간이_지난_제안이면_MATCHING_OFFER_EXPIRED를_던진다() {
-        InstructorMatchingOfferService service = createService();
-        InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
-        MatchingRequestGroup group = exposedGroup(20L);
-        MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
-        MatchingRequestGroupItem item = item(40L, matchingRequest, group);
-        MatchingOffer offer = offeredOffer(
-                50L,
-                instructorProfile,
-                group,
-                Instant.parse("2026-07-06T23:59:59Z")
-        );
-        givenRespondableOffer(instructorProfile, offer, group, List.of(item));
-
-        assertThatExceptionOfType(BusinessException.class)
-                .isThrownBy(() -> service.respond(1L, 50L, MatchingOfferDecision.ACCEPTED))
-                .satisfies(exception -> assertThat(exception.getErrorCode())
-                        .isSameAs(MatchingErrorCode.MATCHING_OFFER_EXPIRED));
-
-        assertThat(offer.getStatus()).isSameAs(MatchingOfferStatus.OFFERED);
-        verifyNoInteractions(matchingSearchService);
-    }
-
-    @Test
     void respond는_이미_응답한_제안이면_MATCHING_OFFER_ALREADY_RESPONDED를_던지고_주변상태를_변경하지_않는다() {
         InstructorMatchingOfferService service = createService();
         InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
         MatchingRequestGroup group = exposedGroup(20L);
-        MatchingOffer offer = offeredOffer(50L, instructorProfile, group, OFFER_EXPIRES_AT);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
         offer.reject(FIXED_CLOCK.instant().minusSeconds(30));
         givenOfferAndGroup(instructorProfile, offer, group);
 
@@ -228,7 +202,7 @@ class InstructorMatchingOfferServiceTest {
         InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
         MatchingRequestGroup group = exposedGroup(20L);
         group.cancel();
-        MatchingOffer offer = offeredOffer(50L, instructorProfile, group, OFFER_EXPIRES_AT);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
         givenOfferAndGroup(instructorProfile, offer, group);
 
         assertThatExceptionOfType(BusinessException.class)
@@ -252,8 +226,8 @@ class InstructorMatchingOfferServiceTest {
         MatchingRequest secondRequest = matchingRequest(31L, member(3L, MemberRole.CONSUMER));
         MatchingRequestGroupItem firstItem = item(40L, firstRequest, firstGroup);
         MatchingRequestGroupItem secondItem = item(41L, secondRequest, secondGroup);
-        MatchingOffer firstOffer = offeredOffer(50L, instructorProfile, firstGroup, OFFER_EXPIRES_AT);
-        MatchingOffer secondOffer = offeredOffer(51L, instructorProfile, secondGroup, OFFER_EXPIRES_AT);
+        MatchingOffer firstOffer = offeredOffer(50L, instructorProfile, firstGroup);
+        MatchingOffer secondOffer = offeredOffer(51L, instructorProfile, secondGroup);
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(instructorProfile));
         when(matchingOfferRepository.findByInstructorProfileIdAndStatusOrderByIdAsc(
                 10L,
@@ -271,7 +245,7 @@ class InstructorMatchingOfferServiceTest {
         assertThat(firstItemResult.offerId()).isEqualTo(50L);
         assertThat(firstItemResult.groupId()).isEqualTo(20L);
         assertThat(firstItemResult.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
-        assertThat(firstItemResult.expiresAt()).isEqualTo(OFFER_EXPIRES_AT);
+        assertThat(firstItemResult.expiresAt()).isNull();
         assertThat(firstItemResult.lessonSummary().resort().code()).isEqualTo("HIGH1");
         assertThat(firstItemResult.lessonSummary().resort().displayName()).isEqualTo("하이원");
         assertThat(firstItemResult.lessonSummary().sport()).isSameAs(Sport.SNOWBOARD);
@@ -295,6 +269,7 @@ class InstructorMatchingOfferServiceTest {
                 matchingRequestGroupRepository,
                 matchingRequestGroupItemRepository,
                 matchingSearchService,
+                new MatchingTimeoutPolicy(),
                 FIXED_CLOCK
         );
     }
@@ -325,14 +300,12 @@ class InstructorMatchingOfferServiceTest {
     private MatchingOffer offeredOffer(
             Long id,
             InstructorProfile instructorProfile,
-            MatchingRequestGroup group,
-            Instant expiresAt
+            MatchingRequestGroup group
     ) {
         MatchingOffer offer = MatchingOffer.create(
                 instructorProfile,
                 group,
-                FIXED_CLOCK.instant(),
-                expiresAt
+                FIXED_CLOCK.instant()
         );
         ReflectionTestUtils.setField(offer, "id", id);
         return offer;

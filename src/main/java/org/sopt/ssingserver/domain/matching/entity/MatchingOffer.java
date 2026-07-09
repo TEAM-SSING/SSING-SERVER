@@ -12,7 +12,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.Duration;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -33,8 +32,6 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MatchingOffer extends BaseTimeEntity {
 
-    private static final Duration DEFAULT_RESPONSE_TIMEOUT = Duration.ofMinutes(1);
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -54,7 +51,6 @@ public class MatchingOffer extends BaseTimeEntity {
     @Column(nullable = false)
     private Instant exposedAt;
 
-    @Column(nullable = false)
     private Instant expiresAt;
 
     private Instant respondedAt;
@@ -64,12 +60,7 @@ public class MatchingOffer extends BaseTimeEntity {
             MatchingRequestGroup matchingRequestGroup,
             Instant exposedAt
     ) {
-        return create(
-                instructorProfile,
-                matchingRequestGroup,
-                exposedAt,
-                exposedAt.plus(DEFAULT_RESPONSE_TIMEOUT)
-        );
+        return create(instructorProfile, matchingRequestGroup, exposedAt, null);
     }
 
     public static MatchingOffer create(
@@ -88,7 +79,7 @@ public class MatchingOffer extends BaseTimeEntity {
     }
 
     public boolean isExpired(Instant now) {
-        return !expiresAt.isAfter(now);
+        return expiresAt != null && !expiresAt.isAfter(now);
     }
 
     public void accept(Instant respondedAt) {

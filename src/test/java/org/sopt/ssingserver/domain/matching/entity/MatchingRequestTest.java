@@ -20,7 +20,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class MatchingRequestTest {
 
-    private static final Instant EXPIRES_AT = Instant.parse("2026-07-07T00:10:00Z");
     private static final Instant CANCELED_AT = Instant.parse("2026-07-07T00:03:00Z");
 
     @Test
@@ -36,7 +35,7 @@ class MatchingRequestTest {
         assertThat(matchingRequest.isEquipmentReady()).isTrue();
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         assertThat(matchingRequest.getStatusReason()).isNull();
-        assertThat(matchingRequest.getExpiresAt()).isEqualTo(EXPIRES_AT);
+        assertThat(matchingRequest.getExpiresAt()).isNull();
     }
 
     @Test
@@ -54,7 +53,6 @@ class MatchingRequestTest {
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         assertThat(matchingRequest.getStatusReason()).isNull();
         assertThat(matchingRequest.getExpiresAt()).isNull();
-        assertThat(matchingRequest.isSearchExpired(EXPIRES_AT)).isFalse();
     }
 
     @Test
@@ -77,8 +75,7 @@ class MatchingRequestTest {
                 LessonLevel.FIRST_TIME,
                 2,
                 List.of(),
-                true,
-                EXPIRES_AT
+                true
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("requestedDurationMinutes must not be empty.");
@@ -93,8 +90,7 @@ class MatchingRequestTest {
                 LessonLevel.FIRST_TIME,
                 2,
                 List.of(120, 0),
-                true,
-                EXPIRES_AT
+                true
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("requestedDurationMinutes must contain positive minutes.");
@@ -113,20 +109,19 @@ class MatchingRequestTest {
     }
 
     @Test
-    void markMatched는_수락된_제안과_확인만료시각을_저장한다() {
+    void markMatched는_수락된_제안만_저장하고_만료시각은_비운다() {
         MatchingRequest matchingRequest = matchingRequest();
         MatchingOffer matchingOffer = MatchingOffer.create(
                 instructorProfile(),
                 MatchingRequestGroup.createCandidate(120),
                 Instant.parse("2026-07-07T00:01:00Z")
         );
-        Instant confirmationExpiresAt = Instant.parse("2026-07-07T00:02:00Z");
 
-        matchingRequest.markMatched(matchingOffer, confirmationExpiresAt);
+        matchingRequest.markMatched(matchingOffer);
 
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.MATCHED);
         assertThat(matchingRequest.getMatchingOffer()).isSameAs(matchingOffer);
-        assertThat(matchingRequest.getExpiresAt()).isEqualTo(confirmationExpiresAt);
+        assertThat(matchingRequest.getExpiresAt()).isNull();
         assertThat(matchingRequest.getStatusReason()).isNull();
     }
 
@@ -146,7 +141,7 @@ class MatchingRequestTest {
     }
 
     @Test
-    void 만료_메서드는_타임아웃_사유별로_EXPIRED와_사유를_저장한다() {
+    void 과거_보정용_만료_메서드는_EXPIRED와_사유를_저장한다() {
         MatchingRequest instructorTimeoutRequest = matchingRequest();
         MatchingRequest confirmationTimeoutRequest = matchingRequest();
         MatchingRequest paymentTimeoutRequest = matchingRequest();
@@ -174,8 +169,7 @@ class MatchingRequestTest {
                 LessonLevel.FIRST_TIME,
                 2,
                 List.of(120, 180),
-                true,
-                EXPIRES_AT
+                true
         );
     }
 

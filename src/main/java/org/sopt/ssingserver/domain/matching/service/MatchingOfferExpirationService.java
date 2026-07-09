@@ -29,7 +29,7 @@ public class MatchingOfferExpirationService {
     private final MatchingSearchService matchingSearchService;
     private final Clock clock;
 
-    // OFFERED 제안 하나를 만료 처리하고, 가능하면 같은 그룹에서 다음 우선순위 강사에게 넘김
+    // 유한 응답 시간 정책 재도입 시 OFFERED 제안 하나를 만료 처리하고 다음 우선순위 강사에게 넘기는 구현체
     @Transactional
     public void expireOffer(Long matchingOfferId) {
         Instant now = clock.instant();

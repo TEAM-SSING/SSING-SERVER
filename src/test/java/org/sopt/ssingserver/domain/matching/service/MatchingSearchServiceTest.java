@@ -32,14 +32,12 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
+import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
-import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
-import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferCreatedEvent;
-import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
@@ -82,7 +80,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_무제한탐색_요청에_후보가_없어도_REQUESTED_SEARCHING을_유지한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), null);
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
         when(instructorMatchingSettingRepository.findExposedCandidates(
@@ -103,54 +101,6 @@ class MatchingSearchServiceTest {
         verify(matchingRequestGroupItemRepository, never()).save(any());
         verifyNoInteractions(matchingOfferRepository);
         verify(matchingEventPublisher, never()).publish(any());
-    }
-
-    @Test
-    void search는_만료된_REQUESTED_요청을_NO_AVAILABLE_INSTRUCTOR로_최종_실패시킨다() {
-        MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-06T23:59:59Z"));
-        when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
-                .thenReturn(Optional.of(matchingRequest));
-
-        MatchingSearchResult result = service.search(1L);
-
-        assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.FAILED);
-        assertThat(matchingRequest.getStatusReason()).isSameAs(MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR);
-        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.NO_AVAILABLE_INSTRUCTOR);
-        assertThat(result.requestStatus()).isSameAs(MatchingRequestStatus.FAILED);
-        assertThat(result.requestStatusReason()).isSameAs(MatchingRequestStatusReason.NO_AVAILABLE_INSTRUCTOR);
-        verifyNoInteractions(instructorMatchingSettingRepository);
-        verifyNoInteractions(matchingRequestGroupRepository);
-        verifyNoInteractions(matchingOfferRepository);
-        ArgumentCaptor<MatchingRequestStatusChangedEvent> eventCaptor =
-                ArgumentCaptor.forClass(MatchingRequestStatusChangedEvent.class);
-        verify(matchingEventPublisher).publish(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().eventId()).isNotNull();
-        assertThat(eventCaptor.getValue().occurredAt()).isEqualTo(FIXED_CLOCK.instant());
-        assertThat(eventCaptor.getValue().matchingRequestId()).isEqualTo(1L);
-    }
-
-    @Test
-    void search는_만료_실패_이벤트도_트랜잭션_커밋후에_발행한다() {
-        MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-06T23:59:59Z"));
-        when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
-                .thenReturn(Optional.of(matchingRequest));
-        TransactionSynchronizationManager.initSynchronization();
-
-        try {
-            MatchingSearchResult result = service.search(1L);
-
-            assertThat(result.matchingStatus()).isSameAs(MatchingStatus.NO_AVAILABLE_INSTRUCTOR);
-            verify(matchingEventPublisher, never()).publish(any());
-
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(TransactionSynchronization::afterCommit);
-
-            verify(matchingEventPublisher).publish(isA(MatchingRequestStatusChangedEvent.class));
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
     }
 
     @Test
@@ -177,7 +127,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_요청인원이_강사최대인원보다_적어도_수용가능하면_강사제안을_생성한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(240, 120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(240, 120, 180));
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 3, List.of(180, 240));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
@@ -224,7 +174,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_팀정원이_맞으면_그룹을_노출하고_강사제안을_생성한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
@@ -262,7 +212,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_강사에게_활성_OFFERED_제안이_있으면_중복제안을_만들지_않고_SEARCHING을_유지한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
@@ -303,7 +253,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_앞선_후보가_잠금재조회에서_유효하지_않으면_다음_가능후보로_제안한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         InstructorMatchingSetting staleSetting = instructorMatchingSetting(11L, 101L, 2, List.of(120, 180));
         InstructorMatchingSetting availableSetting = instructorMatchingSetting(12L, 102L, 2, List.of(180, 240));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
@@ -350,7 +300,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_앞선_후보가_활성제안으로_점유되어도_다음_가능후보로_제안한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         InstructorMatchingSetting busySetting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         InstructorMatchingSetting availableSetting = instructorMatchingSetting(12L, 102L, 2, List.of(180, 240));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
@@ -404,7 +354,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_같은_매칭요청에서_이미_제안받은_강사를_건너뛰고_다음_후보로_제안한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         InstructorMatchingSetting previouslyOfferedSetting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         InstructorMatchingSetting availableSetting = instructorMatchingSetting(12L, 102L, 2, List.of(180, 240));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
@@ -453,7 +403,7 @@ class MatchingSearchServiceTest {
     @Test
     void search는_트랜잭션_동기화가_있으면_제안생성_이벤트를_커밋후에_발행한다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
@@ -495,15 +445,14 @@ class MatchingSearchServiceTest {
     @Test
     void ensureNextOfferForGroup은_그룹에_이미_OFFERED_제안이_있으면_새_제안을_만들지_않는다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
         group.expose();
         ReflectionTestUtils.setField(group, "id", 20L);
         MatchingOffer activeOffer = MatchingOffer.create(
                 instructorProfile(101L),
                 group,
-                FIXED_CLOCK.instant(),
-                FIXED_CLOCK.instant().plusSeconds(60)
+                FIXED_CLOCK.instant()
         );
         ReflectionTestUtils.setField(activeOffer, "id", 30L);
         when(matchingRequestGroupRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(group));
@@ -526,7 +475,7 @@ class MatchingSearchServiceTest {
     @Test
     void ensureNextOfferForGroup은_활성_제안이_없으면_현재_후보를_다시_조회해_새_제안을_만든다() {
         MatchingSearchService service = createService();
-        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180), Instant.parse("2026-07-07T00:05:00Z"));
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
         group.expose();
         ReflectionTestUtils.setField(group, "id", 20L);
@@ -570,6 +519,7 @@ class MatchingSearchServiceTest {
                 matchingOfferRepository,
                 instructorMatchingSettingRepository,
                 new MatchingStatusResolver(),
+                new MatchingTimeoutPolicy(),
                 matchingEventPublisher,
                 new MatchingAfterCommitExecutor(),
                 FIXED_CLOCK
@@ -579,8 +529,7 @@ class MatchingSearchServiceTest {
     private MatchingRequest matchingRequest(
             Long id,
             int headcount,
-            List<Integer> requestedDurationMinutes,
-            Instant expiresAt
+            List<Integer> requestedDurationMinutes
     ) {
         MatchingRequest matchingRequest = MatchingRequest.create(
                 Member.create("소비자", null, MemberRole.CONSUMER, MemberStatus.ACTIVE),
@@ -589,8 +538,7 @@ class MatchingSearchServiceTest {
                 LessonLevel.FIRST_TIME,
                 headcount,
                 requestedDurationMinutes,
-                true,
-                expiresAt
+                true
         );
         ReflectionTestUtils.setField(matchingRequest, "id", id);
         return matchingRequest;

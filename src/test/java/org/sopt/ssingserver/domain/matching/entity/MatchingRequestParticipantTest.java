@@ -40,8 +40,7 @@ class MatchingRequestParticipantTest {
                 LessonLevel.FIRST_TIME,
                 1,
                 List.of(120),
-                true,
-                Instant.parse("2026-07-07T00:10:00Z")
+                true
         );
     }
 

@@ -19,8 +19,8 @@ import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
-import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
+import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
@@ -59,7 +59,7 @@ class MatchingOfferExpirationServiceTest {
     private MatchingSearchService matchingSearchService;
 
     @Test
-    void expireOffer는_만료된_OFFERED_제안을_EXPIRED로_바꾸고_다음_후보가_있으면_그룹을_EXPOSED로_유지한다() {
+    void expireOffer는_유한정책의_만료된_OFFERED_제안을_EXPIRED로_바꾸고_다음_후보가_있으면_그룹을_EXPOSED로_유지한다() {
         MatchingOfferExpirationService service = createService();
         MatchingRequestGroup group = exposedGroup(20L);
         MatchingRequest matchingRequest = matchingRequest(30L);
@@ -79,7 +79,7 @@ class MatchingOfferExpirationServiceTest {
     }
 
     @Test
-    void expireOffer는_다음_후보가_없으면_그룹을_EXPIRED로_닫고_요청을_REMATCHING용_REQUESTED로_되돌린다() {
+    void expireOffer는_유한정책의_다음_후보가_없으면_그룹을_EXPIRED로_닫고_요청을_REMATCHING용_REQUESTED로_되돌린다() {
         MatchingOfferExpirationService service = createService();
         MatchingRequestGroup group = exposedGroup(20L);
         MatchingRequest matchingRequest = matchingRequest(30L);
@@ -99,13 +99,14 @@ class MatchingOfferExpirationServiceTest {
     }
 
     @Test
-    void expireOffer는_아직_만료되지_않은_제안이면_아무_상태도_바꾸지_않는다() {
+    void expireOffer는_무기한_제안이면_아무_상태도_바꾸지_않는다() {
         MatchingOfferExpirationService service = createService();
-        MatchingOffer offer = offeredOffer(
-                50L,
+        MatchingOffer offer = MatchingOffer.create(
+                instructorProfile(10L),
                 exposedGroup(20L),
-                Instant.parse("2026-07-07T00:01:01Z")
+                Instant.parse("2026-07-07T00:00:00Z")
         );
+        ReflectionTestUtils.setField(offer, "id", 50L);
         when(matchingOfferRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(offer));
 
         service.expireOffer(50L);

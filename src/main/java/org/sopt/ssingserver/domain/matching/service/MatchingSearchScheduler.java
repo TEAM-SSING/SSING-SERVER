@@ -18,7 +18,7 @@ public class MatchingSearchScheduler {
     private final MatchingOfferExpirationTriggerService matchingOfferExpirationTriggerService;
     private final MatchingSearchTriggerService matchingSearchTriggerService;
 
-    // MVP 기준 1분 주기 제안 만료 정리 후 REQUESTED 요청 재탐색
+    // REQUESTED 요청을 주기적으로 재탐색한다. 무기한 정책에서는 제안 만료 트리거가 no-op으로 동작한다.
     @Scheduled(fixedDelay = 60_000)
     public void runScheduledSearch() {
         try {
