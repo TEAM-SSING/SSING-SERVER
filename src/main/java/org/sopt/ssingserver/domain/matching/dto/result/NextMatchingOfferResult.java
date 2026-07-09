@@ -20,7 +20,10 @@ public record NextMatchingOfferResult(
     }
 
     public boolean hasActiveOffer() {
-        return status != Status.NO_CANDIDATE;
+        return switch (status) {
+            case CREATED, ALREADY_ACTIVE -> true;
+            case NO_CANDIDATE -> false;
+        };
     }
 
     public enum Status {
