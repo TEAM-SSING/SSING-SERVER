@@ -3,7 +3,9 @@ package org.sopt.ssingserver.domain.home.controller;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.home.controller.docs.HomeApiDocs;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse;
-import org.sopt.ssingserver.domain.home.service.HomeService;
+import org.sopt.ssingserver.domain.home.dto.response.InstructorHomeResponse;
+import org.sopt.ssingserver.domain.home.service.ConsumerHomeService;
+import org.sopt.ssingserver.domain.home.service.InstructorHomeService;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.response.CommonSuccessCode;
 import org.sopt.ssingserver.global.response.SuccessResponseFactory;
@@ -17,16 +19,25 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/consumer/home")
+@RequestMapping("/api/v1")
 public class HomeController implements HomeApiDocs {
 
-    private final HomeService homeService;
+    private final ConsumerHomeService consumerHomeService;
+    private final InstructorHomeService instructorHomeService;
 
     @Override
     @RequireAccess(AccessPolicy.CONSUMER)
-    @GetMapping
-    public ResponseEntity<BaseResponse<ConsumerHomeResponse>> getHome(CurrentMember currentMember) {
-        ConsumerHomeResponse response = homeService.getHome(currentMember.memberId());
+    @GetMapping("/consumer/home")
+    public ResponseEntity<BaseResponse<ConsumerHomeResponse>> getConsumerHome(CurrentMember currentMember) {
+        ConsumerHomeResponse response = consumerHomeService.getConsumerHome(currentMember.memberId());
+        return SuccessResponseFactory.success(CommonSuccessCode.SUCCESS, response);
+    }
+
+    @Override
+    @RequireAccess(AccessPolicy.APPROVED_INSTRUCTOR)
+    @GetMapping("/instructor/home")
+    public ResponseEntity<BaseResponse<InstructorHomeResponse>> getInstructorHome(CurrentMember currentMember) {
+        InstructorHomeResponse response = instructorHomeService.getInstructorHome(currentMember.memberId());
         return SuccessResponseFactory.success(CommonSuccessCode.SUCCESS, response);
     }
 }

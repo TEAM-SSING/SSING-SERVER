@@ -19,7 +19,7 @@ import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
 
 @ExtendWith(MockitoExtension.class)
-class HomeServiceTest {
+class ConsumerHomeServiceTest {
 
     private static final Clock FIXED_CLOCK = Clock.fixed(
             Instant.parse("2026-07-09T00:00:00Z"),
@@ -34,8 +34,8 @@ class HomeServiceTest {
     private LessonParticipantRepository lessonParticipantRepository;
 
     @Test
-    void getHome은_예정된_강습을_D_day와_함께_반환한다() {
-        HomeService service = createService();
+    void getConsumerHome은_예정된_강습을_D_day와_함께_반환한다() {
+        ConsumerHomeService service = createService();
         HomeLessonCardProjection lessonCard = lessonCard(
                 1L,
                 LessonStatus.CONFIRMED,
@@ -46,7 +46,7 @@ class HomeServiceTest {
         when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
                 .thenReturn(List.of(lessonCard));
 
-        ConsumerHomeResponse response = service.getHome(1L);
+        ConsumerHomeResponse response = service.getConsumerHome(1L);
 
         assertThat(response.hasUnreadNotification()).isFalse();
         assertThat(response.lessonCards()).hasSize(1);
@@ -61,8 +61,8 @@ class HomeServiceTest {
     }
 
     @Test
-    void getHome은_진행중인_강습의_remainingDays를_0으로_고정한다() {
-        HomeService service = createService();
+    void getConsumerHome은_진행중인_강습의_remainingDays를_0으로_고정한다() {
+        ConsumerHomeService service = createService();
         HomeLessonCardProjection lessonCard = lessonCard(
                 2L,
                 LessonStatus.IN_PROGRESS,
@@ -73,7 +73,7 @@ class HomeServiceTest {
         when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
                 .thenReturn(List.of(lessonCard));
 
-        ConsumerHomeResponse response = service.getHome(1L);
+        ConsumerHomeResponse response = service.getConsumerHome(1L);
 
         LessonCardResponse lesson = response.lessonCards().get(0);
         assertThat(lesson.displayStatus()).isSameAs(LessonStatus.IN_PROGRESS);
@@ -82,8 +82,8 @@ class HomeServiceTest {
     }
 
     @Test
-    void getHome은_조회된_강습_카드를_순서대로_반환한다() {
-        HomeService service = createService();
+    void getConsumerHome은_조회된_강습_카드를_순서대로_반환한다() {
+        ConsumerHomeService service = createService();
         HomeLessonCardProjection firstLessonCard = lessonCard(
                 1L,
                 LessonStatus.CONFIRMED,
@@ -101,7 +101,7 @@ class HomeServiceTest {
         when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
                 .thenReturn(List.of(firstLessonCard, secondLessonCard));
 
-        ConsumerHomeResponse response = service.getHome(1L);
+        ConsumerHomeResponse response = service.getConsumerHome(1L);
 
         assertThat(response.lessonCards())
                 .extracting(LessonCardResponse::lessonId)
@@ -109,19 +109,22 @@ class HomeServiceTest {
     }
 
     @Test
-    void getHome은_예약된_강습이_없으면_빈_배열을_반환한다() {
-        HomeService service = createService();
+    void getConsumerHome은_예약된_강습이_없으면_빈_배열을_반환한다() {
+        ConsumerHomeService service = createService();
         when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
                 .thenReturn(List.of());
 
-        ConsumerHomeResponse response = service.getHome(1L);
+        ConsumerHomeResponse response = service.getConsumerHome(1L);
 
         assertThat(response.lessonCards()).isEmpty();
         assertThat(response.hasUnreadNotification()).isFalse();
     }
 
-    private HomeService createService() {
-        return new HomeService(lessonParticipantRepository, FIXED_CLOCK);
+    private ConsumerHomeService createService() {
+        return new ConsumerHomeService(
+                lessonParticipantRepository,
+                FIXED_CLOCK
+        );
     }
 
     private HomeLessonCardProjection lessonCard(

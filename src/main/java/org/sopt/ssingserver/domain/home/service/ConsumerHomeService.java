@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class HomeService {
+public class ConsumerHomeService {
 
     private static final List<LessonStatus> UPCOMING_LESSON_STATUSES = List.of(
             LessonStatus.CONFIRMED,
@@ -27,8 +27,9 @@ public class HomeService {
     private final LessonParticipantRepository lessonParticipantRepository;
     private final Clock clock;
 
+    // 소비자 홈에 표시할 예약/진행 강습 카드 조회함
     @Transactional(readOnly = true)
-    public ConsumerHomeResponse getHome(Long memberId) {
+    public ConsumerHomeResponse getConsumerHome(Long memberId) {
         List<HomeLessonCardProjection> lessonCards = lessonParticipantRepository
                 .findHomeLessonCardsByMemberIdAndLessonStatusIn(memberId, UPCOMING_LESSON_STATUSES);
 
@@ -41,12 +42,13 @@ public class HomeService {
                 ))
                 .toList();
 
-        // TODO: 알림 읽음 여부 정책이 확정되면 실제 조회로 교체
+        // TODO: 알림 읽음 여부 정책 확정 후 실제 조회로 교체함
         boolean hasUnreadNotification = false;
 
         return ConsumerHomeResponse.from(lessonCardResponses, hasUnreadNotification);
     }
 
+    // 강습 상태와 예정일 기준으로 홈 카드의 D-day 값 계산함
     private int resolveRemainingDays(LessonStatus lessonStatus, Instant scheduledAt, Instant now) {
         if (lessonStatus == LessonStatus.IN_PROGRESS) {
             return 0;
@@ -57,6 +59,7 @@ public class HomeService {
         return (int) Math.max(0, ChronoUnit.DAYS.between(today, scheduledDate));
     }
 
+    // 소비자 홈 카드 제목을 대표 소비자 닉네임과 전체 인원으로 생성함
     private String resolveTitle(HomeLessonCardProjection lessonCard) {
         return lessonCard.getRequesterNickname() + "님 팀 " + lessonCard.getTotalHeadcount() + "명";
     }

@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -64,6 +65,9 @@ public class Lesson extends BaseTimeEntity {
     private String meetingPlace;
 
     @Column(nullable = false)
+    private Instant confirmedAt;
+
+    @Column(nullable = false)
     private Instant scheduledAt;
 
     @Enumerated(EnumType.STRING)
@@ -75,4 +79,29 @@ public class Lesson extends BaseTimeEntity {
     private Instant completedAt;
 
     private Instant canceledAt;
+
+    public static Lesson createImmediateConfirmed(
+            InstructorProfile instructorProfile,
+            Resort resort,
+            MatchingOffer matchingOffer,
+            Sport sport,
+            LessonLevel lessonLevel,
+            int totalHeadcount,
+            int durationMinutes,
+            Instant confirmedAt
+    ) {
+        Lesson lesson = new Lesson();
+        lesson.instructorProfile = instructorProfile;
+        lesson.resort = resort;
+        lesson.matchingOffer = matchingOffer;
+        lesson.sport = sport;
+        lesson.lessonLevel = lessonLevel;
+        lesson.totalHeadcount = totalHeadcount;
+        lesson.durationMinutes = durationMinutes;
+        // 즉시 매칭은 예약 시간이 없으므로 확정 시각을 홈 카드 기준 시각으로 함께 저장한다.
+        lesson.confirmedAt = Objects.requireNonNull(confirmedAt, "confirmedAt must not be null.");
+        lesson.scheduledAt = confirmedAt;
+        lesson.status = LessonStatus.CONFIRMED;
+        return lesson;
+    }
 }
