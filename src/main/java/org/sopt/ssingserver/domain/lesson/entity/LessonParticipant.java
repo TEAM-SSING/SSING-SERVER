@@ -8,6 +8,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -25,6 +26,11 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 @Entity
 @Table(
         name = "lesson_participants",
+        indexes = {
+                @Index(
+                        name = "idx_lesson_participants_lesson_request_id",
+                        columnList = "lesson_id, matching_request_id, id")
+        },
         uniqueConstraints = {
                 @UniqueConstraint(
                         name = "uk_lesson_participants_lesson_request_participant",
