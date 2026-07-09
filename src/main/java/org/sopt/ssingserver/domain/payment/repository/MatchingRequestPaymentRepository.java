@@ -33,4 +33,17 @@ public interface MatchingRequestPaymentRepository extends JpaRepository<Matching
             order by payment.id asc
             """)
     List<MatchingRequestPayment> findByMatchingOfferIdForUpdate(@Param("matchingOfferId") Long matchingOfferId);
+
+    // 커밋 이후 WebSocket 결제 이벤트의 수신자와 요청별 결제 상태 조회
+    @Query("""
+            select payment
+            from MatchingRequestPayment payment
+            join fetch payment.matchingRequest matchingRequest
+            join fetch matchingRequest.member
+            where payment.matchingOffer.id = :matchingOfferId
+            order by payment.id asc
+            """)
+    List<MatchingRequestPayment> findRealtimeContextByMatchingOfferIdOrderByIdAsc(
+            @Param("matchingOfferId") Long matchingOfferId
+    );
 }

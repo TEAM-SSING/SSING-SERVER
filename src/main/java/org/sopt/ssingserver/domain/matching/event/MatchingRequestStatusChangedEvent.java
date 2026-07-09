@@ -10,10 +10,12 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 public record MatchingRequestStatusChangedEvent(
         // 알림 계층의 중복 발행 방어와 추적용 이벤트 id
         UUID eventId,
-        // 상태 변경 판단 시각, 클라이언트 이벤트 정렬과 로그 분석 기준
+        // 상태 변경 판단 시각. 이벤트 순서 보장이 아니라 로그 추적에 사용한다.
         Instant occurredAt,
         // REST 상태 조회 복구의 기준 매칭 요청 id
         Long matchingRequestId,
+        // 그룹 생성 이후 상태 변경이면 관련 그룹 id, 탐색 초기 단계면 null
+        Long matchingRequestGroupId,
         // DB에 저장된 요청 상태
         MatchingRequestStatus requestStatus,
         // DB에 저장된 실패/상태 전환 사유
@@ -21,4 +23,23 @@ public record MatchingRequestStatusChangedEvent(
         // 앱에 전달할 서버 계산 표시 상태
         MatchingStatus matchingStatus
 ) implements MatchingDomainEvent {
+
+    public MatchingRequestStatusChangedEvent(
+            UUID eventId,
+            Instant occurredAt,
+            Long matchingRequestId,
+            MatchingRequestStatus requestStatus,
+            MatchingRequestStatusReason requestStatusReason,
+            MatchingStatus matchingStatus
+    ) {
+        this(
+                eventId,
+                occurredAt,
+                matchingRequestId,
+                null,
+                requestStatus,
+                requestStatusReason,
+                matchingStatus
+        );
+    }
 }

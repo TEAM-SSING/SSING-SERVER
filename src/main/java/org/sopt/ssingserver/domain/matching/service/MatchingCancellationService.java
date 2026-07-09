@@ -20,6 +20,7 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferCanceledEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
@@ -106,10 +107,18 @@ public class MatchingCancellationService {
                 UUID.randomUUID(),
                 now,
                 matchingRequest.getId(),
+                matchingRequestGroup.map(MatchingRequestGroup::getId).orElse(null),
                 matchingRequest.getStatus(),
                 matchingRequest.getStatusReason(),
                 matchingStatus
         ));
+        activeOffers.forEach(offer -> publishAfterCommit(new MatchingOfferCanceledEvent(
+                UUID.randomUUID(),
+                now,
+                offer.getMatchingRequestGroup().getId(),
+                offer.getId(),
+                matchingRequest.getStatusReason()
+        )));
 
         logCancellationSuccess(
                 memberId,

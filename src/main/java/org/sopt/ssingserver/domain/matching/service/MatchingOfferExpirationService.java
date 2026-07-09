@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
@@ -11,6 +12,12 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
+import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
+import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
+import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
@@ -27,6 +34,8 @@ public class MatchingOfferExpirationService {
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingSearchService matchingSearchService;
+    private final MatchingEventPublisher matchingEventPublisher;
+    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
     private final Clock clock;
 
     // 유한 응답 시간 정책 재도입 시 OFFERED 제안 하나를 만료 처리하고 다음 우선순위 강사에게 넘기는 구현체
@@ -52,6 +61,13 @@ public class MatchingOfferExpirationService {
         }
 
         matchingOffer.expire();
+        publishAfterCommit(new MatchingOfferClosedEvent(
+                UUID.randomUUID(),
+                now,
+                matchingRequestGroup.getId(),
+                matchingOffer.getId(),
+                MatchingOfferClosedReason.EXPIRED
+        ));
         MatchingRequest matchingRequest = groupItems.getFirst().getMatchingRequest();
         NextMatchingOfferResult nextOfferResult = matchingSearchService.ensureNextOfferForGroup(
                 matchingRequest,
@@ -61,17 +77,35 @@ public class MatchingOfferExpirationService {
         if (nextOfferResult.hasActiveOffer()) {
             matchingRequestGroup.expose();
         } else {
-            closeGroupAndRequestRematch(matchingRequestGroup, groupItems);
+            closeGroupAndRequestRematch(matchingRequestGroup, groupItems, now);
         }
     }
 
     private void closeGroupAndRequestRematch(
             MatchingRequestGroup matchingRequestGroup,
-            List<MatchingRequestGroupItem> groupItems
+            List<MatchingRequestGroupItem> groupItems,
+            Instant now
     ) {
         matchingRequestGroup.expire();
         for (MatchingRequestGroupItem groupItem : groupItems) {
-            groupItem.getMatchingRequest().rematchAfterInstructorTimeout();
+            MatchingRequest matchingRequest = groupItem.getMatchingRequest();
+            matchingRequest.rematchAfterInstructorTimeout();
+            publishAfterCommit(new MatchingRequestStatusChangedEvent(
+                    UUID.randomUUID(),
+                    now,
+                    matchingRequest.getId(),
+                    matchingRequestGroup.getId(),
+                    matchingRequest.getStatus(),
+                    matchingRequest.getStatusReason(),
+                    MatchingStatus.REMATCHING
+            ));
         }
+    }
+
+    private void publishAfterCommit(MatchingDomainEvent event) {
+        matchingAfterCommitExecutor.execute(
+                "matching-domain-event-publish",
+                () -> matchingEventPublisher.publish(event)
+        );
     }
 }

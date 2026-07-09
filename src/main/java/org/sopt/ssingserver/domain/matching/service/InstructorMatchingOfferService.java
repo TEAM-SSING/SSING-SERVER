@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
@@ -20,6 +21,12 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingOfferDecision;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
+import org.sopt.ssingserver.domain.matching.event.InstructorAcceptedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
+import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
@@ -41,6 +48,8 @@ public class InstructorMatchingOfferService {
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingSearchService matchingSearchService;
     private final MatchingTimeoutPolicy matchingTimeoutPolicy;
+    private final MatchingEventPublisher matchingEventPublisher;
+    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
     private final Clock clock;
 
     // 강사 앱 재진입/WebSocket 유실 복구 시 현재 강사에게 노출된 제안만 조회
@@ -121,6 +130,12 @@ public class InstructorMatchingOfferService {
             groupItem.requestConfirmation();
             groupItem.getMatchingRequest().markMatched(matchingOffer, requesterConfirmationExpiresAt);
         }
+        publishAfterCommit(new InstructorAcceptedEvent(
+                UUID.randomUUID(),
+                now,
+                matchingRequestGroup.getId(),
+                matchingOffer.getId()
+        ));
 
         return new InstructorMatchingOfferDecisionResult(
                 matchingOffer.getId(),
@@ -139,6 +154,13 @@ public class InstructorMatchingOfferService {
             Instant now
     ) {
         matchingOffer.reject(now);
+        publishAfterCommit(new MatchingOfferClosedEvent(
+                UUID.randomUUID(),
+                now,
+                matchingRequestGroup.getId(),
+                matchingOffer.getId(),
+                MatchingOfferClosedReason.REJECTED
+        ));
 
         MatchingRequest matchingRequest = groupItems.getFirst().getMatchingRequest();
         NextMatchingOfferResult nextOfferResult = matchingSearchService.ensureNextOfferForGroup(
@@ -149,7 +171,7 @@ public class InstructorMatchingOfferService {
         if (nextOfferResult.hasActiveOffer()) {
             matchingRequestGroup.expose();
         } else {
-            closeGroupAndRequestRematch(matchingRequestGroup, groupItems);
+            closeGroupAndRequestRematch(matchingRequestGroup, groupItems, now);
         }
 
         return new InstructorMatchingOfferDecisionResult(
@@ -163,12 +185,30 @@ public class InstructorMatchingOfferService {
 
     private void closeGroupAndRequestRematch(
             MatchingRequestGroup matchingRequestGroup,
-            List<MatchingRequestGroupItem> groupItems
+            List<MatchingRequestGroupItem> groupItems,
+            Instant now
     ) {
         matchingRequestGroup.cancel();
         for (MatchingRequestGroupItem groupItem : groupItems) {
-            groupItem.getMatchingRequest().rematchAfterInstructorRejected();
+            MatchingRequest matchingRequest = groupItem.getMatchingRequest();
+            matchingRequest.rematchAfterInstructorRejected();
+            publishAfterCommit(new MatchingRequestStatusChangedEvent(
+                    UUID.randomUUID(),
+                    now,
+                    matchingRequest.getId(),
+                    matchingRequestGroup.getId(),
+                    matchingRequest.getStatus(),
+                    matchingRequest.getStatusReason(),
+                    org.sopt.ssingserver.domain.matching.enums.MatchingStatus.REMATCHING
+            ));
         }
+    }
+
+    private void publishAfterCommit(MatchingDomainEvent event) {
+        matchingAfterCommitExecutor.execute(
+                "matching-domain-event-publish",
+                () -> matchingEventPublisher.publish(event)
+        );
     }
 
     private Map<Long, List<MatchingRequestGroupItem>> findGroupItemsByGroupId(List<MatchingOffer> matchingOffers) {

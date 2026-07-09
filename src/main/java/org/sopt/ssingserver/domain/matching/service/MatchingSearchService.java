@@ -266,7 +266,7 @@ public class MatchingSearchService {
                 totalHeadcount
         ));
 
-        // 실제 WebSocket/FCM 부재 상태의 제안 생성 이벤트 포트 전달과 후속 구현 연결 지점
+        // DB 커밋 뒤 WebSocket 알림 계층이 강사와 소비자에게 제안 생성을 전달한다.
         publishAfterCommit(new MatchingOfferCreatedEvent(
                 // 이벤트 저장소 도입 전 MVP의 발행 단위 추적용 id 생성
                 UUID.randomUUID(),
@@ -302,10 +302,8 @@ public class MatchingSearchService {
         return MatchingSearchResult.of(matchingRequest, matchingStatus);
     }
 
-    // DB 변경 커밋 이후 상태 변경 이벤트의 알림 계층 전달
-    // 트랜잭션 없는 단위 테스트/직접 호출 환경의 즉시 발행과 같은 코드 경로 검증
+    // DB 변경 커밋 이후 상태 변경 이벤트를 알림 계층에 전달한다.
     private void publishAfterCommit(MatchingDomainEvent event) {
-        // 이벤트 수신 계층의 미구현 상태에서도 Service가 포트 호출 위치를 고정하는 경계
         matchingAfterCommitExecutor.execute(
                 "matching-domain-event-publish",
                 () -> matchingEventPublisher.publish(event)

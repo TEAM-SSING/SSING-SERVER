@@ -33,6 +33,55 @@ public record MatchingRealtimeEvent(
     ) {
     }
 
+    public record MatchingOfferClosedPayload(
+            String closedReason,
+            String message
+    ) {
+    }
+
+    public record InstructorAcceptedPayload(
+            InstructorSummary instructor,
+            LessonSummary lessonSummary
+    ) {
+    }
+
+    public record RequesterConfirmationUpdatedPayload(
+            ProgressSummary progressSummary
+    ) {
+    }
+
+    public record PaymentPendingPayload(
+            Long matchingRequestPaymentId
+    ) {
+    }
+
+    public record PaymentStatusChangedPayload(
+            ProgressSummary progressSummary
+    ) {
+    }
+
+    public record MatchingConfirmedPayload(
+            Long lessonId,
+            LessonSummary lessonSummary
+    ) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record InstructorSummary(
+            Long instructorProfileId,
+            String name,
+            String profileImageUrl
+    ) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ProgressSummary(
+            Integer acceptedRequesterCount,
+            int totalRequesterCount,
+            Integer paidRequesterCount
+    ) {
+    }
+
     public record RequestSummary(
             String requesterName,
             int headcount,

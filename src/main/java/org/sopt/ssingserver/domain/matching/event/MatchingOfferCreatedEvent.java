@@ -7,7 +7,7 @@ import java.util.UUID;
 public record MatchingOfferCreatedEvent(
         // 알림 계층의 중복 발행 방어와 추적용 이벤트 id
         UUID eventId,
-        // 제안 생성 판단 시각, 클라이언트 이벤트 정렬과 로그 분석 기준
+        // 제안 생성 판단 시각. 이벤트 순서 보장이 아니라 로그 추적에 사용한다.
         Instant occurredAt,
         // 소비자 요청 상태 복구 조회의 기준 매칭 요청 id
         Long matchingRequestId,

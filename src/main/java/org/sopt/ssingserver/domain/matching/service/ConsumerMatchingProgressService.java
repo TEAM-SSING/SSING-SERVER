@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.entity.LessonParticipant;
@@ -23,6 +24,15 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
+import org.sopt.ssingserver.domain.matching.event.MatchingConfirmedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
+import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
+import org.sopt.ssingserver.domain.matching.event.PaymentPendingEvent;
+import org.sopt.ssingserver.domain.matching.event.PaymentStatusChangedEvent;
+import org.sopt.ssingserver.domain.matching.event.RequesterConfirmationUpdatedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipantRepository;
@@ -52,6 +62,8 @@ public class ConsumerMatchingProgressService {
     private final MatchingRequestParticipantRepository matchingRequestParticipantRepository;
     private final LessonRepository lessonRepository;
     private final LessonParticipantRepository lessonParticipantRepository;
+    private final MatchingEventPublisher matchingEventPublisher;
+    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
     private final Clock clock;
 
     // 강사 수락 이후 대표 소비자의 최종 수락/거절을 단일 트랜잭션에서 반영
@@ -105,6 +117,14 @@ public class ConsumerMatchingProgressService {
         int paidCount = countCompletedPayments(payments);
         int requiredCount = payments.size();
         if (paidCount != requiredCount) {
+            publishAfterCommit(new PaymentStatusChangedEvent(
+                    UUID.randomUUID(),
+                    now,
+                    context.group().getId(),
+                    matchingOffer.getId(),
+                    paidCount,
+                    requiredCount
+            ));
             return new ConsumerMatchingPaymentResult(
                     matchingRequest.getId(),
                     MatchingStatus.WAITING_FOR_OTHER_PAYMENTS,
@@ -123,6 +143,13 @@ public class ConsumerMatchingProgressService {
             groupItem.getMatchingRequest().confirm();
         }
         Lesson lesson = createConfirmedLesson(context, matchingOffer, now);
+        publishAfterCommit(new MatchingConfirmedEvent(
+                UUID.randomUUID(),
+                now,
+                context.group().getId(),
+                matchingOffer.getId(),
+                lesson.getId()
+        ));
 
         return new ConsumerMatchingPaymentResult(
                 matchingRequest.getId(),
@@ -146,6 +173,14 @@ public class ConsumerMatchingProgressService {
         int confirmedCount = countAcceptedItems(context.groupItems());
         int requiredCount = context.groupItems().size();
         if (confirmedCount != requiredCount) {
+            publishAfterCommit(new RequesterConfirmationUpdatedEvent(
+                    UUID.randomUUID(),
+                    now,
+                    context.group().getId(),
+                    requireAcceptedOffer(context.matchingRequest()).getId(),
+                    confirmedCount,
+                    requiredCount
+            ));
             return new ConsumerMatchingConfirmationResult(
                     context.matchingRequest().getId(),
                     MatchingStatus.WAITING_FOR_OTHER_CONFIRMATIONS,
@@ -164,6 +199,12 @@ public class ConsumerMatchingProgressService {
         context.group().markConsumerAccepted();
         createPendingPayments(context, now);
         context.group().markPaymentPending();
+        publishAfterCommit(new PaymentPendingEvent(
+                UUID.randomUUID(),
+                now,
+                context.group().getId(),
+                requireAcceptedOffer(context.matchingRequest()).getId()
+        ));
 
         return new ConsumerMatchingConfirmationResult(
                 context.matchingRequest().getId(),
@@ -194,8 +235,25 @@ public class ConsumerMatchingProgressService {
             } else {
                 groupItem.cancel();
             }
-            groupItem.getMatchingRequest().rematchAfterConsumerRejected();
+            MatchingRequest matchingRequest = groupItem.getMatchingRequest();
+            matchingRequest.rematchAfterConsumerRejected();
+            publishAfterCommit(new MatchingRequestStatusChangedEvent(
+                    UUID.randomUUID(),
+                    now,
+                    matchingRequest.getId(),
+                    context.group().getId(),
+                    matchingRequest.getStatus(),
+                    matchingRequest.getStatusReason(),
+                    MatchingStatus.REMATCHING
+            ));
         }
+        publishAfterCommit(new MatchingOfferClosedEvent(
+                UUID.randomUUID(),
+                now,
+                context.group().getId(),
+                matchingOffer.getId(),
+                MatchingOfferClosedReason.GROUP_CANCELED
+        ));
 
         return new ConsumerMatchingConfirmationResult(
                 context.matchingRequest().getId(),
@@ -284,6 +342,13 @@ public class ConsumerMatchingProgressService {
                 .toList();
         lessonParticipantRepository.saveAll(lessonParticipants);
         return lesson;
+    }
+
+    private void publishAfterCommit(MatchingDomainEvent event) {
+        matchingAfterCommitExecutor.execute(
+                "matching-domain-event-publish",
+                () -> matchingEventPublisher.publish(event)
+        );
     }
 
     private MatchingRequest findRequestForUpdate(Long matchingRequestId) {
