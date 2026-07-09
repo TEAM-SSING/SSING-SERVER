@@ -16,7 +16,16 @@ public interface MatchingRequestGroupItemRepository extends JpaRepository<Matchi
 
     Optional<MatchingRequestGroupItem> findFirstByMatchingRequestIdOrderByIdDesc(Long matchingRequestId);
 
-    List<MatchingRequestGroupItem> findByMatchingRequestGroupIdOrderByIdAsc(Long matchingRequestGroupId);
+    @Query("""
+            select item
+            from MatchingRequestGroupItem item
+            join fetch item.matchingRequest
+            where item.matchingRequestGroup.id = :matchingRequestGroupId
+            order by item.id asc
+            """)
+    List<MatchingRequestGroupItem> findByMatchingRequestGroupIdOrderByIdAsc(
+            @Param("matchingRequestGroupId") Long matchingRequestGroupId
+    );
 
     // 강사 수락/만료로 그룹 안 요청 상태를 함께 바꿀 때 항목 row를 잠금 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -24,6 +33,7 @@ public interface MatchingRequestGroupItemRepository extends JpaRepository<Matchi
     @Query("""
             select item
             from MatchingRequestGroupItem item
+            join fetch item.matchingRequest
             where item.matchingRequestGroup.id = :matchingRequestGroupId
             order by item.id asc
             """)
