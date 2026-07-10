@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
+import org.sopt.ssingserver.domain.lesson.dto.response.LessonStartConfirmationResponse;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +36,19 @@ public interface LessonApiDocs {
     )
     @ApiResponse(responseCode = "200", description = "강습 상세 조회 성공")
     ResponseEntity<BaseResponse<InstructorLessonDetailResponse>> getInstructorLessonDetail(
+            @Parameter(hidden = true)
+            CurrentMember currentMember,
+            @Parameter(description = "강습 ID")
+            @PathVariable Long lessonId
+    );
+
+    @Operation(
+            summary = "강습 시작 확인",
+            description = "강사 또는 강습을 구성하는 매칭 요청의 대표 소비자가 강습 시작 전 확인을 완료합니다.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponse(responseCode = "200", description = "강습 시작 확인 성공")
+    ResponseEntity<BaseResponse<LessonStartConfirmationResponse>> confirmLessonStart(
             @Parameter(hidden = true)
             CurrentMember currentMember,
             @Parameter(description = "강습 ID")

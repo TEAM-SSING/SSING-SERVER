@@ -59,4 +59,40 @@ public class LessonStartConfirmation extends BaseTimeEntity {
     private LessonStartConfirmationStatus status;
 
     private Instant confirmedAt;
+
+    public static LessonStartConfirmation confirmInstructor(
+            Lesson lesson,
+            Member member,
+            Instant confirmedAt
+    ) {
+        LessonStartConfirmation confirmation = confirmed(lesson, member, confirmedAt);
+        confirmation.actorType = LessonStartConfirmationActor.INSTRUCTOR;
+        confirmation.matchingRequest = null;
+        return confirmation;
+    }
+
+    public static LessonStartConfirmation confirmConsumer(
+            Lesson lesson,
+            Member member,
+            MatchingRequest matchingRequest,
+            Instant confirmedAt
+    ) {
+        LessonStartConfirmation confirmation = confirmed(lesson, member, confirmedAt);
+        confirmation.actorType = LessonStartConfirmationActor.CONSUMER;
+        confirmation.matchingRequest = matchingRequest;
+        return confirmation;
+    }
+
+    private static LessonStartConfirmation confirmed(
+            Lesson lesson,
+            Member member,
+            Instant confirmedAt
+    ) {
+        LessonStartConfirmation confirmation = new LessonStartConfirmation();
+        confirmation.lesson = lesson;
+        confirmation.member = member;
+        confirmation.status = LessonStartConfirmationStatus.CONFIRMED;
+        confirmation.confirmedAt = confirmedAt;
+        return confirmation;
+    }
 }
