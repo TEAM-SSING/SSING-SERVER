@@ -3,6 +3,7 @@ package org.sopt.ssingserver.domain.lesson.dto.request;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.sopt.ssingserver.domain.lesson.enums.LessonCancelReason;
 
@@ -12,6 +13,7 @@ public record LessonCancellationRequest(
         LessonCancelReason cancelReason,
 
         @Schema(description = "기타 선택 시 직접 입력한 취소 사유", example = "개인 사정으로 강습을 취소합니다.")
+        @Size(max = 500, message = "취소 상세 사유는 500자를 초과할 수 없습니다.")
         String cancelReasonDetail
 ) {
 

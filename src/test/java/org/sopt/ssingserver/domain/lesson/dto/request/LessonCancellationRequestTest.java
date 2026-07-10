@@ -90,4 +90,18 @@ class LessonCancellationRequestTest {
                 .extracting(ConstraintViolation::getMessage)
                 .contains("기타를 선택한 경우에만 상세 취소 사유를 입력할 수 있습니다.");
     }
+
+    @Test
+    void 기타_상세_사유가_500자를_초과하면_검증에_실패한다() {
+        LessonCancellationRequest request = new LessonCancellationRequest(
+                LessonCancelReason.ETC,
+                "a".repeat(501)
+        );
+
+        Set<ConstraintViolation<LessonCancellationRequest>> violations = validator.validate(request);
+
+        assertThat(violations)
+                .extracting(ConstraintViolation::getMessage)
+                .contains("취소 상세 사유는 500자를 초과할 수 없습니다.");
+    }
 }
