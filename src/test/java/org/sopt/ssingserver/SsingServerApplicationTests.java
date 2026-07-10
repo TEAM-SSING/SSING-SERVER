@@ -127,12 +127,7 @@ class SsingServerApplicationTests {
 
 	@Test
 	void generatedOpenApiReflectsSharedErrorResponseContract() throws Exception {
-		String json = mockMvc.perform(get("/v3/api-docs"))
-				.andExpect(status().isOk())
-				.andReturn()
-				.getResponse()
-				.getContentAsString();
-		JsonNode openApi = objectMapper.readTree(json);
+		JsonNode openApi = generatedOpenApi();
 
 		assertThat(openApi.path("paths").has("/dev/auth/console")).isFalse();
 		JsonNode responses = openApi.path("paths")
@@ -157,6 +152,43 @@ class SsingServerApplicationTests {
 				.has("INTERNAL_ERROR")).isTrue();
 		assertThat(openApi.path("components").path("schemas").has("CommonErrorResponse")).isTrue();
 		assertThat(openApi.path("components").path("schemas").has("ValidationErrorResponse")).isTrue();
+	}
+
+	@Test
+	void generatedOpenApiDocumentsAuthAndHidesUnsafeDevOperations() throws Exception {
+		JsonNode openApi = generatedOpenApi();
+		JsonNode paths = openApi.path("paths");
+
+		assertThat(paths.has("/dev/auth/token")).isFalse();
+		assertThat(paths.path("/dev/auth/personas").has("get")).isTrue();
+		assertThat(paths.path("/dev/auth/personas").has("post")).isFalse();
+
+		JsonNode consumerLogin = paths.path("/api/v1/consumer/auth/kakao").path("post");
+		assertThat(consumerLogin.has("security")).isFalse();
+		assertThat(consumerLogin.path("responses").has("200")).isTrue();
+		assertThat(consumerLogin.path("responses")
+				.path("500")
+				.path("content")
+				.path("application/json")
+				.path("examples")
+				.has("INTERNAL_ERROR")).isTrue();
+
+		JsonNode logout = paths.path("/api/v1/auth/logout").path("post");
+		assertThat(logout.path("responses").has("204")).isTrue();
+		assertThat(logout.path("responses").path("204").has("content")).isFalse();
+
+		JsonNode schemas = openApi.path("components").path("schemas");
+		assertThat(schemas.has("ConsumerAuthMemberResponse")).isTrue();
+		assertThat(schemas.has("InstructorAuthMemberResponse")).isTrue();
+	}
+
+	private JsonNode generatedOpenApi() throws Exception {
+		String json = mockMvc.perform(get("/v3/api-docs"))
+				.andExpect(status().isOk())
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		return objectMapper.readTree(json);
 	}
 
 }

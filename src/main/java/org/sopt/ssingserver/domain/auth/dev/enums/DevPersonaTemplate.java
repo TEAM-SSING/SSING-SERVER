@@ -1,10 +1,20 @@
 package org.sopt.ssingserver.domain.auth.dev.enums;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.sopt.ssingserver.domain.auth.dev.error.DevAuthErrorCode;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.global.error.BusinessException;
 
+@Schema(
+        description = "개발용 persona의 회원·강사 상태 템플릿",
+        allowableValues = {
+                "GENERAL_CONSUMER",
+                "SUSPENDED_CONSUMER",
+                "INSTRUCTOR_PENDING",
+                "INSTRUCTOR_APPROVED"
+        }
+)
 public enum DevPersonaTemplate {
 
     GENERAL_CONSUMER(MemberRole.CONSUMER, MemberStatus.ACTIVE, DevInstructorProfilePlan.NONE),
