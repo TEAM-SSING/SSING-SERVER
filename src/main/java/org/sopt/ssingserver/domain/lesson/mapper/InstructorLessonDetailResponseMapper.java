@@ -60,8 +60,9 @@ public class InstructorLessonDetailResponseMapper {
         boolean instructorConfirmed = confirmations.stream().anyMatch(this::isConfirmedInstructor);
         InstructorLessonDetailResponse.ConfirmedStatusInfoResponse statusInfo =
                 InstructorLessonDetailResponse.ConfirmedStatusInfoResponse.of(
-                        confirmedByMatchingRequestId.size() + (instructorConfirmed ? 1 : 0),
-                        groupedParticipants(participants).size() + 1,
+                        confirmedConsumerHeadcount(confirmedByMatchingRequestId)
+                                + (instructorConfirmed ? 1 : 0),
+                        lesson.getTotalHeadcount() + 1,
                         instructorConfirmed,
                         instructorConfirmed
                 );
@@ -278,6 +279,15 @@ public class InstructorLessonDetailResponseMapper {
             }
         }
         return confirmedByMatchingRequestId;
+    }
+
+    private int confirmedConsumerHeadcount(
+            Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId
+    ) {
+        return confirmedByMatchingRequestId.values().stream()
+                .map(LessonStartConfirmation::getMatchingRequest)
+                .mapToInt(MatchingRequest::getHeadcount)
+                .sum();
     }
 
     private boolean isConfirmedInstructor(LessonStartConfirmation confirmation) {
