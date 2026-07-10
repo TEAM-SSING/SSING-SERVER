@@ -94,8 +94,12 @@ public class MatchingRequestPayment extends BaseTimeEntity {
         this.paidAt = paidAt;
     }
 
-    // 매칭 중지 API에서 아직 완료되지 않은 결제 요청을 함께 종료할 때 사용
+    // 매칭 중지 API에서 PENDING 결제 요청을 함께 종료할 때 사용
     public void cancel(Instant canceledAt) {
+        if (status != MatchingRequestPaymentStatus.PENDING) {
+            throw new IllegalStateException("Only pending payment can be canceled.");
+        }
+
         this.status = MatchingRequestPaymentStatus.CANCELED;
         this.canceledAt = canceledAt;
     }
