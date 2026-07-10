@@ -37,6 +37,7 @@ import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
@@ -78,6 +79,9 @@ class LessonCompletionServiceTest {
         assertThat(response.completedAt().toString()).isEqualTo("2026-07-10T10:00+09:00");
         assertThat(fixture.lesson().getStatus()).isSameAs(LessonStatus.COMPLETED);
         assertThat(fixture.lesson().getCompletedAt()).isEqualTo(FIXED_CLOCK.instant());
+        assertThat(fixture.matchingRequests())
+                .extracting(MatchingRequest::getStatus)
+                .containsOnly(MatchingRequestStatus.COMPLETED);
         verify(lessonRealtimeEventPublisher).publish(captor.capture());
         assertThat(captor.getValue()).hasSize(3);
         assertThat(captor.getValue())
@@ -216,6 +220,7 @@ class LessonCompletionServiceTest {
                 true
         );
         ReflectionTestUtils.setField(matchingRequest, "id", id);
+        matchingRequest.confirm();
         return matchingRequest;
     }
 

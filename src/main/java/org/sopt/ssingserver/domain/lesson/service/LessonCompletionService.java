@@ -74,6 +74,7 @@ public class LessonCompletionService {
 
         Instant now = clock.instant();
         lesson.complete(now);
+        matchingRequests.forEach(MatchingRequest::complete);
 
         // DB 커밋 이후 강습 참여 대상에게 종료 이벤트 전송
         lessonAfterCommitExecutor.execute(
