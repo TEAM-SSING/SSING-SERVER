@@ -22,7 +22,7 @@ import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
-import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
+import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.entity.LessonCancellation;
 import org.sopt.ssingserver.domain.lesson.entity.LessonParticipant;
@@ -49,10 +49,11 @@ import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
-class LessonDetailServiceTest {
+class InstructorLessonDetailTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
 
@@ -77,48 +78,46 @@ class LessonDetailServiceTest {
     private MatchingRequestPaymentRepository matchingRequestPaymentRepository;
 
     @Test
-    void getDetail은_CONFIRMED_강습의_강사와_팀단위_준비상태를_반환한다() {
+    void getDetail은_CONFIRMED_강습의_강사와_팀단위_준비상태와_가격을_반환한다() throws Exception {
         LessonDetailService service = createService();
         Fixture fixture = fixture(LessonStatus.CONFIRMED);
-        givenAccessibleLesson(fixture);
+        givenOwnedLesson(fixture);
         LessonStartConfirmation instructorConfirmation = confirmation(
                 fixture.lesson(),
                 fixture.instructorMember(),
                 null,
-                LessonStartConfirmationActor.INSTRUCTOR,
-                Instant.parse("2026-07-10T00:50:00Z")
+                LessonStartConfirmationActor.INSTRUCTOR
         );
-        LessonStartConfirmation myTeamConfirmation = confirmation(
+        LessonStartConfirmation firstTeamConfirmation = confirmation(
                 fixture.lesson(),
                 fixture.consumer(),
-                fixture.myRequest(),
-                LessonStartConfirmationActor.CONSUMER,
-                Instant.parse("2026-07-10T00:55:00Z")
+                fixture.firstRequest(),
+                LessonStartConfirmationActor.CONSUMER
         );
         when(lessonStartConfirmationRepository.findByLessonId(500L))
-                .thenReturn(List.of(instructorConfirmation, myTeamConfirmation));
+                .thenReturn(List.of(instructorConfirmation, firstTeamConfirmation));
 
-        ConsumerLessonDetailResponse response = service.getConsumerDetail(1L, 500L);
+        InstructorLessonDetailResponse response = service.getInstructorDetail(3L, 500L);
+        JsonNode data = toJson(response);
 
         assertThat(response.lessonStatus()).isSameAs(LessonStatus.CONFIRMED);
-        ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse statusInfo =
-                (ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse) response.statusInfo();
-        ConsumerLessonDetailResponse.LessonInfoResponse lessonInfo =
-                (ConsumerLessonDetailResponse.LessonInfoResponse) response.lessonInfo();
+        InstructorLessonDetailResponse.ConfirmedStatusInfoResponse statusInfo =
+                (InstructorLessonDetailResponse.ConfirmedStatusInfoResponse) response.statusInfo();
+        InstructorLessonDetailResponse.LessonInfoResponse lessonInfo =
+                (InstructorLessonDetailResponse.LessonInfoResponse) response.lessonInfo();
 
         assertThat(statusInfo.requiredCount()).isEqualTo(3);
         assertThat(statusInfo.confirmedCount()).isEqualTo(2);
-        assertThat(statusInfo.myTeamConfirmed()).isTrue();
         assertThat(statusInfo.instructorConfirmed()).isTrue();
         assertThat(lessonInfo.representativeConsumerNames()).containsExactly("김소비", "박소비");
-        assertThat(lessonInfo.myTeamLessonPrice()).isEqualTo(40_000);
+        assertThat(lessonInfo.totalLessonPrice()).isEqualTo(87_500);
         assertThat(response.matchingRequests()).hasSize(2);
-        ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse firstMatchingRequest =
-                (ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse) response.matchingRequests().get(0);
-        ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse secondMatchingRequest =
-                (ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse) response.matchingRequests().get(1);
-        assertThat(firstMatchingRequest.startConfirmed()).isTrue();
-        assertThat(secondMatchingRequest.startConfirmed()).isFalse();
+        assertThat(data.get("matchingRequests").get(0).get("teamLessonPrice").asInt()).isEqualTo(40_000);
+        assertThat(data.get("matchingRequests").get(1).get("teamLessonPrice").asInt()).isEqualTo(47_500);
+        assertThat(data.get("lessonInfo").has("representativeConsumerName")).isFalse();
+        assertThat(data.get("lessonInfo").get("representativeConsumerNames")).hasSize(2);
+        assertThat(data.get("matchingRequests").get(0).has("startConfirmed")).isTrue();
+        assertThat(data.get("matchingRequests").get(0).has("confirmedAt")).isFalse();
     }
 
     @Test
@@ -126,139 +125,47 @@ class LessonDetailServiceTest {
         LessonDetailService service = createService();
         Fixture fixture = fixture(LessonStatus.IN_PROGRESS);
         ReflectionTestUtils.setField(fixture.lesson(), "startedAt", Instant.parse("2026-07-10T00:00:00Z"));
-        givenAccessibleLesson(fixture);
+        givenOwnedLesson(fixture);
 
-        ConsumerLessonDetailResponse response = service.getConsumerDetail(1L, 500L);
+        InstructorLessonDetailResponse response = service.getInstructorDetail(3L, 500L);
 
         assertThat(response.lessonStatus()).isSameAs(LessonStatus.IN_PROGRESS);
-        ConsumerLessonDetailResponse.InProgressStatusInfoResponse statusInfo =
-                (ConsumerLessonDetailResponse.InProgressStatusInfoResponse) response.statusInfo();
+        InstructorLessonDetailResponse.InProgressStatusInfoResponse statusInfo =
+                (InstructorLessonDetailResponse.InProgressStatusInfoResponse) response.statusInfo();
 
         assertThat(statusInfo.elapsedSeconds()).isEqualTo(3600);
         assertThat(statusInfo.remainingSeconds()).isEqualTo(3600);
-        assertThat(statusInfo.serverTime()).isNotNull();
         assertThat(response.matchingRequests()).hasSize(2);
-        assertThat(response.matchingRequests().get(0))
-                .isInstanceOf(ConsumerLessonDetailResponse.MatchingRequestResponse.class);
     }
 
     @Test
-    void getDetail은_CONFIRMED_응답에서_팀별_준비완료_여부만_포함한다() throws Exception {
-        LessonDetailService service = createService();
-        Fixture fixture = fixture(LessonStatus.CONFIRMED);
-        givenAccessibleLesson(fixture);
-        when(lessonStartConfirmationRepository.findByLessonId(500L))
-                .thenReturn(List.of(confirmation(
-                        fixture.lesson(),
-                        fixture.consumer(),
-                        fixture.myRequest(),
-                        LessonStartConfirmationActor.CONSUMER,
-                        Instant.parse("2026-07-10T00:55:00Z")
-                )));
-
-        JsonNode data = toJson(service.getConsumerDetail(1L, 500L));
-
-        assertThat(data.has("statusInfo")).isTrue();
-        assertThat(data.has("cancelInfo")).isFalse();
-        assertThat(data.has("matchingRequests")).isTrue();
-        assertThat(data.get("lessonInfo").has("representativeConsumerName")).isFalse();
-        assertThat(data.get("lessonInfo").get("representativeConsumerNames")).hasSize(2);
-        assertThat(data.get("matchingRequests").get(0).has("startConfirmed")).isTrue();
-        assertThat(data.get("matchingRequests").get(0).has("confirmedAt")).isFalse();
-        assertThat(data.get("matchingRequests").get(1).has("startConfirmed")).isTrue();
-        assertThat(data.get("matchingRequests").get(1).has("confirmedAt")).isFalse();
-    }
-
-    @Test
-    void getDetail은_IN_PROGRESS_응답에서_준비완료_필드를_제외한다() throws Exception {
-        LessonDetailService service = createService();
-        Fixture fixture = fixture(LessonStatus.IN_PROGRESS);
-        ReflectionTestUtils.setField(fixture.lesson(), "startedAt", Instant.parse("2026-07-10T00:00:00Z"));
-        givenAccessibleLesson(fixture);
-
-        JsonNode data = toJson(service.getConsumerDetail(1L, 500L));
-
-        assertThat(data.has("statusInfo")).isTrue();
-        assertThat(data.has("cancelInfo")).isFalse();
-        assertThat(data.has("matchingRequests")).isTrue();
-        assertThat(data.get("matchingRequests").get(0).has("startConfirmed")).isFalse();
-        assertThat(data.get("matchingRequests").get(0).has("confirmedAt")).isFalse();
-    }
-
-    @Test
-    void getDetail은_COMPLETED_응답에서_statusInfo_cancelInfo_matchingRequests를_제외한다() throws Exception {
+    void getDetail은_COMPLETED_강습에서_팀정보를_포함하고_전체가격을_반환한다() {
         LessonDetailService service = createService();
         Fixture fixture = fixture(LessonStatus.COMPLETED);
         ReflectionTestUtils.setField(fixture.lesson(), "startedAt", Instant.parse("2026-07-10T00:00:00Z"));
         ReflectionTestUtils.setField(fixture.lesson(), "completedAt", Instant.parse("2026-07-10T01:58:00Z"));
-        givenAccessibleLesson(fixture);
+        givenOwnedLesson(fixture);
 
-        JsonNode data = toJson(service.getConsumerDetail(1L, 500L));
+        InstructorLessonDetailResponse response = service.getInstructorDetail(3L, 500L);
 
-        assertThat(data.has("statusInfo")).isFalse();
-        assertThat(data.has("cancelInfo")).isFalse();
-        assertThat(data.has("matchingRequests")).isFalse();
-        assertThat(data.get("lessonInfo").has("lessonDurationMinutes")).isTrue();
-        assertThat(data.get("lessonInfo").has("scheduledAt")).isFalse();
-        assertThat(data.get("lessonInfo").has("scheduledDurationMinutes")).isFalse();
+        assertThat(response.lessonStatus()).isSameAs(LessonStatus.COMPLETED);
+        InstructorLessonDetailResponse.CompletedLessonInfoResponse lessonInfo =
+                (InstructorLessonDetailResponse.CompletedLessonInfoResponse) response.lessonInfo();
+        assertThat(lessonInfo.actualDurationMinutes()).isEqualTo(118);
+        assertThat(lessonInfo.representativeConsumerNames()).containsExactly("김소비", "박소비");
+        assertThat(lessonInfo.totalLessonPrice()).isEqualTo(87_500);
+        assertThat(response.matchingRequests()).hasSize(2);
     }
 
     @Test
-    void getDetail은_CANCELED_응답에서_statusInfo_matchingRequests를_제외하고_cancelInfo를_포함한다() throws Exception {
+    void getDetail은_CANCELED_강습에서_마지막_취소정보를_반환한다() {
         LessonDetailService service = createService();
         Fixture fixture = fixture(LessonStatus.CANCELED);
-        LessonCancellation instructorCancellation = cancellation(
-                fixture.lesson(),
-                fixture.instructorMember(),
-                null,
-                LessonCancellationActor.INSTRUCTOR
-        );
-        givenAccessibleLesson(fixture);
-        when(lessonCancellationRepository.findByLessonIdAndCanceledBy(500L, LessonCancellationActor.INSTRUCTOR))
-                .thenReturn(List.of(instructorCancellation));
-
-        JsonNode data = toJson(service.getConsumerDetail(1L, 500L));
-
-        assertThat(data.has("statusInfo")).isFalse();
-        assertThat(data.has("cancelInfo")).isTrue();
-        assertThat(data.has("matchingRequests")).isFalse();
-        assertThat(data.get("lessonInfo").has("lessonDurationMinutes")).isTrue();
-        assertThat(data.get("lessonInfo").has("scheduledAt")).isFalse();
-        assertThat(data.get("lessonInfo").has("scheduledDurationMinutes")).isFalse();
-    }
-
-    @Test
-    void getDetail은_내팀_취소정보가_있으면_강습상태를_CANCELED로_반환한다() {
-        LessonDetailService service = createService();
-        Fixture fixture = fixture(LessonStatus.CONFIRMED);
-        givenAccessibleLesson(fixture);
-        LessonCancellation myCancellation = cancellation(
+        givenOwnedLesson(fixture);
+        LessonCancellation consumerCancellation = cancellation(
                 fixture.lesson(),
                 fixture.consumer(),
-                fixture.myRequest(),
-                LessonCancellationActor.CONSUMER
-        );
-        when(lessonCancellationRepository.findByLessonIdAndMatchingRequestId(500L, 10L))
-                .thenReturn(List.of(myCancellation));
-
-        ConsumerLessonDetailResponse response = service.getConsumerDetail(1L, 500L);
-
-        assertThat(response.lessonStatus()).isSameAs(LessonStatus.CANCELED);
-        assertThat(response.cancelInfo().canceledBy().memberId()).isEqualTo(1L);
-        assertThat(response.cancelInfo().canceledBy().name()).isEqualTo("김소비");
-        assertThat(response.cancelInfo().cancelReason()).isEqualTo("일정 변경");
-        assertThat(response.matchingRequests()).isNull();
-    }
-
-    @Test
-    void getDetail은_내팀취소와_강사취소가_모두_있으면_최신_취소정보를_반환한다() {
-        LessonDetailService service = createService();
-        Fixture fixture = fixture(LessonStatus.CANCELED);
-        givenAccessibleLesson(fixture);
-        LessonCancellation myCancellation = cancellation(
-                fixture.lesson(),
-                fixture.consumer(),
-                fixture.myRequest(),
+                fixture.firstRequest(),
                 LessonCancellationActor.CONSUMER,
                 Instant.parse("2026-07-10T00:30:00Z")
         );
@@ -269,34 +176,48 @@ class LessonDetailServiceTest {
                 LessonCancellationActor.INSTRUCTOR,
                 Instant.parse("2026-07-10T00:40:00Z")
         );
-        when(lessonCancellationRepository.findByLessonIdAndMatchingRequestId(500L, 10L))
-                .thenReturn(List.of(myCancellation));
-        when(lessonCancellationRepository.findByLessonIdAndCanceledBy(500L, LessonCancellationActor.INSTRUCTOR))
-                .thenReturn(List.of(instructorCancellation));
+        when(lessonCancellationRepository.findByLessonId(500L))
+                .thenReturn(List.of(consumerCancellation, instructorCancellation));
 
-        ConsumerLessonDetailResponse response = service.getConsumerDetail(1L, 500L);
+        InstructorLessonDetailResponse response = service.getInstructorDetail(3L, 500L);
 
         assertThat(response.lessonStatus()).isSameAs(LessonStatus.CANCELED);
         assertThat(response.cancelInfo().canceledBy().memberId()).isEqualTo(3L);
         assertThat(response.cancelInfo().canceledBy().name()).isEqualTo("김강사");
+        assertThat(response.cancelInfo().cancelReason()).isEqualTo("일정 변경");
+        assertThat(response.matchingRequests()).hasSize(2);
     }
 
     @Test
-    void getDetail은_IN_PROGRESS인데_startedAt이_없으면_잘못된_강습상태로_실패한다() {
+    void getDetail은_담당_강사가_아니면_FORBIDDEN으로_실패한다() {
         LessonDetailService service = createService();
-        Fixture fixture = fixture(LessonStatus.IN_PROGRESS);
-        givenAccessibleLesson(fixture);
+        Fixture fixture = fixture(LessonStatus.CONFIRMED);
+        when(lessonRepository.findWithDetailById(500L)).thenReturn(Optional.of(fixture.lesson()));
 
         assertThatExceptionOfType(BusinessException.class)
-                .isThrownBy(() -> service.getConsumerDetail(1L, 500L))
+                .isThrownBy(() -> service.getInstructorDetail(99L, 500L))
                 .satisfies(exception -> assertThat(exception.getErrorCode())
-                        .isSameAs(LessonErrorCode.LESSON_INVALID_STATE));
+                        .isSameAs(CommonErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    void getDetail은_팀가격이_없으면_가격정보_없음으로_실패한다() {
+        LessonDetailService service = createService();
+        Fixture fixture = fixture(LessonStatus.CONFIRMED);
+        when(lessonRepository.findWithDetailById(500L)).thenReturn(Optional.of(fixture.lesson()));
+        when(lessonParticipantRepository.findDetailParticipantsByLessonId(500L))
+                .thenReturn(fixture.participants());
+        when(matchingRequestPaymentRepository.findByMatchingOfferIdOrderByMatchingRequestIdAsc(300L))
+                .thenReturn(List.of(payment(fixture.firstRequest(), fixture.offer(), 40_000)));
+        when(lessonStartConfirmationRepository.findByLessonId(500L)).thenReturn(List.of());
+
+        assertThatExceptionOfType(BusinessException.class)
+                .isThrownBy(() -> service.getInstructorDetail(3L, 500L))
+                .satisfies(exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(LessonErrorCode.LESSON_PRICE_NOT_FOUND));
     }
 
     private LessonDetailService createService() {
-        ConsumerLessonDetailResponseMapper responseMapper = new ConsumerLessonDetailResponseMapper(FIXED_CLOCK);
-        InstructorLessonDetailResponseMapper instructorResponseMapper =
-                new InstructorLessonDetailResponseMapper(FIXED_CLOCK);
         LessonDetailReader lessonDetailReader = new LessonDetailReader(
                 lessonRepository,
                 lessonParticipantRepository,
@@ -304,23 +225,20 @@ class LessonDetailServiceTest {
                 lessonStartConfirmationRepository,
                 matchingRequestPaymentRepository
         );
-        return new LessonDetailService(
-                lessonDetailReader,
-                responseMapper,
-                instructorResponseMapper
-        );
+        ConsumerLessonDetailResponseMapper consumerResponseMapper = new ConsumerLessonDetailResponseMapper(FIXED_CLOCK);
+        InstructorLessonDetailResponseMapper responseMapper = new InstructorLessonDetailResponseMapper(FIXED_CLOCK);
+        return new LessonDetailService(lessonDetailReader, consumerResponseMapper, responseMapper);
     }
 
-    private void givenAccessibleLesson(Fixture fixture) {
+    private void givenOwnedLesson(Fixture fixture) {
         when(lessonRepository.findWithDetailById(500L)).thenReturn(Optional.of(fixture.lesson()));
         when(lessonParticipantRepository.findDetailParticipantsByLessonId(500L))
                 .thenReturn(fixture.participants());
-        when(lessonParticipantRepository.findMatchingRequestIdsByLessonIdAndMemberId(500L, 1L))
-                .thenReturn(List.of(10L));
-        when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 300L))
-                .thenReturn(Optional.of(payment(fixture.myRequest(), fixture.offer(), 40_000)));
-        when(lessonCancellationRepository.findByLessonIdAndMatchingRequestId(500L, 10L))
-                .thenReturn(List.of());
+        when(matchingRequestPaymentRepository.findByMatchingOfferIdOrderByMatchingRequestIdAsc(300L))
+                .thenReturn(List.of(
+                        payment(fixture.firstRequest(), fixture.offer(), 40_000),
+                        payment(fixture.secondRequest(), fixture.offer(), 47_500)
+                ));
     }
 
     private Fixture fixture(LessonStatus lessonStatus) {
@@ -333,8 +251,8 @@ class LessonDetailServiceTest {
         ReflectionTestUtils.setField(group, "id", 250L);
         MatchingOffer offer = MatchingOffer.create(instructorProfile, group, Instant.parse("2026-07-10T00:00:00Z"));
         ReflectionTestUtils.setField(offer, "id", 300L);
-        MatchingRequest myRequest = matchingRequest(10L, consumer, 3);
-        MatchingRequest otherRequest = matchingRequest(11L, otherConsumer, 2);
+        MatchingRequest firstRequest = matchingRequest(10L, consumer, 3);
+        MatchingRequest secondRequest = matchingRequest(11L, otherConsumer, 2);
         Lesson lesson = Lesson.createImmediateConfirmed(
                 instructorProfile,
                 resort,
@@ -349,11 +267,11 @@ class LessonDetailServiceTest {
         ReflectionTestUtils.setField(lesson, "status", lessonStatus);
 
         List<LessonParticipant> participants = List.of(
-                lessonParticipant(100L, lesson, myRequest, 38, Gender.MALE),
-                lessonParticipant(101L, lesson, myRequest, 12, Gender.FEMALE),
-                lessonParticipant(102L, lesson, otherRequest, 9, Gender.MALE)
+                lessonParticipant(100L, lesson, firstRequest, 38, Gender.MALE),
+                lessonParticipant(101L, lesson, firstRequest, 12, Gender.FEMALE),
+                lessonParticipant(102L, lesson, secondRequest, 9, Gender.MALE)
         );
-        return new Fixture(lesson, offer, myRequest, consumer, instructorMember, participants);
+        return new Fixture(lesson, offer, firstRequest, secondRequest, consumer, instructorMember, participants);
     }
 
     private MatchingRequest matchingRequest(
@@ -394,8 +312,7 @@ class LessonDetailServiceTest {
             Lesson lesson,
             Member member,
             MatchingRequest matchingRequest,
-            LessonStartConfirmationActor actor,
-            Instant confirmedAt
+            LessonStartConfirmationActor actor
     ) {
         LessonStartConfirmation confirmation = construct(LessonStartConfirmation.class);
         ReflectionTestUtils.setField(confirmation, "lesson", lesson);
@@ -403,23 +320,8 @@ class LessonDetailServiceTest {
         ReflectionTestUtils.setField(confirmation, "matchingRequest", matchingRequest);
         ReflectionTestUtils.setField(confirmation, "actorType", actor);
         ReflectionTestUtils.setField(confirmation, "status", LessonStartConfirmationStatus.CONFIRMED);
-        ReflectionTestUtils.setField(confirmation, "confirmedAt", confirmedAt);
+        ReflectionTestUtils.setField(confirmation, "confirmedAt", Instant.parse("2026-07-10T00:55:00Z"));
         return confirmation;
-    }
-
-    private LessonCancellation cancellation(
-            Lesson lesson,
-            Member member,
-            MatchingRequest matchingRequest,
-            LessonCancellationActor actor
-    ) {
-        return cancellation(
-                lesson,
-                member,
-                matchingRequest,
-                actor,
-                Instant.parse("2026-07-10T00:30:00Z")
-        );
     }
 
     private LessonCancellation cancellation(
@@ -501,14 +403,15 @@ class LessonDetailServiceTest {
         }
     }
 
-    private JsonNode toJson(ConsumerLessonDetailResponse response) throws Exception {
+    private JsonNode toJson(InstructorLessonDetailResponse response) {
         return OBJECT_MAPPER.valueToTree(response);
     }
 
     private record Fixture(
             Lesson lesson,
             MatchingOffer offer,
-            MatchingRequest myRequest,
+            MatchingRequest firstRequest,
+            MatchingRequest secondRequest,
             Member consumer,
             Member instructorMember,
             List<LessonParticipant> participants
