@@ -129,6 +129,7 @@ public record InstructorMatchingExposureConditionsResponse(
                 InstructorMatchingExposureConditionsResult.CurrentSettingResult result
         ) {
             if (result == null) {
+                // 상위 NON_NULL 규칙에 따라 저장된 조건이 없을 때 currentSetting 필드 자체를 생략한다.
                 return null;
             }
             return new CurrentSettingResponse(

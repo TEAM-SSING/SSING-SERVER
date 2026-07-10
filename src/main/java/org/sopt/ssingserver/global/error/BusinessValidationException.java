@@ -2,6 +2,7 @@ package org.sopt.ssingserver.global.error;
 
 import java.util.Map;
 
+// DB 상태를 확인해야 하는 검증도 요청 DTO 검증과 같은 errors 응답으로 전달하기 위한 예외.
 public final class BusinessValidationException extends BusinessException {
 
     private final Map<String, String> errors;

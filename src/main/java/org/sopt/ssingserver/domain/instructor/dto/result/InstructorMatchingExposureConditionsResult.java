@@ -20,6 +20,7 @@ public record InstructorMatchingExposureConditionsResult(
             Optional<InstructorMatchingSetting> currentSetting,
             List<Integer> durationOptions
     ) {
+        // Service 트랜잭션 안에서 LAZY 연관값을 화면용 Result로 복사해 Controller까지 영속성 객체가 새지 않게 한다.
         Resort resort = instructorProfile.getResort();
         return new InstructorMatchingExposureConditionsResult(
                 new ResortResult(resort.getCode(), resort.getDisplayName()),
@@ -45,6 +46,7 @@ public record InstructorMatchingExposureConditionsResult(
     ) {
 
         private static CurrentSettingResult from(InstructorMatchingSetting setting) {
+            // Set으로 저장된 선택값은 응답 순서를 고정해 앱 초기값과 테스트 결과가 흔들리지 않게 한다.
             return new CurrentSettingResult(
                     setting.getSport(),
                     setting.getLessonLevels().stream().sorted().toList(),
