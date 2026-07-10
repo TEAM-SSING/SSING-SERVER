@@ -106,8 +106,8 @@ class LessonDetailServiceTest {
         ConsumerLessonDetailResponse.LessonInfoResponse lessonInfo =
                 (ConsumerLessonDetailResponse.LessonInfoResponse) response.lessonInfo();
 
-        assertThat(statusInfo.requiredCount()).isEqualTo(3);
-        assertThat(statusInfo.confirmedCount()).isEqualTo(2);
+        assertThat(statusInfo.requiredCount()).isEqualTo(6);
+        assertThat(statusInfo.confirmedCount()).isEqualTo(4);
         assertThat(statusInfo.currentActorConfirmed()).isTrue();
         assertThat(statusInfo.instructorConfirmed()).isTrue();
         assertThat(lessonInfo.representativeConsumerNames()).containsExactly("김소비", "박소비");
