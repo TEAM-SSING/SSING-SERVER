@@ -6,9 +6,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
 import org.sopt.ssingserver.domain.notification.dto.request.DeleteFcmTokenRequest;
 import org.sopt.ssingserver.domain.notification.dto.request.RegisterFcmTokenRequest;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
+import org.sopt.ssingserver.global.swagger.error.ApiErrorCodes;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -21,6 +24,20 @@ public interface FcmTokenApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "204", description = "FCM 토큰 등록 또는 수정 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {
+                    "VALIDATION_FAILED",
+                    "BAD_REQUEST",
+                    "UNAUTHENTICATED",
+                    "FORBIDDEN",
+                    "INTERNAL_ERROR"
+            }
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
     ResponseEntity<Void> registerOrUpdate(
             @Parameter(hidden = true)
             CurrentMember currentMember,
@@ -33,6 +50,20 @@ public interface FcmTokenApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "204", description = "FCM 토큰 삭제 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {
+                    "VALIDATION_FAILED",
+                    "BAD_REQUEST",
+                    "UNAUTHENTICATED",
+                    "FORBIDDEN",
+                    "INTERNAL_ERROR"
+            }
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
     ResponseEntity<Void> unregister(
             @Parameter(hidden = true)
             CurrentMember currentMember,
