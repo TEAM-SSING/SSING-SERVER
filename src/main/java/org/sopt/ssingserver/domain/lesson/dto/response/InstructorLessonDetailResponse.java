@@ -100,6 +100,9 @@ public record InstructorLessonDetailResponse(
             @Schema(description = "강습 시작을 눌러야 하는 강사와 팀 수", example = "3")
             int requiredCount,
 
+            @Schema(description = "현재 요청 주체의 강습 시작 준비 완료 여부", example = "true")
+            boolean currentActorConfirmed,
+
             @Schema(description = "강사의 강습 시작 준비 완료 여부", example = "true")
             boolean instructorConfirmed
     ) {
@@ -107,9 +110,15 @@ public record InstructorLessonDetailResponse(
         public static ConfirmedStatusInfoResponse of(
                 int confirmedCount,
                 int requiredCount,
+                boolean currentActorConfirmed,
                 boolean instructorConfirmed
         ) {
-            return new ConfirmedStatusInfoResponse(confirmedCount, requiredCount, instructorConfirmed);
+            return new ConfirmedStatusInfoResponse(
+                    confirmedCount,
+                    requiredCount,
+                    currentActorConfirmed,
+                    instructorConfirmed
+            );
         }
     }
 

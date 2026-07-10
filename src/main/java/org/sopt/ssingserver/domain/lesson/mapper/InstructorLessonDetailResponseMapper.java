@@ -62,6 +62,7 @@ public class InstructorLessonDetailResponseMapper {
                 InstructorLessonDetailResponse.ConfirmedStatusInfoResponse.of(
                         confirmedByMatchingRequestId.size() + (instructorConfirmed ? 1 : 0),
                         groupedParticipants(participants).size() + 1,
+                        instructorConfirmed,
                         instructorConfirmed
                 );
 

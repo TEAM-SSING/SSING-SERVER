@@ -108,12 +108,14 @@ class InstructorLessonDetailTest {
 
         assertThat(statusInfo.requiredCount()).isEqualTo(3);
         assertThat(statusInfo.confirmedCount()).isEqualTo(2);
+        assertThat(statusInfo.currentActorConfirmed()).isTrue();
         assertThat(statusInfo.instructorConfirmed()).isTrue();
         assertThat(lessonInfo.representativeConsumerNames()).containsExactly("김소비", "박소비");
         assertThat(lessonInfo.totalLessonPrice()).isEqualTo(87_500);
         assertThat(response.matchingRequests()).hasSize(2);
         assertThat(data.get("matchingRequests").get(0).get("teamLessonPrice").asInt()).isEqualTo(40_000);
         assertThat(data.get("matchingRequests").get(1).get("teamLessonPrice").asInt()).isEqualTo(47_500);
+        assertThat(data.get("statusInfo").get("currentActorConfirmed").asBoolean()).isTrue();
         assertThat(data.get("lessonInfo").has("representativeConsumerName")).isFalse();
         assertThat(data.get("lessonInfo").get("representativeConsumerNames")).hasSize(2);
         assertThat(data.get("matchingRequests").get(0).has("startConfirmed")).isTrue();

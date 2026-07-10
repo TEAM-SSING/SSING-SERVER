@@ -108,7 +108,7 @@ class LessonDetailServiceTest {
 
         assertThat(statusInfo.requiredCount()).isEqualTo(3);
         assertThat(statusInfo.confirmedCount()).isEqualTo(2);
-        assertThat(statusInfo.myTeamConfirmed()).isTrue();
+        assertThat(statusInfo.currentActorConfirmed()).isTrue();
         assertThat(statusInfo.instructorConfirmed()).isTrue();
         assertThat(lessonInfo.representativeConsumerNames()).containsExactly("김소비", "박소비");
         assertThat(lessonInfo.myTeamLessonPrice()).isEqualTo(40_000);
@@ -161,6 +161,8 @@ class LessonDetailServiceTest {
         assertThat(data.has("statusInfo")).isTrue();
         assertThat(data.has("cancelInfo")).isFalse();
         assertThat(data.has("matchingRequests")).isTrue();
+        assertThat(data.get("statusInfo").has("myTeamConfirmed")).isFalse();
+        assertThat(data.get("statusInfo").get("currentActorConfirmed").asBoolean()).isTrue();
         assertThat(data.get("lessonInfo").has("representativeConsumerName")).isFalse();
         assertThat(data.get("lessonInfo").get("representativeConsumerNames")).hasSize(2);
         assertThat(data.get("matchingRequests").get(0).has("startConfirmed")).isTrue();
