@@ -109,4 +109,9 @@ public class Lesson extends BaseTimeEntity {
         this.status = LessonStatus.IN_PROGRESS;
         this.startedAt = Objects.requireNonNull(startedAt, "startedAt must not be null.");
     }
+
+    public void complete(Instant completedAt) {
+        this.status = LessonStatus.COMPLETED;
+        this.completedAt = Objects.requireNonNull(completedAt, "completedAt must not be null.");
+    }
 }
