@@ -47,8 +47,7 @@ public record MatchingStatusQueryResult(
                     member == null ? null : member.getProfileImageUrl(),
                     instructorProfile.getGender(),
                     birthDate == null ? null : birthDate.getYear(),
-                    // 현재 강사 등급 원천 컬럼 부재로 명세 확정 전까지 응답 DTO에서 생략되는 값
-                    null
+                    instructorProfile.getLevel()
             );
         }
     }

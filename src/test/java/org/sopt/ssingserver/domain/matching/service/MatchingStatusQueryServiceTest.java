@@ -186,6 +186,7 @@ class MatchingStatusQueryServiceTest {
         MatchingRequestGroup group = matchingRequestGroup(20L);
         MatchingRequestGroupItem item = matchingRequestGroupItem(30L, matchingRequest, group);
         InstructorProfile instructorProfile = instructorProfile(40L);
+        ReflectionTestUtils.setField(instructorProfile, "level", 3);
         MatchingOffer offer = acceptedOffer(50L, instructorProfile, group);
         matchingRequest.markMatched(offer);
 
@@ -216,6 +217,7 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.instructorProfile().profileImageUrl()).isEqualTo("https://example.com/instructor.png");
         assertThat(result.instructorProfile().gender()).isSameAs(Gender.FEMALE);
         assertThat(result.instructorProfile().birthYear()).isEqualTo(1998);
+        assertThat(result.instructorProfile().level()).isEqualTo(3);
         assertThat(result.lessonId()).isNull();
         verifyNoInteractions(lessonRepository);
     }
