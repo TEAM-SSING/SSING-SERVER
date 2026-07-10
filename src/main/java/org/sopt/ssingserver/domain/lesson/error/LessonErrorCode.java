@@ -14,6 +14,7 @@ public enum LessonErrorCode implements ErrorCode {
     LESSON_PRICE_NOT_FOUND(HttpStatus.NOT_FOUND, "강습 가격 정보를 찾을 수 없습니다."),
     LESSON_CANCELLATION_NOT_FOUND(HttpStatus.NOT_FOUND, "강습 취소 정보를 찾을 수 없습니다."),
     LESSON_START_NOT_ALLOWED(HttpStatus.CONFLICT, "시작 확인할 수 없는 강습 상태입니다."),
+    LESSON_COMPLETE_NOT_ALLOWED(HttpStatus.CONFLICT, "현재 강습 상태에서는 강습을 종료할 수 없습니다."),
     LESSON_INVALID_STATE(HttpStatus.CONFLICT, "현재 강습 상태와 필요한 강습 상세 정보가 일치하지 않습니다.");
 
     private final HttpStatus status;

@@ -72,38 +72,86 @@ public class LessonRealtimeEventFactory {
     }
 
     public List<LessonRealtimeDelivery> started(StartedRealtimeContext context) {
+        return statusChanged(
+                context.eventId(),
+                context.occurredAt(),
+                context.lessonId(),
+                context.instructorMemberId(),
+                context.consumerRecipients(),
+                LessonRealtimeEventType.LESSON_STARTED,
+                LessonStatus.IN_PROGRESS
+        );
+    }
+
+    public List<LessonRealtimeDelivery> completed(CompletedRealtimeContext context) {
+        return statusChanged(
+                context.eventId(),
+                context.occurredAt(),
+                context.lessonId(),
+                context.instructorMemberId(),
+                context.consumerRecipients(),
+                LessonRealtimeEventType.LESSON_COMPLETED,
+                LessonStatus.COMPLETED
+        );
+    }
+
+    private List<LessonRealtimeDelivery> statusChanged(
+            UUID eventId,
+            Instant occurredAt,
+            Long lessonId,
+            Long instructorMemberId,
+            List<ConsumerRecipient> consumerRecipients,
+            LessonRealtimeEventType eventType,
+            LessonStatus lessonStatus
+    ) {
         Set<Long> sentMemberIds = new LinkedHashSet<>();
         List<LessonRealtimeDelivery> deliveries = new java.util.ArrayList<>();
 
-        sentMemberIds.add(context.instructorMemberId());
-        deliveries.add(startedDelivery(
-                context,
-                context.instructorMemberId(),
-                LessonRealtimeRecipientRole.INSTRUCTOR
+        sentMemberIds.add(instructorMemberId);
+        deliveries.add(statusChangedDelivery(
+                eventId,
+                occurredAt,
+                lessonId,
+                instructorMemberId,
+                LessonRealtimeRecipientRole.INSTRUCTOR,
+                eventType,
+                lessonStatus
         ));
 
-        for (ConsumerRecipient recipient : context.consumerRecipients()) {
+        for (ConsumerRecipient recipient : consumerRecipients) {
             if (sentMemberIds.add(recipient.memberId())) {
-                deliveries.add(startedDelivery(context, recipient.memberId(), LessonRealtimeRecipientRole.CONSUMER));
+                deliveries.add(statusChangedDelivery(
+                        eventId,
+                        occurredAt,
+                        lessonId,
+                        recipient.memberId(),
+                        LessonRealtimeRecipientRole.CONSUMER,
+                        eventType,
+                        lessonStatus
+                ));
             }
         }
         return deliveries;
     }
 
-    private LessonRealtimeDelivery startedDelivery(
-            StartedRealtimeContext context,
+    private LessonRealtimeDelivery statusChangedDelivery(
+            UUID eventId,
+            Instant occurredAt,
+            Long lessonId,
             Long recipientMemberId,
-            LessonRealtimeRecipientRole recipientRole
+            LessonRealtimeRecipientRole recipientRole,
+            LessonRealtimeEventType eventType,
+            LessonStatus lessonStatus
     ) {
         return new LessonRealtimeDelivery(
                 recipientMemberId,
                 new LessonRealtimeEvent(
-                        context.eventId(),
-                        LessonRealtimeEventType.LESSON_STARTED,
-                        toOffsetDateTime(context.occurredAt()),
+                        eventId,
+                        eventType,
+                        toOffsetDateTime(occurredAt),
                         recipientRole,
-                        context.lessonId(),
-                        LessonStatus.IN_PROGRESS,
+                        lessonId,
+                        lessonStatus,
                         Map.of()
                 )
         );
@@ -127,6 +175,15 @@ public class LessonRealtimeEventFactory {
     }
 
     public record StartedRealtimeContext(
+            UUID eventId,
+            Instant occurredAt,
+            Long lessonId,
+            Long instructorMemberId,
+            List<ConsumerRecipient> consumerRecipients
+    ) {
+    }
+
+    public record CompletedRealtimeContext(
             UUID eventId,
             Instant occurredAt,
             Long lessonId,

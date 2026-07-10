@@ -5,6 +5,7 @@ import java.util.List;
 import org.sopt.ssingserver.domain.lesson.entity.LessonParticipant;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
+import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -45,6 +46,17 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
             order by matchingRequest.id asc, lessonParticipant.id asc
             """)
     List<LessonParticipant> findDetailParticipantsByLessonId(@Param("lessonId") Long lessonId);
+
+    // 강습 참여 팀(소비자)을 중복 없이 조회
+    @Query("""
+            select distinct matchingRequest
+            from LessonParticipant lessonParticipant
+            join lessonParticipant.matchingRequest matchingRequest
+            join fetch matchingRequest.member
+            where lessonParticipant.lesson.id = :lessonId
+            order by matchingRequest.id asc
+            """)
+    List<MatchingRequest> findDistinctMatchingRequestsByLessonId(@Param("lessonId") Long lessonId);
 
     // 로그인한 회원이 해당 강습에 참여한 팀의 매칭 요청 ID를 조회
     @Query("""

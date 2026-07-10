@@ -4,8 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.lesson.controller.docs.LessonApiDocs;
 import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
+import org.sopt.ssingserver.domain.lesson.dto.response.LessonCompletionResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonStartConfirmationResponse;
 import org.sopt.ssingserver.domain.lesson.response.LessonSuccessCode;
+import org.sopt.ssingserver.domain.lesson.service.LessonCompletionService;
 import org.sopt.ssingserver.domain.lesson.service.LessonDetailService;
 import org.sopt.ssingserver.domain.lesson.service.LessonStartConfirmationService;
 import org.sopt.ssingserver.global.response.BaseResponse;
@@ -28,6 +30,7 @@ public class LessonController implements LessonApiDocs {
 
     private final LessonDetailService lessonDetailService;
     private final LessonStartConfirmationService lessonStartConfirmationService;
+    private final LessonCompletionService lessonCompletionService;
 
     @Override
     @RequireAccess(AccessPolicy.CONSUMER)
@@ -72,5 +75,19 @@ public class LessonController implements LessonApiDocs {
                 ? LessonSuccessCode.LESSON_STARTED
                 : LessonSuccessCode.LESSON_START_CONFIRMATION_PENDING;
         return SuccessResponseFactory.success(successCode, response);
+    }
+
+    @Override
+    @RequireAccess(AccessPolicy.ACTIVE_MEMBER)
+    @PostMapping("/lessons/{lessonId}/completion")
+    public ResponseEntity<BaseResponse<LessonCompletionResponse>> completeLesson(
+            CurrentMember currentMember,
+            @PathVariable Long lessonId
+    ) {
+        LessonCompletionResponse response = lessonCompletionService.complete(
+                currentMember,
+                lessonId
+        );
+        return SuccessResponseFactory.success(LessonSuccessCode.LESSON_COMPLETED, response);
     }
 }

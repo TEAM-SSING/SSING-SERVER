@@ -3,10 +3,8 @@ package org.sopt.ssingserver.domain.lesson.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -14,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonStartConfirmationResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonStartConfirmationResponse.StatusInfoResponse;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
-import org.sopt.ssingserver.domain.lesson.entity.LessonParticipant;
 import org.sopt.ssingserver.domain.lesson.entity.LessonStartConfirmation;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationActor;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationStatus;
@@ -59,9 +56,10 @@ public class LessonStartConfirmationService {
         Lesson lesson = lessonRepository.findByIdForUpdate(lessonId)
                 .orElseThrow(() -> new BusinessException(LessonErrorCode.LESSON_NOT_FOUND));
 
-        // 실제 강습 참여자와 확인 대상 정리
-        List<LessonParticipant> participants = lessonParticipantRepository.findDetailParticipantsByLessonId(lessonId);
-        LessonRecipients recipients = recipients(lesson, participants);
+        // 실제 강습 참여 팀과 확인 대상 정리
+        List<MatchingRequest> matchingRequests =
+                lessonParticipantRepository.findDistinctMatchingRequestsByLessonId(lessonId);
+        LessonRecipients recipients = recipients(lesson, matchingRequests);
 
         // 현재 요청자의 역할과 권한 판별
         ActorContext actorContext = resolveActor(currentMember, lesson, recipients);
@@ -162,24 +160,19 @@ public class LessonStartConfirmationService {
 
     private LessonRecipients recipients(
             Lesson lesson,
-            List<LessonParticipant> participants
+            List<MatchingRequest> matchingRequests
     ) {
-        Map<Long, ConsumerRecipient> consumerRecipientsByRequestId = new LinkedHashMap<>();
-        for (LessonParticipant participant : participants) {
-            MatchingRequest matchingRequest = participant.getMatchingRequest();
-            consumerRecipientsByRequestId.putIfAbsent(
-                    matchingRequest.getId(),
-                    new ConsumerRecipient(
-                            matchingRequest.getMember().getId(),
-                            matchingRequest.getId(),
-                            matchingRequest.getMember(),
-                    matchingRequest
-                    )
-            );
-        }
+        List<ConsumerRecipient> consumerRecipients = matchingRequests.stream()
+                .map(matchingRequest -> new ConsumerRecipient(
+                        matchingRequest.getMember().getId(),
+                        matchingRequest.getId(),
+                        matchingRequest.getMember(),
+                        matchingRequest
+                ))
+                .toList();
         return new LessonRecipients(
                 lesson.getInstructorProfile().getMember().getId(),
-                List.copyOf(consumerRecipientsByRequestId.values())
+                consumerRecipients
         );
     }
 
