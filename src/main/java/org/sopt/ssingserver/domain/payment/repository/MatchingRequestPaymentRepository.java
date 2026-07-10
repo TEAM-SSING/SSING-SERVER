@@ -12,12 +12,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
-// 소비자 매칭 상태 조회에서 요청별 최신 결제 진행 상태 확인용 Repository
+// 소비자 매칭 상태 조회에서 요청별 결제 진행 상태 확인용 Repository
 public interface MatchingRequestPaymentRepository extends JpaRepository<MatchingRequestPayment, Long> {
 
     Optional<MatchingRequestPayment> findFirstByMatchingRequestIdOrderByIdDesc(Long matchingRequestId);
 
-    Optional<MatchingRequestPayment> findFirstByMatchingRequestIdAndMatchingOfferIdOrderByIdDesc(
+    Optional<MatchingRequestPayment> findByMatchingRequestIdAndMatchingOfferId(
             Long matchingRequestId,
             Long matchingOfferId
     );
@@ -38,6 +38,18 @@ public interface MatchingRequestPaymentRepository extends JpaRepository<Matching
             order by payment.id asc
             """)
     List<MatchingRequestPayment> findByMatchingOfferIdForUpdate(@Param("matchingOfferId") Long matchingOfferId);
+
+    // 강습 상세의 팀별 결제 금액 조회를 위해 matchingOffer에 묶인 결제 요청을 조회
+    @Query("""
+            select payment
+            from MatchingRequestPayment payment
+            join fetch payment.matchingRequest matchingRequest
+            where payment.matchingOffer.id = :matchingOfferId
+            order by matchingRequest.id asc
+            """)
+    List<MatchingRequestPayment> findByMatchingOfferIdOrderByMatchingRequestIdAsc(
+            @Param("matchingOfferId") Long matchingOfferId
+    );
 
     // 커밋 이후 WebSocket 결제 이벤트의 수신자와 요청별 결제 상태 조회
     @Query("""

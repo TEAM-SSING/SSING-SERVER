@@ -10,7 +10,7 @@ import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record ConsumerLessonDetailResponse(
+public record InstructorLessonDetailResponse(
         @Schema(description = "강습 ID", example = "9101")
         Long lessonId,
 
@@ -26,10 +26,7 @@ public record ConsumerLessonDetailResponse(
         @Schema(description = "상태별 강습 정보")
         LessonInfo lessonInfo,
 
-        @Schema(description = "강사 프로필 요약 정보")
-        InstructorProfileResponse instructorProfile,
-
-        @Schema(description = "강습에 포함된 팀 목록. 시작 전/진행 중 상태에서 사용")
+        @Schema(description = "강습에 포함된 팀 목록")
         List<? extends MatchingRequest> matchingRequests
 ) {
 
@@ -42,72 +39,66 @@ public record ConsumerLessonDetailResponse(
     public sealed interface MatchingRequest permits ConfirmedMatchingRequestResponse, MatchingRequestResponse {
     }
 
-    public static ConsumerLessonDetailResponse confirmed(
+    public static InstructorLessonDetailResponse confirmed(
             Long lessonId,
             ConfirmedStatusInfoResponse statusInfo,
             LessonInfoResponse lessonInfo,
-            InstructorProfileResponse instructorProfile,
             List<ConfirmedMatchingRequestResponse> matchingRequests
     ) {
-        return new ConsumerLessonDetailResponse(
+        return new InstructorLessonDetailResponse(
                 lessonId,
                 LessonStatus.CONFIRMED,
                 statusInfo,
                 null,
                 lessonInfo,
-                instructorProfile,
                 matchingRequests
         );
     }
 
-    public static ConsumerLessonDetailResponse inProgress(
+    public static InstructorLessonDetailResponse inProgress(
             Long lessonId,
             InProgressStatusInfoResponse statusInfo,
             LessonInfoResponse lessonInfo,
-            InstructorProfileResponse instructorProfile,
             List<MatchingRequestResponse> matchingRequests
     ) {
-        return new ConsumerLessonDetailResponse(
+        return new InstructorLessonDetailResponse(
                 lessonId,
                 LessonStatus.IN_PROGRESS,
                 statusInfo,
                 null,
                 lessonInfo,
-                instructorProfile,
                 matchingRequests
         );
     }
 
-    public static ConsumerLessonDetailResponse completed(
+    public static InstructorLessonDetailResponse completed(
             Long lessonId,
             CompletedLessonInfoResponse lessonInfo,
-            InstructorProfileResponse instructorProfile
+            List<MatchingRequestResponse> matchingRequests
     ) {
-        return new ConsumerLessonDetailResponse(
+        return new InstructorLessonDetailResponse(
                 lessonId,
                 LessonStatus.COMPLETED,
                 null,
                 null,
                 lessonInfo,
-                instructorProfile,
-                null
+                matchingRequests
         );
     }
 
-    public static ConsumerLessonDetailResponse canceled(
+    public static InstructorLessonDetailResponse canceled(
             Long lessonId,
             CancelInfoResponse cancelInfo,
             CanceledLessonInfoResponse lessonInfo,
-            InstructorProfileResponse instructorProfile
+            List<MatchingRequestResponse> matchingRequests
     ) {
-        return new ConsumerLessonDetailResponse(
+        return new InstructorLessonDetailResponse(
                 lessonId,
                 LessonStatus.CANCELED,
                 null,
                 cancelInfo,
                 lessonInfo,
-                instructorProfile,
-                null
+                matchingRequests
         );
     }
 
@@ -232,8 +223,8 @@ public record ConsumerLessonDetailResponse(
             @Schema(description = "예정 강습 시간", example = "120")
             int scheduledDurationMinutes,
 
-            @Schema(description = "내 팀 강습 가격", example = "40000")
-            int myTeamLessonPrice
+            @Schema(description = "전체 강습 가격", example = "80000")
+            int totalLessonPrice
     ) implements LessonInfo {
 
         public static LessonInfoResponse of(
@@ -244,7 +235,7 @@ public record ConsumerLessonDetailResponse(
                 LessonLevel lessonLevel,
                 OffsetDateTime scheduledAt,
                 int scheduledDurationMinutes,
-                int myTeamLessonPrice
+                int totalLessonPrice
         ) {
             return new LessonInfoResponse(
                     representativeConsumerNames,
@@ -254,7 +245,7 @@ public record ConsumerLessonDetailResponse(
                     lessonLevel,
                     scheduledAt,
                     scheduledDurationMinutes,
-                    myTeamLessonPrice
+                    totalLessonPrice
             );
         }
     }
@@ -275,7 +266,7 @@ public record ConsumerLessonDetailResponse(
             @Schema(description = "강습 레벨", example = "FIRST_TIME")
             LessonLevel lessonLevel,
 
-            @Schema(description = "예정 강습 시간", example = "120")
+            @Schema(description = "강습 기본 시간", example = "120")
             int lessonDurationMinutes,
 
             @Schema(description = "실제 강습 시작 시각", example = "2026-01-01T10:00:00+09:00")
@@ -287,8 +278,8 @@ public record ConsumerLessonDetailResponse(
             @Schema(description = "실제 강습 진행 시간", example = "118")
             int actualDurationMinutes,
 
-            @Schema(description = "내 팀 강습 가격", example = "40000")
-            int myTeamLessonPrice
+            @Schema(description = "전체 강습 가격", example = "80000")
+            int totalLessonPrice
     ) implements LessonInfo {
 
         public static CompletedLessonInfoResponse of(
@@ -301,7 +292,7 @@ public record ConsumerLessonDetailResponse(
                 OffsetDateTime actualStartedAt,
                 OffsetDateTime actualEndedAt,
                 int actualDurationMinutes,
-                int myTeamLessonPrice
+                int totalLessonPrice
         ) {
             return new CompletedLessonInfoResponse(
                     representativeConsumerNames,
@@ -313,7 +304,7 @@ public record ConsumerLessonDetailResponse(
                     actualStartedAt,
                     actualEndedAt,
                     actualDurationMinutes,
-                    myTeamLessonPrice
+                    totalLessonPrice
             );
         }
     }
@@ -334,11 +325,11 @@ public record ConsumerLessonDetailResponse(
             @Schema(description = "강습 레벨", example = "FIRST_TIME")
             LessonLevel lessonLevel,
 
-            @Schema(description = "예정 강습 시간", example = "120")
+            @Schema(description = "강습 기본 시간", example = "120")
             int lessonDurationMinutes,
 
-            @Schema(description = "내 팀 강습 가격", example = "40000")
-            int myTeamLessonPrice
+            @Schema(description = "전체 강습 가격", example = "80000")
+            int totalLessonPrice
     ) implements LessonInfo {
 
         public static CanceledLessonInfoResponse of(
@@ -348,7 +339,7 @@ public record ConsumerLessonDetailResponse(
                 Sport sport,
                 LessonLevel lessonLevel,
                 int lessonDurationMinutes,
-                int myTeamLessonPrice
+                int totalLessonPrice
         ) {
             return new CanceledLessonInfoResponse(
                     representativeConsumerNames,
@@ -357,7 +348,7 @@ public record ConsumerLessonDetailResponse(
                     sport,
                     lessonLevel,
                     lessonDurationMinutes,
-                    myTeamLessonPrice
+                    totalLessonPrice
             );
         }
     }
@@ -378,45 +369,6 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record InstructorProfileResponse(
-            @Schema(description = "강사 ID", example = "9001")
-            Long instructorId,
-
-            @Schema(description = "강사 이름", example = "김씽씽")
-            String name,
-
-            @Schema(description = "강사 성별", example = "MALE")
-            Gender gender,
-
-            @Schema(description = "강사 출생연도", example = "1994")
-            Integer birthYear,
-
-            @Schema(description = "강사 등급", example = "1")
-            Integer level,
-
-            @Schema(description = "강사 프로필 이미지 URL", example = "https://example.com/instructors/9003.jpg")
-            String profileImageUrl
-    ) {
-
-        public static InstructorProfileResponse of(
-                Long instructorId,
-                String name,
-                Gender gender,
-                Integer birthYear,
-                Integer level,
-                String profileImageUrl
-        ) {
-            return new InstructorProfileResponse(
-                    instructorId,
-                    name,
-                    gender,
-                    birthYear,
-                    level,
-                    profileImageUrl
-            );
-        }
-    }
-
     public record ConfirmedMatchingRequestResponse(
             @Schema(description = "매칭 요청 ID", example = "91011")
             Long matchingRequestId,
@@ -430,6 +382,9 @@ public record ConsumerLessonDetailResponse(
             @Schema(description = "해당 팀 인원 수", example = "3")
             int headcount,
 
+            @Schema(description = "해당 팀 강습 가격", example = "40000")
+            int teamLessonPrice,
+
             @Schema(description = "해당 팀의 강습 시작 준비 완료 여부", example = "true")
             boolean startConfirmed,
 
@@ -442,6 +397,7 @@ public record ConsumerLessonDetailResponse(
                 Long representativeMemberId,
                 String representativeMemberName,
                 int headcount,
+                int teamLessonPrice,
                 boolean startConfirmed,
                 List<ParticipantResponse> participants
         ) {
@@ -450,6 +406,7 @@ public record ConsumerLessonDetailResponse(
                     representativeMemberId,
                     representativeMemberName,
                     headcount,
+                    teamLessonPrice,
                     startConfirmed,
                     participants
             );
@@ -469,6 +426,9 @@ public record ConsumerLessonDetailResponse(
             @Schema(description = "해당 팀 인원 수", example = "3")
             int headcount,
 
+            @Schema(description = "해당 팀 강습 가격", example = "40000")
+            int teamLessonPrice,
+
             @Schema(description = "해당 팀 참여자 목록")
             List<ParticipantResponse> participants
     ) implements MatchingRequest {
@@ -478,6 +438,7 @@ public record ConsumerLessonDetailResponse(
                 Long representativeMemberId,
                 String representativeMemberName,
                 int headcount,
+                int teamLessonPrice,
                 List<ParticipantResponse> participants
         ) {
             return new MatchingRequestResponse(
@@ -485,6 +446,7 @@ public record ConsumerLessonDetailResponse(
                     representativeMemberId,
                     representativeMemberName,
                     headcount,
+                    teamLessonPrice,
                     participants
             );
         }

@@ -7,8 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface LessonStartConfirmationRepository extends JpaRepository<LessonStartConfirmation, Long> {
 
-    @EntityGraph(attributePaths = {
-            "matchingRequest"
-    })
+    @EntityGraph(attributePaths = {"matchingRequest"})
     List<LessonStartConfirmation> findByLessonId(Long lessonId);
 }

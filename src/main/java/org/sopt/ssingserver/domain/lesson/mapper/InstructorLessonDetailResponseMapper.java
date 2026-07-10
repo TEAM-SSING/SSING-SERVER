@@ -4,16 +4,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
-import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
-import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
+import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.entity.LessonCancellation;
 import org.sopt.ssingserver.domain.lesson.entity.LessonParticipant;
@@ -21,7 +18,6 @@ import org.sopt.ssingserver.domain.lesson.entity.LessonStartConfirmation;
 import org.sopt.ssingserver.domain.lesson.enums.LessonCancellationActor;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationActor;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationStatus;
-import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.error.LessonErrorCode;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.member.entity.Member;
@@ -32,72 +28,64 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class ConsumerLessonDetailResponseMapper {
+public class InstructorLessonDetailResponseMapper {
 
     private final Clock clock;
 
-    public ConsumerLessonDetailResponse toResponse(
+    public InstructorLessonDetailResponse toResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            Long myMatchingRequestId,
-            int myTeamLessonPrice,
+            Map<Long, Integer> teamPricesByMatchingRequestId,
             List<LessonStartConfirmation> confirmations,
-            Optional<LessonCancellation> myCancellation,
-            Optional<LessonCancellation> instructorCancellation
+            Optional<LessonCancellation> latestCancellation
     ) {
-        LessonStatus responseStatus = myCancellation.isPresent() ? LessonStatus.CANCELED : lesson.getStatus();
-        return switch (responseStatus) {
-            case CONFIRMED -> confirmedResponse(
-                    lesson, participants, myMatchingRequestId, myTeamLessonPrice, confirmations);
-            case IN_PROGRESS -> inProgressResponse(lesson, participants, myTeamLessonPrice);
-            case COMPLETED -> completedResponse(lesson, participants, myTeamLessonPrice);
-            case CANCELED -> canceledResponse(
-                    lesson, participants, myTeamLessonPrice, myCancellation, instructorCancellation);
+        return switch (lesson.getStatus()) {
+            case CONFIRMED -> confirmedResponse(lesson, participants, teamPricesByMatchingRequestId, confirmations);
+            case IN_PROGRESS -> inProgressResponse(lesson, participants, teamPricesByMatchingRequestId);
+            case COMPLETED -> completedResponse(lesson, participants, teamPricesByMatchingRequestId);
+            case CANCELED -> canceledResponse(lesson, participants, teamPricesByMatchingRequestId, latestCancellation);
         };
     }
 
-    private ConsumerLessonDetailResponse confirmedResponse(
+    private InstructorLessonDetailResponse confirmedResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            Long myMatchingRequestId,
-            int myTeamLessonPrice,
+            Map<Long, Integer> teamPricesByMatchingRequestId,
             List<LessonStartConfirmation> confirmations
     ) {
-        // 강습 시작 전 강사와 각 팀이 준비 완료를 눌렀는지 확인
+        // 시작 전 화면은 강사와 팀 단위 준비 완료 상태를 함께 내려줌
         Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId = confirmedConsumerConfirmationsByRequestId(
                 confirmations
         );
         boolean instructorConfirmed = confirmations.stream().anyMatch(this::isConfirmedInstructor);
-
-        ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse statusInfo =
-                ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse.of(
+        InstructorLessonDetailResponse.ConfirmedStatusInfoResponse statusInfo =
+                InstructorLessonDetailResponse.ConfirmedStatusInfoResponse.of(
                         confirmedByMatchingRequestId.size() + (instructorConfirmed ? 1 : 0),
                         groupedParticipants(participants).size() + 1,
-                        confirmedByMatchingRequestId.containsKey(myMatchingRequestId),
+                        instructorConfirmed,
                         instructorConfirmed
                 );
 
-        return ConsumerLessonDetailResponse.confirmed(
+        return InstructorLessonDetailResponse.confirmed(
                 lesson.getId(),
                 statusInfo,
-                activeLessonInfo(lesson, participants, myTeamLessonPrice),
-                instructorProfile(lesson.getInstructorProfile()),
-                confirmedMatchingRequests(participants, confirmedByMatchingRequestId)
+                activeLessonInfo(lesson, participants, teamPricesByMatchingRequestId),
+                confirmedMatchingRequests(participants, confirmedByMatchingRequestId, teamPricesByMatchingRequestId)
         );
     }
 
-    private ConsumerLessonDetailResponse inProgressResponse(
+    private InstructorLessonDetailResponse inProgressResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            int myTeamLessonPrice
+            Map<Long, Integer> teamPricesByMatchingRequestId
     ) {
         // 강습 진행 중에는 실제 시작 시각과 서버 현재 시각으로 타이머 값을 계산
         Instant startedAt = requireInstant(lesson.getStartedAt());
         Instant serverTime = clock.instant();
         Instant expectedEndedAt = startedAt.plus(lesson.getDurationMinutes(), ChronoUnit.MINUTES);
 
-        ConsumerLessonDetailResponse.InProgressStatusInfoResponse statusInfo =
-                ConsumerLessonDetailResponse.InProgressStatusInfoResponse.of(
+        InstructorLessonDetailResponse.InProgressStatusInfoResponse statusInfo =
+                InstructorLessonDetailResponse.InProgressStatusInfoResponse.of(
                         toOffsetDateTime(serverTime),
                         toOffsetDateTime(startedAt),
                         toOffsetDateTime(expectedEndedAt),
@@ -105,28 +93,27 @@ public class ConsumerLessonDetailResponseMapper {
                         Math.max(0, ChronoUnit.SECONDS.between(serverTime, expectedEndedAt))
                 );
 
-        return ConsumerLessonDetailResponse.inProgress(
+        return InstructorLessonDetailResponse.inProgress(
                 lesson.getId(),
                 statusInfo,
-                activeLessonInfo(lesson, participants, myTeamLessonPrice),
-                instructorProfile(lesson.getInstructorProfile()),
-                matchingRequests(participants)
+                activeLessonInfo(lesson, participants, teamPricesByMatchingRequestId),
+                matchingRequests(participants, teamPricesByMatchingRequestId)
         );
     }
 
-    private ConsumerLessonDetailResponse completedResponse(
+    private InstructorLessonDetailResponse completedResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            int myTeamLessonPrice
+            Map<Long, Integer> teamPricesByMatchingRequestId
     ) {
         // 강습 종료 후에는 실제 시작/종료 시각 기준의 기록 정보를 내려줌
         Instant startedAt = requireInstant(lesson.getStartedAt());
         Instant completedAt = requireInstant(lesson.getCompletedAt());
         int actualDurationMinutes = Math.toIntExact(Math.max(0, ChronoUnit.MINUTES.between(startedAt, completedAt)));
 
-        return ConsumerLessonDetailResponse.completed(
+        return InstructorLessonDetailResponse.completed(
                 lesson.getId(),
-                ConsumerLessonDetailResponse.CompletedLessonInfoResponse.of(
+                InstructorLessonDetailResponse.CompletedLessonInfoResponse.of(
                         representativeConsumerNames(participants),
                         lesson.getTotalHeadcount(),
                         resort(lesson.getResort()),
@@ -136,64 +123,48 @@ public class ConsumerLessonDetailResponseMapper {
                         toOffsetDateTime(startedAt),
                         toOffsetDateTime(completedAt),
                         actualDurationMinutes,
-                        myTeamLessonPrice
+                        totalLessonPrice(participants, teamPricesByMatchingRequestId)
                 ),
-                instructorProfile(lesson.getInstructorProfile())
+                matchingRequests(participants, teamPricesByMatchingRequestId)
         );
     }
 
-    private ConsumerLessonDetailResponse canceledResponse(
+    private InstructorLessonDetailResponse canceledResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            int myTeamLessonPrice,
-            Optional<LessonCancellation> myCancellation,
-            Optional<LessonCancellation> instructorCancellation
+            Map<Long, Integer> teamPricesByMatchingRequestId,
+            Optional<LessonCancellation> latestCancellation
     ) {
-        // 내 팀 취소와 강사 취소가 모두 있을 수 있으므로 가장 최근 취소 정보를 보여줌
-        // TODO: 관리자 취소 기능 추가시 수정 필여
-        // TODO: 취소 및 환불 정책 결정 후 수정 필요
-        LessonCancellation cancellation = Stream.of(myCancellation, instructorCancellation)
-                .flatMap(Optional::stream)
-                .max(Comparator.comparing(LessonCancellation::getCanceledAt))
+        // lesson이 취소 상태이면 가장 마지막 취소 이력을 화면 복구 기준으로 사용
+        LessonCancellation cancellation = latestCancellation
                 .orElseThrow(() -> new BusinessException(LessonErrorCode.LESSON_CANCELLATION_NOT_FOUND));
-        ConsumerLessonDetailResponse.CanceledByResponse canceledBy;
-        if (cancellation.getCanceledBy() == LessonCancellationActor.INSTRUCTOR) {
-            InstructorProfile instructorProfile = lesson.getInstructorProfile();
-            canceledBy = ConsumerLessonDetailResponse.CanceledByResponse.of(
-                    instructorProfile.getMember().getId(),
-                    instructorProfile.getRealName()
-                );
-        } else {
-            Member member = cancellation.getMember();
-            canceledBy = ConsumerLessonDetailResponse.CanceledByResponse.of(member.getId(), member.getNickname());
-        }
 
-        return ConsumerLessonDetailResponse.canceled(
+        return InstructorLessonDetailResponse.canceled(
                 lesson.getId(),
-                ConsumerLessonDetailResponse.CancelInfoResponse.of(
+                InstructorLessonDetailResponse.CancelInfoResponse.of(
                         toOffsetDateTime(cancellation.getCanceledAt()),
-                        canceledBy,
+                        canceledBy(lesson, cancellation),
                         cancellation.getCancelReason()
                 ),
-                ConsumerLessonDetailResponse.CanceledLessonInfoResponse.of(
+                InstructorLessonDetailResponse.CanceledLessonInfoResponse.of(
                         representativeConsumerNames(participants),
                         lesson.getTotalHeadcount(),
                         resort(lesson.getResort()),
                         lesson.getSport(),
                         lesson.getLessonLevel(),
                         lesson.getDurationMinutes(),
-                        myTeamLessonPrice
+                        totalLessonPrice(participants, teamPricesByMatchingRequestId)
                 ),
-                instructorProfile(lesson.getInstructorProfile())
+                matchingRequests(participants, teamPricesByMatchingRequestId)
         );
     }
 
-    private ConsumerLessonDetailResponse.LessonInfoResponse activeLessonInfo(
+    private InstructorLessonDetailResponse.LessonInfoResponse activeLessonInfo(
             Lesson lesson,
             List<LessonParticipant> participants,
-            int myTeamLessonPrice
+            Map<Long, Integer> teamPricesByMatchingRequestId
     ) {
-        return ConsumerLessonDetailResponse.LessonInfoResponse.of(
+        return InstructorLessonDetailResponse.LessonInfoResponse.of(
                 representativeConsumerNames(participants),
                 lesson.getTotalHeadcount(),
                 resort(lesson.getResort()),
@@ -201,88 +172,81 @@ public class ConsumerLessonDetailResponseMapper {
                 lesson.getLessonLevel(),
                 toOffsetDateTime(lesson.getScheduledAt()),
                 lesson.getDurationMinutes(),
-                myTeamLessonPrice
+                totalLessonPrice(participants, teamPricesByMatchingRequestId)
         );
     }
 
-    private ConsumerLessonDetailResponse.InstructorProfileResponse instructorProfile(InstructorProfile profile) {
-        Member member = profile.getMember();
-        return ConsumerLessonDetailResponse.InstructorProfileResponse.of(
-                profile.getId(),
-                profile.getRealName(),
-                profile.getGender(),
-                profile.getBirthDate().getYear(),
-                profile.getLevel(),
-                member.getProfileImageUrl()
-        );
-    }
-
-    private List<ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse> confirmedMatchingRequests(
+    private List<InstructorLessonDetailResponse.ConfirmedMatchingRequestResponse> confirmedMatchingRequests(
             List<LessonParticipant> participants,
-            Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId
+            Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId,
+            Map<Long, Integer> teamPricesByMatchingRequestId
     ) {
         return groupedParticipants(participants)
                 .values()
                 .stream()
-                .map(group -> confirmedMatchingRequest(group, confirmedByMatchingRequestId))
+                .map(group -> confirmedMatchingRequest(group, confirmedByMatchingRequestId, teamPricesByMatchingRequestId))
                 .toList();
     }
 
-    private ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse confirmedMatchingRequest(
+    private InstructorLessonDetailResponse.ConfirmedMatchingRequestResponse confirmedMatchingRequest(
             List<LessonParticipant> participants,
-            Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId
+            Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId,
+            Map<Long, Integer> teamPricesByMatchingRequestId
     ) {
         LessonParticipant firstParticipant = firstParticipant(participants);
         MatchingRequest matchingRequest = firstParticipant.getMatchingRequest();
         Member representativeMember = matchingRequest.getMember();
-        LessonStartConfirmation confirmation = confirmedByMatchingRequestId.get(matchingRequest.getId());
-        List<ConsumerLessonDetailResponse.ParticipantResponse> participantResponses = participants.stream()
-                .map(participant -> ConsumerLessonDetailResponse.ParticipantResponse.of(
+        List<InstructorLessonDetailResponse.ParticipantResponse> participantResponses = participants.stream()
+                .map(participant -> InstructorLessonDetailResponse.ParticipantResponse.of(
                         participant.getId(),
                         participant.getGender(),
                         participant.getAge()
                 ))
                 .toList();
 
-        return ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse.of(
+        return InstructorLessonDetailResponse.ConfirmedMatchingRequestResponse.of(
                 matchingRequest.getId(),
                 representativeMember.getId(),
                 representativeMember.getNickname(),
                 matchingRequest.getHeadcount(),
-                confirmation != null,
+                teamLessonPrice(matchingRequest.getId(), teamPricesByMatchingRequestId),
+                confirmedByMatchingRequestId.containsKey(matchingRequest.getId()),
                 participantResponses
         );
     }
 
-    private List<ConsumerLessonDetailResponse.MatchingRequestResponse> matchingRequests(
-            List<LessonParticipant> participants
+    private List<InstructorLessonDetailResponse.MatchingRequestResponse> matchingRequests(
+            List<LessonParticipant> participants,
+            Map<Long, Integer> teamPricesByMatchingRequestId
     ) {
         return groupedParticipants(participants)
                 .values()
                 .stream()
-                .map(this::matchingRequest)
+                .map(group -> matchingRequest(group, teamPricesByMatchingRequestId))
                 .toList();
     }
 
-    private ConsumerLessonDetailResponse.MatchingRequestResponse matchingRequest(
-            List<LessonParticipant> participants
+    private InstructorLessonDetailResponse.MatchingRequestResponse matchingRequest(
+            List<LessonParticipant> participants,
+            Map<Long, Integer> teamPricesByMatchingRequestId
     ) {
         LessonParticipant firstParticipant = firstParticipant(participants);
         MatchingRequest matchingRequest = firstParticipant.getMatchingRequest();
         Member representativeMember = matchingRequest.getMember();
-        List<ConsumerLessonDetailResponse.ParticipantResponse> participantResponses = participants.stream()
-                .map(participant -> ConsumerLessonDetailResponse.ParticipantResponse.of(
+        List<InstructorLessonDetailResponse.ParticipantResponse> participantResponses = participants.stream()
+                .map(participant -> InstructorLessonDetailResponse.ParticipantResponse.of(
                         participant.getId(),
                         participant.getGender(),
                         participant.getAge()
                 ))
                 .toList();
 
-        return ConsumerLessonDetailResponse.MatchingRequestResponse.of(
+        return InstructorLessonDetailResponse.MatchingRequestResponse.of(
                 matchingRequest.getId(),
                 representativeMember.getId(),
                 representativeMember.getNickname(),
                 matchingRequest.getHeadcount(),
+                teamLessonPrice(matchingRequest.getId(), teamPricesByMatchingRequestId),
                 participantResponses
         );
     }
@@ -326,14 +290,48 @@ public class ConsumerLessonDetailResponseMapper {
                 && confirmation.getStatus() == LessonStartConfirmationStatus.CONFIRMED;
     }
 
+    private InstructorLessonDetailResponse.CanceledByResponse canceledBy(
+            Lesson lesson,
+            LessonCancellation cancellation
+    ) {
+        Member member = cancellation.getMember();
+        String name = cancellation.getCanceledBy() == LessonCancellationActor.INSTRUCTOR
+                ? lesson.getInstructorProfile().getRealName()
+                : member.getNickname();
+        return InstructorLessonDetailResponse.CanceledByResponse.of(member.getId(), name);
+    }
+
+    private int totalLessonPrice(
+            List<LessonParticipant> participants,
+            Map<Long, Integer> teamPricesByMatchingRequestId
+    ) {
+        // 전체 강습 가격은 팀별 결제 요청 금액을 합산해서 계산
+        return groupedParticipants(participants)
+                .keySet()
+                .stream()
+                .mapToInt(matchingRequestId -> teamLessonPrice(matchingRequestId, teamPricesByMatchingRequestId))
+                .sum();
+    }
+
+    private int teamLessonPrice(
+            Long matchingRequestId,
+            Map<Long, Integer> teamPricesByMatchingRequestId
+    ) {
+        Integer price = teamPricesByMatchingRequestId.get(matchingRequestId);
+        if (price == null) {
+            throw new BusinessException(LessonErrorCode.LESSON_PRICE_NOT_FOUND);
+        }
+        return price;
+    }
+
     private LessonParticipant firstParticipant(List<LessonParticipant> participants) {
         return participants.stream()
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(LessonErrorCode.LESSON_INVALID_STATE));
     }
 
-    private ConsumerLessonDetailResponse.ResortResponse resort(Resort resort) {
-        return ConsumerLessonDetailResponse.ResortResponse.of(resort.getCode(), resort.getDisplayName());
+    private InstructorLessonDetailResponse.ResortResponse resort(Resort resort) {
+        return InstructorLessonDetailResponse.ResortResponse.of(resort.getCode(), resort.getDisplayName());
     }
 
     private Instant requireInstant(Instant instant) {
