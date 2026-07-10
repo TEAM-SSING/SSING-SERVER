@@ -2,12 +2,18 @@ package org.sopt.ssingserver.domain.auth.dev.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
 class DevAuthConsoleResourceTest {
+
+    @Test
+    void HTML_콘솔은_REST_Swagger_문서에서_숨긴다() {
+        assertThat(DevAuthConsoleController.class.isAnnotationPresent(Hidden.class)).isTrue();
+    }
 
     @Test
     void consoleHtml은_다크_콘솔과_타이포그래피_토큰을_제공한다() throws IOException {
