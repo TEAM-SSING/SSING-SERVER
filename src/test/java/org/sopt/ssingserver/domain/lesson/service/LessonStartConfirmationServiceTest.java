@@ -219,7 +219,8 @@ class LessonStartConfirmationServiceTest {
 
     private void givenLesson(Fixture fixture) {
         when(lessonRepository.findByIdForUpdate(500L)).thenReturn(Optional.of(fixture.lesson()));
-        when(lessonParticipantRepository.findDetailParticipantsByLessonId(500L)).thenReturn(fixture.participants());
+        when(lessonParticipantRepository.findDistinctMatchingRequestsByLessonId(500L))
+                .thenReturn(List.of(fixture.myRequest(), fixture.otherRequest()));
     }
 
     private CurrentMember currentConsumer(Long memberId) {
