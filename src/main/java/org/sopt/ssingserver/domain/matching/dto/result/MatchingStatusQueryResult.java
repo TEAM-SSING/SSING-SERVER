@@ -26,7 +26,8 @@ public record MatchingStatusQueryResult(
         MatchingRequestPaymentStatus paymentStatus,
         Instant expiresAt,
         InstructorProfileResult instructorProfile,
-        Long lessonId
+        Long lessonId,
+        MatchingPriceSummaryResult priceSummary
 ) {
 
     public record InstructorProfileResult(

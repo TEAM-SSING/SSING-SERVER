@@ -49,7 +49,10 @@ public record ConsumerMatchingStatusResponse(
         InstructorProfileResponse instructorProfile,
 
         @Schema(description = "생성된 강습 ID. 매칭이 확정된 경우에만 포함", example = "30")
-        Long lessonId
+        Long lessonId,
+
+        @Schema(description = "가격이 필요한 매칭 단계에서 포함되는 제안 시점 가격 요약. 값이 없으면 생략")
+        MatchingPriceSummaryResponse priceSummary
 ) {
 
     public static ConsumerMatchingStatusResponse from(MatchingStatusQueryResult result) {
@@ -65,7 +68,8 @@ public record ConsumerMatchingStatusResponse(
                 result.paymentStatus(),
                 result.expiresAt(),
                 InstructorProfileResponse.from(result.instructorProfile()),
-                result.lessonId()
+                result.lessonId(),
+                MatchingPriceSummaryResponse.from(result.priceSummary())
         );
     }
 

@@ -9,6 +9,7 @@ import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
+import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
@@ -39,6 +40,7 @@ class ConsumerMatchingStatusResponseTest {
                 null,
                 null,
                 null,
+                null,
                 null
         );
 
@@ -52,6 +54,7 @@ class ConsumerMatchingStatusResponseTest {
         assertThat(json).doesNotContain("offerStatus");
         assertThat(json).doesNotContain("instructorProfile");
         assertThat(json).doesNotContain("lessonId");
+        assertThat(json).doesNotContain("priceSummary");
     }
 
     @Test
@@ -75,7 +78,8 @@ class ConsumerMatchingStatusResponseTest {
                         1998,
                         3
                 ),
-                null
+                null,
+                priceSummary()
         );
 
         ConsumerMatchingStatusResponse response = ConsumerMatchingStatusResponse.from(result);
@@ -90,6 +94,9 @@ class ConsumerMatchingStatusResponseTest {
         assertThat(json).contains("\"profileImageUrl\":\"https://example.com/instructor.png\"");
         assertThat(json).contains("\"birthYear\":1998");
         assertThat(json).contains("\"level\":3");
+        assertThat(json).contains("\"lessonPriceAmount\":80000");
+        assertThat(json).contains("\"resortPassFeeAmount\":20000");
+        assertThat(json).contains("\"totalPaymentAmount\":100000");
     }
 
     @Test
@@ -108,7 +115,8 @@ class ConsumerMatchingStatusResponseTest {
                 null,
                 Instant.parse("2026-07-07T00:10:00Z"),
                 instructorProfile,
-                null
+                null,
+                priceSummary()
         );
 
         ConsumerMatchingStatusResponse response = ConsumerMatchingStatusResponse.from(result);
@@ -145,13 +153,18 @@ class ConsumerMatchingStatusResponseTest {
                         1998,
                         null
                 ),
-                null
+                null,
+                priceSummary()
         );
 
         String json = objectMapper.writeValueAsString(ConsumerMatchingStatusResponse.from(result));
 
         assertThat(json).contains("\"instructorId\":40");
         assertThat(json).doesNotContain("\"level\"");
+    }
+
+    private MatchingPriceSummaryResult priceSummary() {
+        return new MatchingPriceSummaryResult(80_000, 20_000, 100_000);
     }
 
     private InstructorProfile approvedInstructorProfile(Long id, int level) {

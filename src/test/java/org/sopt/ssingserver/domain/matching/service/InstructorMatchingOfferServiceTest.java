@@ -51,6 +51,8 @@ import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
+import org.sopt.ssingserver.domain.payment.entity.MatchingOfferPriceSnapshot;
+import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.springframework.data.domain.PageImpl;
@@ -76,6 +78,9 @@ class InstructorMatchingOfferServiceTest {
 
     @Mock
     private MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
+
+    @Mock
+    private MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
 
     @Mock
     private MatchingSearchService matchingSearchService;
@@ -283,6 +288,8 @@ class InstructorMatchingOfferServiceTest {
         MatchingRequestGroupItem secondItem = item(41L, secondRequest, secondGroup);
         MatchingOffer firstOffer = offeredOffer(50L, instructorProfile, firstGroup);
         MatchingOffer secondOffer = offeredOffer(51L, instructorProfile, secondGroup);
+        MatchingOfferPriceSnapshot firstPriceSnapshot = offerPriceSnapshot(firstOffer, 80_000, 20_000);
+        MatchingOfferPriceSnapshot secondPriceSnapshot = offerPriceSnapshot(secondOffer, 90_000, 30_000);
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(instructorProfile));
         when(matchingOfferRepository.findByInstructorProfileIdAndStatusOrderByIdAsc(
                 10L,
@@ -292,6 +299,8 @@ class InstructorMatchingOfferServiceTest {
         when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdInOrderByGroupIdAscItemIdAsc(
                 List.of(20L, 21L)
         )).thenReturn(List.of(firstItem, secondItem));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferIdIn(List.of(50L, 51L)))
+                .thenReturn(List.of(firstPriceSnapshot, secondPriceSnapshot));
 
         InstructorMatchingOffersResult result = service.getCurrentOffers(1L, 0, 20);
 
@@ -304,17 +313,19 @@ class InstructorMatchingOfferServiceTest {
         assertThat(firstItemResult.lessonSummary().resort().code()).isEqualTo("HIGH1");
         assertThat(firstItemResult.lessonSummary().resort().displayName()).isEqualTo("하이원");
         assertThat(firstItemResult.lessonSummary().sport()).isSameAs(Sport.SNOWBOARD);
-        assertThat(firstItemResult.lessonSummary().lessonLevel()).isSameAs(LessonLevel.FIRST_TIME);
-        assertThat(firstItemResult.lessonSummary().headcount()).isEqualTo(2);
-        assertThat(firstItemResult.lessonSummary().durationMinutes()).isEqualTo(120);
+        assertThat(firstItemResult.priceSummary().lessonPriceAmount()).isEqualTo(80_000);
+        assertThat(firstItemResult.priceSummary().resortPassFeeAmount()).isEqualTo(20_000);
+        assertThat(firstItemResult.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
         assertThat(result.items().get(1).offerId()).isEqualTo(51L);
         assertThat(result.items().get(1).groupId()).isEqualTo(21L);
+        assertThat(result.items().get(1).priceSummary().totalPaymentAmount()).isEqualTo(120_000);
         assertThat(result.currentPage()).isZero();
         assertThat(result.size()).isEqualTo(20);
         assertThat(result.hasNext()).isFalse();
         verify(matchingRequestGroupItemRepository).findByMatchingRequestGroupIdInOrderByGroupIdAscItemIdAsc(
                 List.of(20L, 21L)
         );
+        verify(matchingOfferPriceSnapshotRepository).findByMatchingOfferIdIn(List.of(50L, 51L));
     }
 
     private InstructorMatchingOfferService createService() {
@@ -323,6 +334,7 @@ class InstructorMatchingOfferServiceTest {
                 matchingOfferRepository,
                 matchingRequestGroupRepository,
                 matchingRequestGroupItemRepository,
+                matchingOfferPriceSnapshotRepository,
                 matchingSearchService,
                 new MatchingTimeoutPolicy(),
                 new MatchingEventDispatcher(matchingEventPublisher, new MatchingAfterCommitExecutor()),
@@ -372,6 +384,23 @@ class InstructorMatchingOfferServiceTest {
         group.expose();
         ReflectionTestUtils.setField(group, "id", id);
         return group;
+    }
+
+    private MatchingOfferPriceSnapshot offerPriceSnapshot(
+            MatchingOffer matchingOffer,
+            int lessonPriceAmount,
+            int resortPassFeeAmount
+    ) {
+        MatchingOfferPriceSnapshot snapshot = construct(MatchingOfferPriceSnapshot.class);
+        ReflectionTestUtils.setField(snapshot, "matchingOffer", matchingOffer);
+        ReflectionTestUtils.setField(snapshot, "consumerTotalAmount", lessonPriceAmount);
+        ReflectionTestUtils.setField(snapshot, "resortPassFeeAmount", resortPassFeeAmount);
+        ReflectionTestUtils.setField(
+                snapshot,
+                "totalPaymentAmount",
+                lessonPriceAmount + resortPassFeeAmount
+        );
+        return snapshot;
     }
 
     private MatchingRequestGroupItem item(

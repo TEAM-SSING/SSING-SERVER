@@ -69,16 +69,16 @@ public class MatchingRequestPayment extends BaseTimeEntity {
             MatchingRequest matchingRequest,
             MatchingRequestPriceSnapshot matchingRequestPriceSnapshot,
             MatchingOffer matchingOffer,
-            int amount,
             Instant paymentRequestedAt,
             Instant paymentExpiresAt
     ) {
         // MVP 무기한 결제 대기 정책의 paymentExpiresAt null 허용
+        // 결제 금액을 외부 입력으로 받지 않고 요청 가격 스냅샷의 최종 금액으로만 생성
         MatchingRequestPayment payment = new MatchingRequestPayment();
         payment.matchingRequest = matchingRequest;
         payment.matchingRequestPriceSnapshot = matchingRequestPriceSnapshot;
         payment.matchingOffer = matchingOffer;
-        payment.amount = amount;
+        payment.amount = matchingRequestPriceSnapshot.getTotalPaymentAmount();
         payment.status = MatchingRequestPaymentStatus.PENDING;
         payment.paymentRequestedAt = paymentRequestedAt;
         payment.paymentExpiresAt = paymentExpiresAt;

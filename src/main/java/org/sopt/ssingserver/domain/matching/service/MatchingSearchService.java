@@ -260,7 +260,8 @@ public class MatchingSearchService {
                 matchingOffer,
                 instructorPricePolicy,
                 platformFeePolicy,
-                totalHeadcount
+                totalHeadcount,
+                matchingRequest.getResort().getPassFeeAmount()
         ));
 
         // DB 커밋 뒤 WebSocket 알림 계층이 강사와 소비자에게 제안 생성을 전달한다.

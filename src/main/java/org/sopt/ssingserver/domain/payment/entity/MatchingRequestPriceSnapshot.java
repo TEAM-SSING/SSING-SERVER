@@ -48,7 +48,13 @@ public class MatchingRequestPriceSnapshot {
     private int headcount;
 
     @Column(nullable = false)
-    private int consumerPaymentAmount;
+    private int lessonPriceAmount;
+
+    @Column(nullable = false)
+    private int resortPassFeeAmount;
+
+    @Column(name = "consumer_payment_amount", nullable = false)
+    private int totalPaymentAmount;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -56,14 +62,23 @@ public class MatchingRequestPriceSnapshot {
 
     public static MatchingRequestPriceSnapshot create(
             MatchingRequest matchingRequest,
-            MatchingOfferPriceSnapshot matchingOfferPriceSnapshot,
-            int consumerPaymentAmount
+            MatchingOfferPriceSnapshot matchingOfferPriceSnapshot
     ) {
         MatchingRequestPriceSnapshot snapshot = new MatchingRequestPriceSnapshot();
         snapshot.matchingRequest = matchingRequest;
         snapshot.matchingOfferPriceSnapshot = matchingOfferPriceSnapshot;
         snapshot.headcount = matchingRequest.getHeadcount();
-        snapshot.consumerPaymentAmount = consumerPaymentAmount;
+        snapshot.lessonPriceAmount = matchingOfferPriceSnapshot.getLessonPriceAmount();
+        snapshot.resortPassFeeAmount = matchingOfferPriceSnapshot.getResortPassFeeAmount();
+        snapshot.totalPaymentAmount = matchingOfferPriceSnapshot.getTotalPaymentAmount();
         return snapshot;
+    }
+
+    public int getLessonPriceAmount() {
+        // 새 강습비 컬럼 추가 전 데이터는 기존 consumer_payment_amount를 강습비로 복구
+        if (lessonPriceAmount == 0 && resortPassFeeAmount == 0 && totalPaymentAmount > 0) {
+            return totalPaymentAmount;
+        }
+        return lessonPriceAmount;
     }
 }

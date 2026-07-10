@@ -18,6 +18,7 @@ public record ConsumerMatchingConfirmationResult(
         MatchingRequestGroupItemStatus itemStatus,
         Integer confirmedCount,
         Integer requiredCount,
-        Instant expiresAt
+        Instant expiresAt,
+        MatchingPriceSummaryResult priceSummary
 ) {
 }

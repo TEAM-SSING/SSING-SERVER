@@ -140,7 +140,7 @@ class MatchingSearchServiceTest {
     }
 
     @Test
-    void search는_요청인원이_강사최대인원보다_적어도_수용가능하면_강사제안을_생성한다() {
+    void search는_제안시점_강습비와_리조트패찰비를_스냅샷으로_고정한다() {
         MatchingSearchService service = createService();
         MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(240, 120, 180));
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 3, List.of(180, 240));
@@ -189,9 +189,15 @@ class MatchingSearchServiceTest {
         assertThat(priceSnapshot.getBasePriceAmount()).isEqualTo(70_000);
         assertThat(priceSnapshot.getAdditionalPersonPriceAmount()).isEqualTo(10_000);
         assertThat(priceSnapshot.getConsumerTotalAmount()).isEqualTo(80_000);
+        assertThat(priceSnapshot.getLessonPriceAmount()).isEqualTo(80_000);
+        assertThat(priceSnapshot.getResortPassFeeAmount()).isEqualTo(30_000);
+        assertThat(priceSnapshot.getTotalPaymentAmount()).isEqualTo(110_000);
         assertThat(priceSnapshot.getInstructorSettlementAmount()).isEqualTo(80_000);
         assertThat(priceSnapshot.getPlatformFeeAmount()).isZero();
         assertThat(priceSnapshot.getFeeRateBps()).isZero();
+        ReflectionTestUtils.setField(matchingRequest.getResort(), "passFeeAmount", 50_000);
+        assertThat(priceSnapshot.getResortPassFeeAmount()).isEqualTo(30_000);
+        assertThat(priceSnapshot.getTotalPaymentAmount()).isEqualTo(110_000);
         ArgumentCaptor<MatchingOfferCreatedEvent> eventCaptor =
                 ArgumentCaptor.forClass(MatchingOfferCreatedEvent.class);
         verify(matchingEventPublisher).publish(eventCaptor.capture());
@@ -665,6 +671,7 @@ class MatchingSearchServiceTest {
         ReflectionTestUtils.setField(resort, "code", "HIGH1");
         ReflectionTestUtils.setField(resort, "name", "하이원리조트");
         ReflectionTestUtils.setField(resort, "displayName", "하이원");
+        ReflectionTestUtils.setField(resort, "passFeeAmount", 30_000);
         return resort;
     }
 

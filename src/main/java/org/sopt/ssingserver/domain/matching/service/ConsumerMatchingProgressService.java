@@ -12,6 +12,7 @@ import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.ConsumerMatchingConfirmationResult;
 import org.sopt.ssingserver.domain.matching.dto.result.ConsumerMatchingPaymentResult;
+import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
@@ -189,12 +190,13 @@ public class ConsumerMatchingProgressService {
                     context.currentItem().getStatus(),
                     confirmedCount,
                     requiredCount,
+                    null,
                     null
             );
         }
 
         context.group().markConsumerAccepted();
-        createPendingPayments(context, now);
+        MatchingPriceSummaryResult priceSummary = createPendingPayments(context, now);
         context.group().markPaymentPending();
         matchingEventDispatcher.publishAfterCommit(new PaymentPendingEvent(
                 UUID.randomUUID(),
@@ -214,7 +216,8 @@ public class ConsumerMatchingProgressService {
                 context.currentItem().getStatus(),
                 null,
                 null,
-                null
+                null,
+                priceSummary
         );
     }
 
@@ -263,11 +266,13 @@ public class ConsumerMatchingProgressService {
                 context.currentItem().getStatus(),
                 null,
                 null,
+                null,
                 null
         );
     }
 
-    private void createPendingPayments(
+    // 제안 가격을 요청 가격으로 한 번 더 고정하고 같은 총액으로 결제 대기 row 생성
+    private MatchingPriceSummaryResult createPendingPayments(
             MatchingProgressContext context,
             Instant now
     ) {
@@ -280,26 +285,21 @@ public class ConsumerMatchingProgressService {
         MatchingOfferPriceSnapshot offerPriceSnapshot = matchingOfferPriceSnapshotRepository
                 .findByMatchingOfferId(matchingOffer.getId())
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
-        int consumerPaymentAmount = offerPriceSnapshot.getConsumerTotalAmount();
-
-        for (MatchingRequestGroupItem groupItem : context.groupItems()) {
-            MatchingRequest groupRequest = groupItem.getMatchingRequest();
-            MatchingRequestPriceSnapshot requestPriceSnapshot = matchingRequestPriceSnapshotRepository.save(
-                    MatchingRequestPriceSnapshot.create(
-                            groupRequest,
-                            offerPriceSnapshot,
-                            consumerPaymentAmount
-                    )
-            );
-            matchingRequestPaymentRepository.save(MatchingRequestPayment.createPending(
-                    groupRequest,
-                    requestPriceSnapshot,
-                    matchingOffer,
-                    requestPriceSnapshot.getConsumerPaymentAmount(),
-                    now,
-                    null
-            ));
-        }
+        MatchingRequest groupRequest = context.groupItems().getFirst().getMatchingRequest();
+        MatchingRequestPriceSnapshot requestPriceSnapshot = matchingRequestPriceSnapshotRepository.save(
+                MatchingRequestPriceSnapshot.create(
+                        groupRequest,
+                        offerPriceSnapshot
+                )
+        );
+        matchingRequestPaymentRepository.save(MatchingRequestPayment.createPending(
+                groupRequest,
+                requestPriceSnapshot,
+                matchingOffer,
+                now,
+                null
+        ));
+        return MatchingPriceSummaryResult.from(requestPriceSnapshot);
     }
 
     // 결제 전체 완료 시 매칭 그룹 정보를 강습과 강습 참가자 row로 확정 복사

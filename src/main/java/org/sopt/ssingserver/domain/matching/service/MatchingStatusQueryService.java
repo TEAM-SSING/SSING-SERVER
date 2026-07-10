@@ -5,6 +5,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
+import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
@@ -17,6 +18,7 @@ import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
+import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
@@ -30,6 +32,7 @@ public class MatchingStatusQueryService {
     private final MatchingRequestRepository matchingRequestRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingOfferRepository matchingOfferRepository;
+    private final MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
     private final MatchingRequestPaymentRepository matchingRequestPaymentRepository;
     private final LessonRepository lessonRepository;
     private final MatchingStatusResolver matchingStatusResolver;
@@ -51,8 +54,10 @@ public class MatchingStatusQueryService {
         Optional<MatchingRequestGroup> matchingRequestGroup = matchingRequestGroupItem
                 .map(MatchingRequestGroupItem::getMatchingRequestGroup);
         Optional<MatchingOffer> matchingOffer = findCurrentOffer(matchingRequest, matchingRequestGroup);
-        Optional<MatchingRequestPayment> matchingRequestPayment =
-                matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(matchingRequestId);
+        Optional<MatchingRequestPayment> matchingRequestPayment = matchingOffer
+                .map(MatchingOffer::getId)
+                .flatMap(matchingOfferId -> matchingRequestPaymentRepository
+                        .findByMatchingRequestIdAndMatchingOfferId(matchingRequestId, matchingOfferId));
 
         MatchingStatus matchingStatus = matchingStatusResolver.resolve(
                 matchingRequest,
@@ -103,8 +108,42 @@ public class MatchingStatusQueryService {
                         matchingRequestPayment
                 ).orElse(null),
                 resolveInstructorProfile(matchingOffer),
-                resolveLessonId(matchingStatus, lesson)
+                resolveLessonId(matchingStatus, lesson),
+                resolvePriceSummary(matchingStatus, matchingOffer, matchingRequestPayment)
         );
+    }
+
+    // 최종 확인 단계는 제안 가격, 결제 이후 단계는 요청 가격을 사용해 저장 시점 경계 유지
+    private MatchingPriceSummaryResult resolvePriceSummary(
+            MatchingStatus matchingStatus,
+            Optional<MatchingOffer> matchingOffer,
+            Optional<MatchingRequestPayment> matchingRequestPayment
+    ) {
+        return switch (matchingStatus) {
+            case WAITING_FOR_CONFIRMATION, WAITING_FOR_OTHER_CONFIRMATIONS ->
+                    resolveOfferPriceSummary(matchingOffer);
+            case PAYMENT_PENDING, WAITING_FOR_OTHER_PAYMENTS, CONFIRMED ->
+                    resolveRequestPriceSummary(matchingRequestPayment);
+            default -> null;
+        };
+    }
+
+    private MatchingPriceSummaryResult resolveOfferPriceSummary(Optional<MatchingOffer> matchingOffer) {
+        Long matchingOfferId = matchingOffer
+                .map(MatchingOffer::getId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
+        return matchingOfferPriceSnapshotRepository.findByMatchingOfferId(matchingOfferId)
+                .map(MatchingPriceSummaryResult::from)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
+    }
+
+    private MatchingPriceSummaryResult resolveRequestPriceSummary(
+            Optional<MatchingRequestPayment> matchingRequestPayment
+    ) {
+        return matchingRequestPayment
+                .map(MatchingRequestPayment::getMatchingRequestPriceSnapshot)
+                .map(MatchingPriceSummaryResult::from)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
     }
 
     private static MatchingStatusQueryResult.InstructorProfileResult resolveInstructorProfile(
@@ -140,18 +179,23 @@ public class MatchingStatusQueryService {
         }
     }
 
+    // 재매칭 뒤 요청에 남은 과거 제안보다 최신 그룹과 연결된 제안을 우선해 상태 오염 방지
     private Optional<MatchingOffer> findCurrentOffer(
             MatchingRequest matchingRequest,
             Optional<MatchingRequestGroup> matchingRequestGroup
     ) {
-        if (matchingRequest.getMatchingOffer() != null) {
-            return Optional.of(matchingRequest.getMatchingOffer());
+        MatchingOffer requestOffer = matchingRequest.getMatchingOffer();
+        if (matchingRequestGroup.isPresent()) {
+            Long currentGroupId = matchingRequestGroup.get().getId();
+            if (requestOffer != null
+                    && Objects.equals(requestOffer.getMatchingRequestGroup().getId(), currentGroupId)) {
+                return Optional.of(requestOffer);
+            }
+
+            return matchingOfferRepository.findFirstByMatchingRequestGroupIdOrderByIdDesc(currentGroupId);
         }
 
-        return matchingRequestGroup
-                .map(MatchingRequestGroup::getId)
-                .filter(Objects::nonNull)
-                .flatMap(matchingOfferRepository::findFirstByMatchingRequestGroupIdOrderByIdDesc);
+        return Optional.ofNullable(requestOffer);
     }
 
     private Optional<Lesson> findConfirmedLesson(

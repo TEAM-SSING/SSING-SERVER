@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.matching.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -38,8 +39,11 @@ import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
+import org.sopt.ssingserver.domain.payment.entity.MatchingOfferPriceSnapshot;
 import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
+import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPriceSnapshot;
 import org.sopt.ssingserver.domain.payment.enums.MatchingRequestPaymentStatus;
+import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -61,6 +65,9 @@ class MatchingStatusQueryServiceTest {
 
     @Mock
     private MatchingOfferRepository matchingOfferRepository;
+
+    @Mock
+    private MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
 
     @Mock
     private MatchingRequestPaymentRepository matchingRequestPaymentRepository;
@@ -113,8 +120,6 @@ class MatchingStatusQueryServiceTest {
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.empty());
-        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
-                .thenReturn(Optional.empty());
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.empty(),
@@ -136,7 +141,9 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.paymentStatus()).isNull();
         assertThat(result.instructorProfile()).isNull();
         assertThat(result.lessonId()).isNull();
+        assertThat(result.priceSummary()).isNull();
         verifyNoInteractions(matchingOfferRepository);
+        verifyNoInteractions(matchingOfferPriceSnapshotRepository);
         verifyNoInteractions(lessonRepository);
     }
 
@@ -156,8 +163,6 @@ class MatchingStatusQueryServiceTest {
                 .thenReturn(Optional.of(item));
         when(matchingOfferRepository.findFirstByMatchingRequestGroupIdOrderByIdDesc(20L))
                 .thenReturn(Optional.of(offer));
-        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
-                .thenReturn(Optional.empty());
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),
@@ -175,6 +180,8 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
         assertThat(result.expiresAt()).isNull();
         assertThat(result.instructorProfile()).isNull();
+        assertThat(result.priceSummary()).isNull();
+        verifyNoInteractions(matchingOfferPriceSnapshotRepository);
         verifyNoInteractions(lessonRepository);
     }
 
@@ -193,8 +200,9 @@ class MatchingStatusQueryServiceTest {
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(item));
-        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
-                .thenReturn(Optional.empty());
+        MatchingOfferPriceSnapshot offerPriceSnapshot = offerPriceSnapshot(offer, 80_000, 20_000);
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L))
+                .thenReturn(Optional.of(offerPriceSnapshot));
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),
@@ -219,7 +227,67 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.instructorProfile().birthYear()).isEqualTo(1998);
         assertThat(result.instructorProfile().level()).isEqualTo(3);
         assertThat(result.lessonId()).isNull();
+        assertThat(result.priceSummary().lessonPriceAmount()).isEqualTo(80_000);
+        assertThat(result.priceSummary().resortPassFeeAmount()).isEqualTo(20_000);
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
         verifyNoInteractions(lessonRepository);
+    }
+
+    @Test
+    void getStatus는_가격이_필요한_상태에서_제안스냅샷이_없으면_INTERNAL_ERROR를_던진다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        MatchingRequestGroupItem item = matchingRequestGroupItem(30L, matchingRequest, group);
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile(40L), group);
+        matchingRequest.markMatched(offer);
+
+        when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(item));
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.of(item),
+                Optional.of(offer),
+                Optional.empty()
+        )).thenReturn(MatchingStatus.WAITING_FOR_CONFIRMATION);
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getStatus(1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isSameAs(CommonErrorCode.INTERNAL_ERROR);
+    }
+
+    @Test
+    void getStatus는_본인확인_완료후_다른_대표소비자_대기중에도_제안가격을_반환한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        MatchingRequestGroupItem item = matchingRequestGroupItem(30L, matchingRequest, group);
+        item.accept(Instant.parse("2026-07-07T00:02:00Z"));
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile(40L), group);
+        matchingRequest.markMatched(offer);
+        MatchingOfferPriceSnapshot offerPriceSnapshot = offerPriceSnapshot(offer, 80_000, 20_000);
+
+        when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(item));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L))
+                .thenReturn(Optional.of(offerPriceSnapshot));
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.of(item),
+                Optional.of(offer),
+                Optional.empty()
+        )).thenReturn(MatchingStatus.WAITING_FOR_OTHER_CONFIRMATIONS);
+
+        MatchingStatusQueryResult result = service.getStatus(1L, 10L);
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_OTHER_CONFIRMATIONS);
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
     }
 
     @Test
@@ -242,7 +310,7 @@ class MatchingStatusQueryServiceTest {
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(item));
-        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+        when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
                 .thenReturn(Optional.of(payment));
         when(matchingStatusResolver.resolve(
                 matchingRequest,
@@ -258,7 +326,49 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.paymentStatus()).isSameAs(MatchingRequestPaymentStatus.PENDING);
         assertThat(result.expiresAt()).isNull();
         assertThat(result.lessonId()).isNull();
+        assertThat(result.priceSummary().lessonPriceAmount()).isEqualTo(80_000);
+        assertThat(result.priceSummary().resortPassFeeAmount()).isEqualTo(20_000);
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
         verifyNoInteractions(lessonRepository);
+    }
+
+    @Test
+    void getStatus는_본인결제_완료후_다른_결제_대기중에도_요청가격을_반환한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        group.markPaymentPending();
+        MatchingRequestGroupItem item = matchingRequestGroupItem(30L, matchingRequest, group);
+        item.accept(Instant.parse("2026-07-07T00:02:00Z"));
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile(40L), group);
+        MatchingRequestPayment payment = matchingRequestPayment(
+                60L,
+                matchingRequest,
+                offer,
+                MatchingRequestPaymentStatus.COMPLETED,
+                PAYMENT_EXPIRES_AT
+        );
+        matchingRequest.markMatched(offer);
+
+        when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(item));
+        when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
+                .thenReturn(Optional.of(payment));
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.of(item),
+                Optional.of(offer),
+                Optional.of(payment)
+        )).thenReturn(MatchingStatus.WAITING_FOR_OTHER_PAYMENTS);
+
+        MatchingStatusQueryResult result = service.getStatus(1L, 10L);
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_OTHER_PAYMENTS);
+        assertThat(result.priceSummary().lessonPriceAmount()).isEqualTo(80_000);
+        assertThat(result.priceSummary().resortPassFeeAmount()).isEqualTo(20_000);
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
     }
 
     @Test
@@ -285,7 +395,7 @@ class MatchingStatusQueryServiceTest {
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(item));
-        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+        when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
                 .thenReturn(Optional.of(payment));
         when(lessonRepository.findByMatchingOfferId(50L)).thenReturn(Optional.of(lesson));
         when(matchingStatusResolver.resolve(
@@ -302,6 +412,45 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.paymentStatus()).isSameAs(MatchingRequestPaymentStatus.COMPLETED);
         assertThat(result.expiresAt()).isNull();
         assertThat(result.lessonId()).isEqualTo(70L);
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
+    }
+
+    @Test
+    void getStatus는_재매칭후_요청에_과거제안이_남아있어도_현재그룹의_최신제안을_사용한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup oldGroup = matchingRequestGroup(20L);
+        MatchingOffer oldOffer = acceptedOffer(50L, instructorProfile(40L), oldGroup);
+        matchingRequest.markMatched(oldOffer);
+        matchingRequest.rematchAfterConsumerRejected();
+        matchingRequest.markGrouped();
+
+        MatchingRequestGroup currentGroup = exposedMatchingRequestGroup(21L);
+        MatchingRequestGroupItem currentItem = MatchingRequestGroupItem.createNotRequested(
+                matchingRequest,
+                currentGroup
+        );
+        ReflectionTestUtils.setField(currentItem, "id", 31L);
+        MatchingOffer currentOffer = offeredOffer(51L, instructorProfile(41L), currentGroup);
+
+        when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(currentItem));
+        when(matchingOfferRepository.findFirstByMatchingRequestGroupIdOrderByIdDesc(21L))
+                .thenReturn(Optional.of(currentOffer));
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.of(currentGroup),
+                Optional.of(currentItem),
+                Optional.of(currentOffer),
+                Optional.empty()
+        )).thenReturn(MatchingStatus.WAITING_FOR_INSTRUCTOR);
+
+        MatchingStatusQueryResult result = service.getStatus(1L, 10L);
+
+        assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
+        assertThat(result.priceSummary()).isNull();
+        verify(matchingRequestPaymentRepository).findByMatchingRequestIdAndMatchingOfferId(10L, 51L);
     }
 
     private MatchingStatusQueryService createService() {
@@ -309,6 +458,7 @@ class MatchingStatusQueryServiceTest {
                 matchingRequestRepository,
                 matchingRequestGroupItemRepository,
                 matchingOfferRepository,
+                matchingOfferPriceSnapshotRepository,
                 matchingRequestPaymentRepository,
                 lessonRepository,
                 matchingStatusResolver,
@@ -388,11 +538,37 @@ class MatchingStatusQueryServiceTest {
         ReflectionTestUtils.setField(payment, "id", id);
         ReflectionTestUtils.setField(payment, "matchingRequest", matchingRequest);
         ReflectionTestUtils.setField(payment, "matchingOffer", offer);
+        ReflectionTestUtils.setField(payment, "matchingRequestPriceSnapshot", requestPriceSnapshot());
         ReflectionTestUtils.setField(payment, "amount", 120_000);
         ReflectionTestUtils.setField(payment, "status", status);
         ReflectionTestUtils.setField(payment, "paymentRequestedAt", Instant.parse("2026-07-07T00:05:00Z"));
         ReflectionTestUtils.setField(payment, "paymentExpiresAt", paymentExpiresAt);
         return payment;
+    }
+
+    private MatchingOfferPriceSnapshot offerPriceSnapshot(
+            MatchingOffer offer,
+            int lessonPriceAmount,
+            int resortPassFeeAmount
+    ) {
+        MatchingOfferPriceSnapshot snapshot = newInstance(MatchingOfferPriceSnapshot.class);
+        ReflectionTestUtils.setField(snapshot, "matchingOffer", offer);
+        ReflectionTestUtils.setField(snapshot, "consumerTotalAmount", lessonPriceAmount);
+        ReflectionTestUtils.setField(snapshot, "resortPassFeeAmount", resortPassFeeAmount);
+        ReflectionTestUtils.setField(
+                snapshot,
+                "totalPaymentAmount",
+                lessonPriceAmount + resortPassFeeAmount
+        );
+        return snapshot;
+    }
+
+    private MatchingRequestPriceSnapshot requestPriceSnapshot() {
+        MatchingRequestPriceSnapshot snapshot = newInstance(MatchingRequestPriceSnapshot.class);
+        ReflectionTestUtils.setField(snapshot, "lessonPriceAmount", 80_000);
+        ReflectionTestUtils.setField(snapshot, "resortPassFeeAmount", 20_000);
+        ReflectionTestUtils.setField(snapshot, "totalPaymentAmount", 100_000);
+        return snapshot;
     }
 
     private Lesson lesson(Long id, MatchingOffer offer) {

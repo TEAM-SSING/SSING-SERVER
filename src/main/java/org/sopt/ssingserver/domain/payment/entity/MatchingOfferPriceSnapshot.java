@@ -47,6 +47,12 @@ public class MatchingOfferPriceSnapshot {
     private int consumerTotalAmount;
 
     @Column(nullable = false)
+    private int resortPassFeeAmount;
+
+    @Column(nullable = false)
+    private int totalPaymentAmount;
+
+    @Column(nullable = false)
     private int instructorSettlementAmount;
 
     @Column(nullable = false)
@@ -72,10 +78,12 @@ public class MatchingOfferPriceSnapshot {
             MatchingOffer matchingOffer,
             InstructorPricePolicy instructorPricePolicy,
             PlatformFeePolicy platformFeePolicy,
-            int totalHeadcount
+            int totalHeadcount,
+            int resortPassFeeAmount
     ) {
         // 강사 제안 수락 이후에도 금액 기준이 흔들리지 않도록 제안 시점 금액 보존
         validateTotalHeadcount(totalHeadcount);
+        validateResortPassFeeAmount(resortPassFeeAmount);
 
         MatchingOfferPriceSnapshot snapshot = new MatchingOfferPriceSnapshot();
         snapshot.instructorPricePolicy = instructorPricePolicy;
@@ -84,17 +92,43 @@ public class MatchingOfferPriceSnapshot {
         snapshot.totalHeadcount = totalHeadcount;
         snapshot.basePriceAmount = instructorPricePolicy.getBasePriceAmount();
         snapshot.additionalPersonPriceAmount = instructorPricePolicy.getAdditionalPersonPriceAmount();
-        snapshot.consumerTotalAmount = snapshot.basePriceAmount
-                + snapshot.additionalPersonPriceAmount * Math.max(0, totalHeadcount - 1);
+        int additionalPriceAmount = Math.multiplyExact(
+                snapshot.additionalPersonPriceAmount,
+                Math.max(0, totalHeadcount - 1)
+        );
+        snapshot.consumerTotalAmount = Math.addExact(snapshot.basePriceAmount, additionalPriceAmount);
+        snapshot.resortPassFeeAmount = resortPassFeeAmount;
+        snapshot.totalPaymentAmount = Math.addExact(
+                snapshot.consumerTotalAmount,
+                snapshot.resortPassFeeAmount
+        );
         snapshot.platformFeeAmount = 0;
         snapshot.feeRateBps = platformFeePolicy.getFeeRateBps();
         snapshot.instructorSettlementAmount = snapshot.consumerTotalAmount - snapshot.platformFeeAmount;
         return snapshot;
     }
 
+    public int getLessonPriceAmount() {
+        return consumerTotalAmount;
+    }
+
+    public int getTotalPaymentAmount() {
+        // 새 총액 컬럼 추가 전 데이터는 기존 강습비를 총액으로 사용해 0원 응답 방지
+        if (totalPaymentAmount == 0 && resortPassFeeAmount == 0 && consumerTotalAmount > 0) {
+            return consumerTotalAmount;
+        }
+        return totalPaymentAmount;
+    }
+
     private static void validateTotalHeadcount(int totalHeadcount) {
         if (totalHeadcount <= 0) {
             throw new IllegalArgumentException("totalHeadcount must be positive.");
+        }
+    }
+
+    private static void validateResortPassFeeAmount(int resortPassFeeAmount) {
+        if (resortPassFeeAmount < 0) {
+            throw new IllegalArgumentException("resortPassFeeAmount must be non-negative.");
         }
     }
 }

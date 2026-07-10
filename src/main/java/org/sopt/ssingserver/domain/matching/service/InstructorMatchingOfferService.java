@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.matching.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -12,6 +13,7 @@ import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
+import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
@@ -28,6 +30,8 @@ import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEv
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
+import org.sopt.ssingserver.domain.payment.entity.MatchingOfferPriceSnapshot;
+import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
@@ -44,6 +48,7 @@ public class InstructorMatchingOfferService {
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
+    private final MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
     private final MatchingSearchService matchingSearchService;
     private final MatchingTimeoutPolicy matchingTimeoutPolicy;
     private final MatchingEventDispatcher matchingEventDispatcher;
@@ -65,6 +70,7 @@ public class InstructorMatchingOfferService {
 
         List<MatchingOffer> offerItems = matchingOffers.getContent();
         Map<Long, List<MatchingRequestGroupItem>> groupItemsByGroupId = findGroupItemsByGroupId(offerItems);
+        Map<Long, MatchingOfferPriceSnapshot> priceSnapshotsByOfferId = findPriceSnapshotsByOfferId(offerItems);
 
         return new InstructorMatchingOffersResult(
                 offerItems.stream()
@@ -73,7 +79,8 @@ public class InstructorMatchingOfferService {
                                 groupItemsByGroupId.getOrDefault(
                                         matchingOffer.getMatchingRequestGroup().getId(),
                                         List.of()
-                                )
+                                ),
+                                priceSnapshotsByOfferId.get(matchingOffer.getId())
                         ))
                         .toList(),
                 matchingOffers.getNumber(),
@@ -217,17 +224,14 @@ public class InstructorMatchingOfferService {
 
     private InstructorMatchingOffersResult.ItemResult toItemResult(
             MatchingOffer matchingOffer,
-            List<MatchingRequestGroupItem> groupItems
+            List<MatchingRequestGroupItem> groupItems,
+            MatchingOfferPriceSnapshot priceSnapshot
     ) {
-        if (groupItems.isEmpty()) {
+        if (groupItems.isEmpty() || priceSnapshot == null) {
             throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
         }
 
         MatchingRequest firstRequest = groupItems.getFirst().getMatchingRequest();
-        int headcount = groupItems.stream()
-                .map(MatchingRequestGroupItem::getMatchingRequest)
-                .mapToInt(MatchingRequest::getHeadcount)
-                .sum();
         Resort resort = firstRequest.getResort();
 
         InstructorMatchingOffersResult.LessonSummaryResult lessonSummary =
@@ -236,10 +240,7 @@ public class InstructorMatchingOfferService {
                                 resort.getCode(),
                                 resort.getDisplayName()
                         ),
-                        firstRequest.getSport(),
-                        firstRequest.getLessonLevel(),
-                        headcount,
-                        matchingOffer.getMatchingRequestGroup().getDurationMinutes()
+                        firstRequest.getSport()
                 );
 
         return new InstructorMatchingOffersResult.ItemResult(
@@ -247,8 +248,29 @@ public class InstructorMatchingOfferService {
                 matchingOffer.getMatchingRequestGroup().getId(),
                 matchingOffer.getStatus(),
                 resolveOfferExpiresAt(matchingOffer),
-                lessonSummary
+                lessonSummary,
+                MatchingPriceSummaryResult.from(priceSnapshot)
         );
+    }
+
+    // 목록 크기와 무관하게 가격 스냅샷을 한 번에 조회하고 오퍼별 단일 스냅샷 계약 보호
+    private Map<Long, MatchingOfferPriceSnapshot> findPriceSnapshotsByOfferId(List<MatchingOffer> matchingOffers) {
+        List<Long> offerIds = matchingOffers.stream()
+                .map(MatchingOffer::getId)
+                .toList();
+        if (offerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, MatchingOfferPriceSnapshot> snapshotsByOfferId = new HashMap<>();
+        for (MatchingOfferPriceSnapshot snapshot
+                : matchingOfferPriceSnapshotRepository.findByMatchingOfferIdIn(offerIds)) {
+            Long offerId = snapshot.getMatchingOffer().getId();
+            if (snapshotsByOfferId.put(offerId, snapshot) != null) {
+                throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
+            }
+        }
+        return snapshotsByOfferId;
     }
 
     private Instant resolveOfferExpiresAt(MatchingOffer matchingOffer) {
