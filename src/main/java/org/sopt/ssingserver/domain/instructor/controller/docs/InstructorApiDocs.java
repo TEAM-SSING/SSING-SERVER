@@ -25,7 +25,7 @@ public interface InstructorApiDocs {
 
     @Operation(
             summary = "강사 즉시노출 조건 화면 조회",
-            description = "활동 리조트, 자격증 기준 선택 가능 종목, 시간 옵션과 저장된 조건을 조회합니다.",
+            description = "활동 리조트와 자격증 기준 선택 가능 종목을 조회합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(

@@ -283,7 +283,7 @@ class InstructorServiceTest {
     }
 
     @Test
-    void getExposureConditions는_자격증_종목과_저장된_조건을_화면_초깃값으로_반환한다() {
+    void getExposureConditions는_활동_리조트와_자격증_종목만_반환한다() {
         InstructorService service = createService();
         InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
         ReflectionTestUtils.setField(
@@ -292,51 +292,37 @@ class InstructorServiceTest {
                 InstructorCertificateType.KSIA_SKI_LEVEL_1
         );
         profile.registerCertificate(InstructorCertificateType.KSIA_SKI_LEVEL_1);
-        InstructorMatchingSetting setting = InstructorMatchingSetting.create(
-                profile,
-                Sport.SNOWBOARD,
-                List.of(LessonLevel.BEGINNER, LessonLevel.FIRST_TIME),
-                List.of(240, 120, 180),
-                3,
-                true
-        );
 
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
-        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
-                .thenReturn(Optional.of(setting));
 
         InstructorMatchingExposureConditionsResult result = service.getExposureConditions(1L);
 
         assertThat(result.resort().code()).isEqualTo("HIGH1");
         assertThat(result.resort().displayName()).isEqualTo("하이원");
         assertThat(result.availableSports()).containsExactly(Sport.SKI);
-        assertThat(result.durationOptions()).containsExactly(120, 180, 240);
-        assertThat(result.currentSetting().sport()).isSameAs(Sport.SNOWBOARD);
-        assertThat(result.currentSetting().lessonLevels())
-                .containsExactly(LessonLevel.FIRST_TIME, LessonLevel.BEGINNER);
-        assertThat(result.currentSetting().availableDurationMinutes())
-                .containsExactly(120, 180, 240);
-        assertThat(result.currentSetting().maxHeadcount()).isEqualTo(3);
-        assertThat(result.currentSetting().equipmentReady()).isTrue();
-        assertThat(result.currentSetting().isExposed()).isTrue();
-        verifyNoInteractions(lessonRepository, matchingSearchTriggerService);
+        verifyNoInteractions(
+                instructorMatchingSettingRepository,
+                lessonRepository,
+                matchingSearchTriggerService
+        );
     }
 
     @Test
-    void getExposureConditions는_자격증과_저장조건이_없으면_빈_종목목록과_null_설정을_반환한다() {
+    void getExposureConditions는_자격증이_없으면_빈_종목목록을_반환한다() {
         InstructorService service = createService();
         InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
         ReflectionTestUtils.setField(profile, "certificateType", null);
 
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
-        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
-                .thenReturn(Optional.empty());
 
         InstructorMatchingExposureConditionsResult result = service.getExposureConditions(1L);
 
         assertThat(result.availableSports()).isEmpty();
-        assertThat(result.currentSetting()).isNull();
-        verifyNoInteractions(lessonRepository, matchingSearchTriggerService);
+        verifyNoInteractions(
+                instructorMatchingSettingRepository,
+                lessonRepository,
+                matchingSearchTriggerService
+        );
     }
 
     @Test

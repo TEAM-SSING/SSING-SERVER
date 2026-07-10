@@ -28,7 +28,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class InstructorService {
 
-    private static final List<Integer> DURATION_OPTIONS = List.of(120, 180, 240);
     private static final String UNSUPPORTED_SPORT_MESSAGE = "보유 자격증으로 선택할 수 없는 종목입니다.";
 
     private final InstructorProfileRepository instructorProfileRepository;
@@ -54,17 +53,13 @@ public class InstructorService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    // 화면 진입 시 리조트·자격 종목·저장 조건을 한 트랜잭션에서 응답용 결과로 조립
+    // 화면 진입 시 리조트와 자격증 종목만 응답용 결과로 조립한다.
     @Transactional(readOnly = true)
     public InstructorMatchingExposureConditionsResult getExposureConditions(Long memberId) {
         InstructorProfile instructorProfile = findInstructorProfile(memberId);
         validateResortConfigured(instructorProfile);
 
-        return InstructorMatchingExposureConditionsResult.from(
-                instructorProfile,
-                instructorMatchingSettingRepository.findByInstructorProfileId(instructorProfile.getId()),
-                DURATION_OPTIONS
-        );
+        return InstructorMatchingExposureConditionsResult.from(instructorProfile);
     }
 
     // 강사 즉시 매칭 조건 저장 및 시작
