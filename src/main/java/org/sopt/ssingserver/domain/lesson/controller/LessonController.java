@@ -3,6 +3,7 @@ package org.sopt.ssingserver.domain.lesson.controller;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.lesson.controller.docs.LessonApiDocs;
 import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
+import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.service.LessonDetailService;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.response.CommonSuccessCode;
@@ -30,7 +31,21 @@ public class LessonController implements LessonApiDocs {
             CurrentMember currentMember,
             @PathVariable Long lessonId
     ) {
-        ConsumerLessonDetailResponse response = lessonDetailService.getDetail(
+        ConsumerLessonDetailResponse response = lessonDetailService.getConsumerDetail(
+                currentMember.memberId(),
+                lessonId
+        );
+        return SuccessResponseFactory.success(CommonSuccessCode.SUCCESS, response);
+    }
+
+    @Override
+    @RequireAccess(AccessPolicy.APPROVED_INSTRUCTOR)
+    @GetMapping("/instructor/lessons/{lessonId}")
+    public ResponseEntity<BaseResponse<InstructorLessonDetailResponse>> getInstructorLessonDetail(
+            CurrentMember currentMember,
+            @PathVariable Long lessonId
+    ) {
+        InstructorLessonDetailResponse response = lessonDetailService.getInstructorDetail(
                 currentMember.memberId(),
                 lessonId
         );

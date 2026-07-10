@@ -8,9 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface LessonCancellationRepository extends JpaRepository<LessonCancellation, Long> {
 
-    @EntityGraph(attributePaths = {
-            "member"
-    })
+    @EntityGraph(attributePaths = {"member"})
+    List<LessonCancellation> findByLessonId(Long lessonId);
+
+    @EntityGraph(attributePaths = {"member"})
     List<LessonCancellation> findByLessonIdAndMatchingRequestId(Long lessonId, Long matchingRequestId);
 
     List<LessonCancellation> findByLessonIdAndCanceledBy(Long lessonId, LessonCancellationActor canceledBy);
