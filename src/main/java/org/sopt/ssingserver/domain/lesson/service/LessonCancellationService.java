@@ -86,8 +86,9 @@ public class LessonCancellationService {
         }
 
         Instant now = clock.instant();
+        // MVP는 강습당 소비자 팀 1개만 지원하므로 취소 주체와 관계없이 강습 전체를 취소한다.
+        // TODO: 다중 팀 도입 전 PM과 부분 취소, 잔여 팀 유지, 강습 인원/상세 보정 정책을 확정한다.
         lesson.cancel(now);
-        // TODO: 다중 매칭 정책 확정 시 소비자 팀 일부 취소에 대해 처리한다.
         matchingRequests.forEach(MatchingRequest::cancelByLessonCancellation);
 
         // 취소 주체와 표시용 취소 사유를 저장
@@ -98,6 +99,7 @@ public class LessonCancellationService {
                 ? lesson.getInstructorProfile().getMember()
                 : requesterMatchingRequest.getMember();
         MatchingRequest canceledMatchingRequest = instructorRequester ? null : requesterMatchingRequest;
+        // TODO: 다중 팀 도입 시 비취소 팀의 상세 상태와 cancelInfo 표시 기준을 PM과 확정한다.
         lessonCancellationRepository.save(LessonCancellation.create(
                 lesson,
                 canceledMatchingRequest,
