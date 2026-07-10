@@ -26,6 +26,15 @@ public class GlobalExceptionHandler {
         this.errorResponseFactory = errorResponseFactory;
     }
 
+    // DB 상태가 필요한 비즈니스 검증 실패를 field errors 형태로 변환
+    @ExceptionHandler(BusinessValidationException.class)
+    public ResponseEntity<BaseResponse<Void>> handleBusinessValidationException(
+            BusinessValidationException exception,
+            HttpServletRequest request
+    ) {
+        return errorResponseFactory.validationError(exception.getErrors(), request);
+    }
+
     // 비즈니스 규칙 위반
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<BaseResponse<Void>> handleBusinessException(

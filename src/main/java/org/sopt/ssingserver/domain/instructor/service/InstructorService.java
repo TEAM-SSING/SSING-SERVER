@@ -1,11 +1,14 @@
 package org.sopt.ssingserver.domain.instructor.service;
 
+import java.util.List;
 import java.util.Objects;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
+import org.sopt.ssingserver.domain.instructor.dto.result.InstructorMatchingExposureConditionsResult;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureCancelResponse;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
@@ -14,6 +17,7 @@ import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.matching.service.MatchingAfterCommitExecutor;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchTriggerService;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.BusinessValidationException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -23,6 +27,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class InstructorService {
+
+    private static final List<Integer> DURATION_OPTIONS = List.of(120, 180, 240);
+    private static final String UNSUPPORTED_SPORT_MESSAGE = "보유 자격증으로 선택할 수 없는 종목입니다.";
 
     private final InstructorProfileRepository instructorProfileRepository;
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
@@ -45,6 +52,19 @@ public class InstructorService {
         this.matchingSearchTriggerService = matchingSearchTriggerService;
         this.matchingAfterCommitExecutor = matchingAfterCommitExecutor;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
+    // 화면 진입 시 리조트·자격 종목·저장 조건을 한 트랜잭션에서 응답용 결과로 조립
+    @Transactional(readOnly = true)
+    public InstructorMatchingExposureConditionsResult getExposureConditions(Long memberId) {
+        InstructorProfile instructorProfile = findInstructorProfile(memberId);
+        validateResortConfigured(instructorProfile);
+
+        return InstructorMatchingExposureConditionsResult.from(
+                instructorProfile,
+                instructorMatchingSettingRepository.findByInstructorProfileId(instructorProfile.getId()),
+                DURATION_OPTIONS
+        );
     }
 
     // 강사 즉시 매칭 조건 저장 및 시작
@@ -104,7 +124,7 @@ public class InstructorService {
             boolean createWhenMissing
     ) {
         InstructorProfile instructorProfile = findInstructorProfile(memberId);
-        validateExposureAllowed(instructorProfile);
+        validateExposureAllowed(instructorProfile, request.sport());
 
         InstructorMatchingSetting setting = findOrCreateMatchingSetting(
                 instructorProfile,
@@ -176,8 +196,11 @@ public class InstructorService {
         );
     }
 
-    // 진행 중인 강습 여부와 활동 리조트 등록 여부를 확인
-    private void validateExposureAllowed(InstructorProfile instructorProfile) {
+    // 진행 중 강습, 활동 리조트, 요청 종목 자격을 저장 직전에 함께 검증
+    private void validateExposureAllowed(
+            InstructorProfile instructorProfile,
+            Sport sport
+    ) {
         if (lessonRepository.existsByInstructorProfileIdAndStatus(
                 instructorProfile.getId(),
                 LessonStatus.IN_PROGRESS
@@ -185,6 +208,13 @@ public class InstructorService {
             throw new BusinessException(InstructorErrorCode.ACTIVE_LESSON_EXISTS);
         }
 
+        validateResortConfigured(instructorProfile);
+        if (!instructorProfile.hasCertificateFor(sport)) {
+            throw BusinessValidationException.of("sport", UNSUPPORTED_SPORT_MESSAGE);
+        }
+    }
+
+    private void validateResortConfigured(InstructorProfile instructorProfile) {
         if (instructorProfile.getResort() == null) {
             throw new BusinessException(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET);
         }

@@ -26,4 +26,25 @@ class InstructorCertificateTypeTest {
                         "SBAK_SNOWBOARD_TEACHING_3"
                 );
     }
+
+    @Test
+    void 자격증_종류는_선택_가능한_스키_또는_스노보드_종목으로_매핑된다() {
+        assertThat(Arrays.asList(
+                InstructorCertificateType.KSIA_SKI_LEVEL_1,
+                InstructorCertificateType.KSIA_SKI_LEVEL_2,
+                InstructorCertificateType.KSIA_SKI_LEVEL_3,
+                InstructorCertificateType.SBAK_SKI_TEACHING_1,
+                InstructorCertificateType.SBAK_SKI_TEACHING_2,
+                InstructorCertificateType.SBAK_SKI_TEACHING_3
+        )).allSatisfy(certificateType -> assertThat(certificateType.sport()).isSameAs(Sport.SKI));
+
+        assertThat(Arrays.asList(
+                InstructorCertificateType.KSIA_SNOWBOARD_LEVEL_1,
+                InstructorCertificateType.KSIA_SNOWBOARD_LEVEL_2,
+                InstructorCertificateType.KSIA_SNOWBOARD_LEVEL_3,
+                InstructorCertificateType.SBAK_SNOWBOARD_TEACHING_1,
+                InstructorCertificateType.SBAK_SNOWBOARD_TEACHING_2,
+                InstructorCertificateType.SBAK_SNOWBOARD_TEACHING_3
+        )).allSatisfy(certificateType -> assertThat(certificateType.sport()).isSameAs(Sport.SNOWBOARD));
+    }
 }

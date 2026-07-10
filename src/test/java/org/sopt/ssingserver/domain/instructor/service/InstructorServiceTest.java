@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -22,9 +23,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureCancelResponse;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
+import org.sopt.ssingserver.domain.instructor.dto.result.InstructorMatchingExposureConditionsResult;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
+import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
@@ -40,7 +43,9 @@ import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.BusinessValidationException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
@@ -246,6 +251,141 @@ class InstructorServiceTest {
         verify(matchingSearchTriggerService, never()).triggerAllRequested();
     }
 
+    @Test
+    void startExposure는_보유_자격증에_없는_종목이면_저장하지_않는다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        ReflectionTestUtils.setField(
+                profile,
+                "certificateType",
+                InstructorCertificateType.KSIA_SKI_LEVEL_1
+        );
+
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(lessonRepository.existsByInstructorProfileIdAndStatus(
+                10L,
+                LessonStatus.IN_PROGRESS
+        )).thenReturn(false);
+
+        assertThatThrownBy(() -> service.startExposure(1L, request()))
+                .isInstanceOf(BusinessValidationException.class)
+                .satisfies(exception -> {
+                    BusinessValidationException validationException =
+                            (BusinessValidationException) exception;
+                    assertThat(validationException.getErrorCode())
+                            .isSameAs(CommonErrorCode.VALIDATION_FAILED);
+                    assertThat(validationException.getErrors())
+                            .containsEntry("sport", "보유 자격증으로 선택할 수 없는 종목입니다.");
+                });
+
+        verifyNoInteractions(instructorMatchingSettingRepository);
+        verify(matchingSearchTriggerService, never()).triggerAllRequested();
+    }
+
+    @Test
+    void getExposureConditions는_자격증_종목과_저장된_조건을_화면_초깃값으로_반환한다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        ReflectionTestUtils.setField(
+                profile,
+                "certificateType",
+                InstructorCertificateType.KSIA_SKI_LEVEL_1
+        );
+        profile.registerCertificate(InstructorCertificateType.KSIA_SKI_LEVEL_1);
+        InstructorMatchingSetting setting = InstructorMatchingSetting.create(
+                profile,
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.BEGINNER, LessonLevel.FIRST_TIME),
+                List.of(240, 120, 180),
+                3,
+                true
+        );
+
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
+                .thenReturn(Optional.of(setting));
+
+        InstructorMatchingExposureConditionsResult result = service.getExposureConditions(1L);
+
+        assertThat(result.resort().code()).isEqualTo("HIGH1");
+        assertThat(result.resort().displayName()).isEqualTo("하이원");
+        assertThat(result.availableSports()).containsExactly(Sport.SKI);
+        assertThat(result.durationOptions()).containsExactly(120, 180, 240);
+        assertThat(result.currentSetting().sport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(result.currentSetting().lessonLevels())
+                .containsExactly(LessonLevel.FIRST_TIME, LessonLevel.BEGINNER);
+        assertThat(result.currentSetting().availableDurationMinutes())
+                .containsExactly(120, 180, 240);
+        assertThat(result.currentSetting().maxHeadcount()).isEqualTo(3);
+        assertThat(result.currentSetting().equipmentReady()).isTrue();
+        assertThat(result.currentSetting().isExposed()).isTrue();
+        verifyNoInteractions(lessonRepository, matchingSearchTriggerService);
+    }
+
+    @Test
+    void getExposureConditions는_자격증과_저장조건이_없으면_빈_종목목록과_null_설정을_반환한다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        ReflectionTestUtils.setField(profile, "certificateType", null);
+
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
+                .thenReturn(Optional.empty());
+
+        InstructorMatchingExposureConditionsResult result = service.getExposureConditions(1L);
+
+        assertThat(result.availableSports()).isEmpty();
+        assertThat(result.currentSetting()).isNull();
+        verifyNoInteractions(lessonRepository, matchingSearchTriggerService);
+    }
+
+    @Test
+    void getExposureConditions는_활동_리조트가_없으면_저장조건을_조회하지_않는다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        ReflectionTestUtils.setField(profile, "resort", null);
+
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+
+        assertThatThrownBy(() -> service.getExposureConditions(1L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isSameAs(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET));
+
+        verifyNoInteractions(instructorMatchingSettingRepository, lessonRepository, matchingSearchTriggerService);
+    }
+
+    @Test
+    void startExposure는_동시생성_충돌_재시도에서도_최신_자격증으로_종목을_재검증한다() {
+        InstructorService service = createService();
+        InstructorProfile firstProfile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        InstructorProfile changedProfile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        ReflectionTestUtils.setField(
+                changedProfile,
+                "certificateType",
+                InstructorCertificateType.KSIA_SKI_LEVEL_1
+        );
+
+        when(instructorProfileRepository.findByMemberId(1L))
+                .thenReturn(Optional.of(firstProfile), Optional.of(changedProfile));
+        when(lessonRepository.existsByInstructorProfileIdAndStatus(
+                10L,
+                LessonStatus.IN_PROGRESS
+        )).thenReturn(false);
+        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
+                .thenReturn(Optional.empty());
+        when(instructorMatchingSettingRepository.save(any()))
+                .thenThrow(new DataIntegrityViolationException("concurrent insert"));
+
+        assertThatThrownBy(() -> service.startExposure(1L, request()))
+                .isInstanceOf(BusinessValidationException.class)
+                .satisfies(exception -> assertThat(((BusinessValidationException) exception).getErrors())
+                        .containsEntry("sport", "보유 자격증으로 선택할 수 없는 종목입니다."));
+
+        verify(instructorMatchingSettingRepository, times(1)).save(any());
+        verify(matchingSearchTriggerService, never()).triggerAllRequested();
+    }
+
     private InstructorService createService() {
         return new InstructorService(
                 instructorProfileRepository,
@@ -292,6 +432,11 @@ class InstructorServiceTest {
         );
         ReflectionTestUtils.setField(profile, "id", id);
         ReflectionTestUtils.setField(profile, "resort", resort());
+        ReflectionTestUtils.setField(
+                profile,
+                "certificateType",
+                InstructorCertificateType.KSIA_SNOWBOARD_LEVEL_1
+        );
         return profile;
     }
 
@@ -302,6 +447,7 @@ class InstructorServiceTest {
             Resort resort = constructor.newInstance();
             ReflectionTestUtils.setField(resort, "code", "HIGH1");
             ReflectionTestUtils.setField(resort, "name", "하이원");
+            ReflectionTestUtils.setField(resort, "displayName", "하이원");
             return resort;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
