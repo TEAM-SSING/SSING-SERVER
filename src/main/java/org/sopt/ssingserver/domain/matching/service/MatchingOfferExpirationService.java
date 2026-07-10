@@ -13,8 +13,6 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
-import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
-import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
 import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
@@ -34,8 +32,7 @@ public class MatchingOfferExpirationService {
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingSearchService matchingSearchService;
-    private final MatchingEventPublisher matchingEventPublisher;
-    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
+    private final MatchingEventDispatcher matchingEventDispatcher;
     private final Clock clock;
 
     // 유한 응답 시간 정책 재도입 시 OFFERED 제안 하나를 만료 처리하고 다음 우선순위 강사에게 넘기는 구현체
@@ -61,7 +58,7 @@ public class MatchingOfferExpirationService {
         }
 
         matchingOffer.expire();
-        publishAfterCommit(new MatchingOfferClosedEvent(
+        matchingEventDispatcher.publishAfterCommit(new MatchingOfferClosedEvent(
                 UUID.randomUUID(),
                 now,
                 matchingRequestGroup.getId(),
@@ -90,7 +87,7 @@ public class MatchingOfferExpirationService {
         for (MatchingRequestGroupItem groupItem : groupItems) {
             MatchingRequest matchingRequest = groupItem.getMatchingRequest();
             matchingRequest.rematchAfterInstructorTimeout();
-            publishAfterCommit(new MatchingRequestStatusChangedEvent(
+            matchingEventDispatcher.publishAfterCommit(new MatchingRequestStatusChangedEvent(
                     UUID.randomUUID(),
                     now,
                     matchingRequest.getId(),
@@ -102,10 +99,4 @@ public class MatchingOfferExpirationService {
         }
     }
 
-    private void publishAfterCommit(MatchingDomainEvent event) {
-        matchingAfterCommitExecutor.execute(
-                "matching-domain-event-publish",
-                () -> matchingEventPublisher.publish(event)
-        );
-    }
 }

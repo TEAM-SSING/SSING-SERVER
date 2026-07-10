@@ -447,8 +447,7 @@ class ConsumerMatchingProgressServiceTest {
                 matchingRequestParticipantRepository,
                 lessonRepository,
                 lessonParticipantRepository,
-                matchingEventPublisher,
-                new MatchingAfterCommitExecutor(),
+                new MatchingEventDispatcher(matchingEventPublisher, new MatchingAfterCommitExecutor()),
                 FIXED_CLOCK
         );
     }

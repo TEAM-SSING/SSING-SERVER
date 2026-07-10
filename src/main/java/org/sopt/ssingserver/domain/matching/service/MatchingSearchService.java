@@ -20,8 +20,6 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
-import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
-import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferCreatedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
@@ -51,8 +49,7 @@ public class MatchingSearchService {
     private final MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
     private final MatchingStatusResolver matchingStatusResolver;
     private final MatchingTimeoutPolicy matchingTimeoutPolicy;
-    private final MatchingEventPublisher matchingEventPublisher;
-    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
+    private final MatchingEventDispatcher matchingEventDispatcher;
     private final Clock clock;
 
     // 즉시 트리거와 스케줄러의 단건 탐색 입구, REQUESTED 요청 잠금 조회 처리
@@ -267,7 +264,7 @@ public class MatchingSearchService {
         ));
 
         // DB 커밋 뒤 WebSocket 알림 계층이 강사와 소비자에게 제안 생성을 전달한다.
-        publishAfterCommit(new MatchingOfferCreatedEvent(
+        matchingEventDispatcher.publishAfterCommit(new MatchingOfferCreatedEvent(
                 // 이벤트 저장소 도입 전 MVP의 발행 단위 추적용 id 생성
                 UUID.randomUUID(),
                 // 제안 row 생성 시각과 이벤트 발생 시각의 동일 기준 적용
@@ -300,14 +297,6 @@ public class MatchingSearchService {
                 Optional.empty()
         );
         return MatchingSearchResult.of(matchingRequest, matchingStatus);
-    }
-
-    // DB 변경 커밋 이후 상태 변경 이벤트를 알림 계층에 전달한다.
-    private void publishAfterCommit(MatchingDomainEvent event) {
-        matchingAfterCommitExecutor.execute(
-                "matching-domain-event-publish",
-                () -> matchingEventPublisher.publish(event)
-        );
     }
 
     // 잠금/중복제안 방어 이후 실제 제안 생성에 사용할 강사 설정과 확정 강습 시간 묶음

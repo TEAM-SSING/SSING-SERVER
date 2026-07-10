@@ -18,8 +18,6 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
-import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
-import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferCanceledEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
@@ -59,8 +57,7 @@ public class MatchingCancellationService {
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingRequestPaymentRepository matchingRequestPaymentRepository;
     private final MatchingStatusResolver matchingStatusResolver;
-    private final MatchingEventPublisher matchingEventPublisher;
-    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
+    private final MatchingEventDispatcher matchingEventDispatcher;
     private final Clock clock;
 
     // Controller에서 들어온 소비자 중지 요청의 단일 트랜잭션 경계
@@ -103,7 +100,7 @@ public class MatchingCancellationService {
                 matchingRequestPayment
         );
 
-        publishAfterCommit(new MatchingRequestStatusChangedEvent(
+        matchingEventDispatcher.publishAfterCommit(new MatchingRequestStatusChangedEvent(
                 UUID.randomUUID(),
                 now,
                 matchingRequest.getId(),
@@ -112,7 +109,7 @@ public class MatchingCancellationService {
                 matchingRequest.getStatusReason(),
                 matchingStatus
         ));
-        activeOffers.forEach(offer -> publishAfterCommit(new MatchingOfferCanceledEvent(
+        activeOffers.forEach(offer -> matchingEventDispatcher.publishAfterCommit(new MatchingOfferCanceledEvent(
                 UUID.randomUUID(),
                 now,
                 offer.getMatchingRequestGroup().getId(),
@@ -200,11 +197,4 @@ public class MatchingCancellationService {
                 .log("Matching request canceled");
     }
 
-    // DB 변경 커밋 이후 상태 변경 이벤트의 알림 계층 전달
-    private void publishAfterCommit(MatchingDomainEvent event) {
-        matchingAfterCommitExecutor.execute(
-                "matching-domain-event-publish",
-                () -> matchingEventPublisher.publish(event)
-        );
-    }
 }
