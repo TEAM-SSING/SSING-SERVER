@@ -553,8 +553,7 @@ class MatchingSearchServiceTest {
                 matchingOfferPriceSnapshotRepository,
                 new MatchingStatusResolver(),
                 new MatchingTimeoutPolicy(),
-                matchingEventPublisher,
-                new MatchingAfterCommitExecutor(),
+                new MatchingEventDispatcher(matchingEventPublisher, new MatchingAfterCommitExecutor()),
                 FIXED_CLOCK
         );
     }

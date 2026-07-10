@@ -22,8 +22,6 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.event.InstructorAcceptedEvent;
-import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
-import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
 import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
@@ -48,8 +46,7 @@ public class InstructorMatchingOfferService {
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingSearchService matchingSearchService;
     private final MatchingTimeoutPolicy matchingTimeoutPolicy;
-    private final MatchingEventPublisher matchingEventPublisher;
-    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
+    private final MatchingEventDispatcher matchingEventDispatcher;
     private final Clock clock;
 
     // 강사 앱 재진입/WebSocket 유실 복구 시 현재 강사에게 노출된 제안만 조회
@@ -130,7 +127,7 @@ public class InstructorMatchingOfferService {
             groupItem.requestConfirmation();
             groupItem.getMatchingRequest().markMatched(matchingOffer, requesterConfirmationExpiresAt);
         }
-        publishAfterCommit(new InstructorAcceptedEvent(
+        matchingEventDispatcher.publishAfterCommit(new InstructorAcceptedEvent(
                 UUID.randomUUID(),
                 now,
                 matchingRequestGroup.getId(),
@@ -154,7 +151,7 @@ public class InstructorMatchingOfferService {
             Instant now
     ) {
         matchingOffer.reject(now);
-        publishAfterCommit(new MatchingOfferClosedEvent(
+        matchingEventDispatcher.publishAfterCommit(new MatchingOfferClosedEvent(
                 UUID.randomUUID(),
                 now,
                 matchingRequestGroup.getId(),
@@ -192,7 +189,7 @@ public class InstructorMatchingOfferService {
         for (MatchingRequestGroupItem groupItem : groupItems) {
             MatchingRequest matchingRequest = groupItem.getMatchingRequest();
             matchingRequest.rematchAfterInstructorRejected();
-            publishAfterCommit(new MatchingRequestStatusChangedEvent(
+            matchingEventDispatcher.publishAfterCommit(new MatchingRequestStatusChangedEvent(
                     UUID.randomUUID(),
                     now,
                     matchingRequest.getId(),
@@ -202,13 +199,6 @@ public class InstructorMatchingOfferService {
                     org.sopt.ssingserver.domain.matching.enums.MatchingStatus.REMATCHING
             ));
         }
-    }
-
-    private void publishAfterCommit(MatchingDomainEvent event) {
-        matchingAfterCommitExecutor.execute(
-                "matching-domain-event-publish",
-                () -> matchingEventPublisher.publish(event)
-        );
     }
 
     private Map<Long, List<MatchingRequestGroupItem>> findGroupItemsByGroupId(List<MatchingOffer> matchingOffers) {

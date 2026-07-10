@@ -173,8 +173,7 @@ class MatchingOfferExpirationServiceTest {
                 matchingRequestGroupRepository,
                 matchingRequestGroupItemRepository,
                 matchingSearchService,
-                matchingEventPublisher,
-                new MatchingAfterCommitExecutor(),
+                new MatchingEventDispatcher(matchingEventPublisher, new MatchingAfterCommitExecutor()),
                 FIXED_CLOCK
         );
     }

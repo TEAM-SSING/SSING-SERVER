@@ -258,8 +258,7 @@ class MatchingCancellationServiceTest {
                 matchingOfferRepository,
                 matchingRequestPaymentRepository,
                 matchingStatusResolver,
-                matchingEventPublisher,
-                new MatchingAfterCommitExecutor(),
+                new MatchingEventDispatcher(matchingEventPublisher, new MatchingAfterCommitExecutor()),
                 FIXED_CLOCK
         );
     }
