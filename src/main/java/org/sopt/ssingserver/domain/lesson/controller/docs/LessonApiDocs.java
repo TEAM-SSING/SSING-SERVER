@@ -5,14 +5,18 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.sopt.ssingserver.domain.lesson.dto.request.LessonCancellationRequest;
 import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
+import org.sopt.ssingserver.domain.lesson.dto.response.LessonCancellationResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonCompletionResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonStartConfirmationResponse;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 
 @Tag(name = "Lesson", description = "강습 API")
 public interface LessonApiDocs {
@@ -67,5 +71,19 @@ public interface LessonApiDocs {
             CurrentMember currentMember,
             @Parameter(description = "강습 ID")
             @PathVariable Long lessonId
+    );
+
+    @Operation(
+            summary = "강습 취소",
+            description = "강습을 취소합니다.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponse(responseCode = "200", description = "강습 취소 성공")
+    ResponseEntity<BaseResponse<LessonCancellationResponse>> cancelLesson(
+            @Parameter(hidden = true)
+            CurrentMember currentMember,
+            @Parameter(description = "강습 ID")
+            @PathVariable Long lessonId,
+            @Valid @RequestBody LessonCancellationRequest request
     );
 }

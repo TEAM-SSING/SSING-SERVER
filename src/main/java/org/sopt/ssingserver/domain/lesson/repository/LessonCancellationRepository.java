@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface LessonCancellationRepository extends JpaRepository<LessonCancellation, Long> {
 
+    boolean existsByLessonIdAndMemberId(Long lessonId, Long memberId);
+
     @EntityGraph(attributePaths = {"member"})
     List<LessonCancellation> findByLessonId(Long lessonId);
 

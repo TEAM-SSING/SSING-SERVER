@@ -58,4 +58,22 @@ public class LessonCancellation extends BaseTimeEntity {
 
     @Column(nullable = false)
     private Instant canceledAt;
+
+    public static LessonCancellation create(
+            Lesson lesson,
+            MatchingRequest matchingRequest,
+            Member member,
+            LessonCancellationActor canceledBy,
+            String cancelReason,
+            Instant canceledAt
+    ) {
+        LessonCancellation lessonCancellation = new LessonCancellation();
+        lessonCancellation.lesson = lesson;
+        lessonCancellation.matchingRequest = matchingRequest;
+        lessonCancellation.member = member;
+        lessonCancellation.canceledBy = canceledBy;
+        lessonCancellation.cancelReason = cancelReason;
+        lessonCancellation.canceledAt = canceledAt;
+        return lessonCancellation;
+    }
 }
