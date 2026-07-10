@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -22,7 +23,13 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 
 @Getter
 @Entity
-@Table(name = "matching_request_payments")
+@Table(
+        name = "matching_request_payments",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_matching_request_payments_request_offer",
+                        columnNames = {"matching_request_id", "matching_offer_id"})
+        })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MatchingRequestPayment extends BaseTimeEntity {
 
