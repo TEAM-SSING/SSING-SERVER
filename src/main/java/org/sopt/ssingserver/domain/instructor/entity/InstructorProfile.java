@@ -88,7 +88,7 @@ public class InstructorProfile extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @CollectionTable(
             name = "instructor_profile_certificates",
-            joinColumns = @JoinColumn(name = "instructor_profile_id"),
+            joinColumns = @JoinColumn(name = "instructor_profile_id", nullable = false),
             uniqueConstraints = @UniqueConstraint(
                     name = "uk_instructor_profile_certificate",
                     columnNames = {"instructor_profile_id", "certificate_type"}
