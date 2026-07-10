@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
@@ -32,6 +33,7 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
+import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
@@ -113,6 +115,14 @@ class MatchingOfferExpirationServiceTest {
         assertThat(group.getStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
         assertThat(matchingRequest.getStatus()).isSameAs(MatchingRequestStatus.GROUPED);
         assertThat(matchingRequest.getStatusReason()).isNull();
+
+        ArgumentCaptor<MatchingDomainEvent> eventCaptor = ArgumentCaptor.forClass(MatchingDomainEvent.class);
+        verify(matchingEventPublisher, times(1)).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue()).isInstanceOf(MatchingOfferClosedEvent.class);
+        MatchingOfferClosedEvent closedEvent = (MatchingOfferClosedEvent) eventCaptor.getValue();
+        assertThat(closedEvent.matchingRequestGroupId()).isEqualTo(20L);
+        assertThat(closedEvent.matchingOfferId()).isEqualTo(50L);
+        assertThat(closedEvent.closedReason()).isSameAs(MatchingOfferClosedReason.EXPIRED);
     }
 
     @Test
@@ -154,6 +164,7 @@ class MatchingOfferExpirationServiceTest {
         verifyNoInteractions(matchingRequestGroupRepository);
         verifyNoInteractions(matchingRequestGroupItemRepository);
         verifyNoInteractions(matchingSearchService);
+        verifyNoInteractions(matchingEventPublisher);
     }
 
     private MatchingOfferExpirationService createService() {

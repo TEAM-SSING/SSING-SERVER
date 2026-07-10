@@ -46,8 +46,10 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.event.MatchingConfirmedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
+import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedReason;
 import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEvent;
 import org.sopt.ssingserver.domain.matching.event.PaymentPendingEvent;
 import org.sopt.ssingserver.domain.matching.event.PaymentStatusChangedEvent;
@@ -194,6 +196,62 @@ class ConsumerMatchingProgressServiceTest {
                 event instanceof MatchingRequestStatusChangedEvent statusEvent
                         && statusEvent.matchingStatus() == MatchingStatus.REMATCHING
         ));
+    }
+
+    @Test
+    void respond는_다인그룹_거절시_모든_요청에_재탐색_이벤트와_제안종료_이벤트를_발행한다() {
+        ConsumerMatchingProgressService service = createService();
+        MatchingFixture fixture = matchedFixture();
+        MatchingRequest secondRequest = matchingRequest(11L, member(3L, MemberRole.CONSUMER));
+        secondRequest.markMatched(fixture.offer());
+        MatchingRequestGroupItem secondItem = MatchingRequestGroupItem.createNotRequested(
+                secondRequest,
+                fixture.group()
+        );
+        ReflectionTestUtils.setField(secondItem, "id", 31L);
+        secondItem.requestConfirmation();
+        givenProgressContext(fixture, List.of(fixture.item(), secondItem));
+
+        service.respond(1L, 10L, MatchingConfirmationDecision.REJECTED);
+
+        assertThat(fixture.item().getStatus()).isSameAs(MatchingRequestGroupItemStatus.REJECTED);
+        assertThat(secondItem.getStatus()).isSameAs(MatchingRequestGroupItemStatus.CANCELED);
+        assertThat(fixture.matchingRequest().getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+        assertThat(fixture.matchingRequest().getStatusReason())
+                .isSameAs(MatchingRequestStatusReason.CONSUMER_REJECTED_INSTRUCTOR);
+        assertThat(secondRequest.getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+        assertThat(secondRequest.getStatusReason())
+                .isSameAs(MatchingRequestStatusReason.CONSUMER_REJECTED_INSTRUCTOR);
+        assertThat(fixture.group().getStatus()).isSameAs(MatchingRequestGroupStatus.CANCELED);
+
+        ArgumentCaptor<MatchingDomainEvent> eventCaptor = ArgumentCaptor.forClass(MatchingDomainEvent.class);
+        verify(matchingEventPublisher, times(3)).publish(eventCaptor.capture());
+
+        List<MatchingRequestStatusChangedEvent> statusEvents = eventCaptor.getAllValues().stream()
+                .filter(MatchingRequestStatusChangedEvent.class::isInstance)
+                .map(MatchingRequestStatusChangedEvent.class::cast)
+                .toList();
+        assertThat(statusEvents).hasSize(2);
+        assertThat(statusEvents)
+                .extracting(MatchingRequestStatusChangedEvent::matchingRequestId)
+                .containsExactlyInAnyOrder(10L, 11L);
+        assertThat(statusEvents).allSatisfy(event -> {
+            assertThat(event.matchingRequestGroupId()).isEqualTo(20L);
+            assertThat(event.requestStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+            assertThat(event.requestStatusReason())
+                    .isSameAs(MatchingRequestStatusReason.CONSUMER_REJECTED_INSTRUCTOR);
+            assertThat(event.matchingStatus()).isSameAs(MatchingStatus.REMATCHING);
+        });
+
+        List<MatchingOfferClosedEvent> closedEvents = eventCaptor.getAllValues().stream()
+                .filter(MatchingOfferClosedEvent.class::isInstance)
+                .map(MatchingOfferClosedEvent.class::cast)
+                .toList();
+        assertThat(closedEvents).singleElement().satisfies(event -> {
+            assertThat(event.matchingRequestGroupId()).isEqualTo(20L);
+            assertThat(event.matchingOfferId()).isEqualTo(50L);
+            assertThat(event.closedReason()).isSameAs(MatchingOfferClosedReason.GROUP_CANCELED);
+        });
     }
 
     @Test
