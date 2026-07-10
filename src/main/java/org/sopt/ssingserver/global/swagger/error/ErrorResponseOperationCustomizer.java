@@ -53,6 +53,7 @@ public class ErrorResponseOperationCustomizer implements OperationCustomizer {
                 ));
 
         for (Map.Entry<HttpStatus, List<ErrorCode>> entry : errorCodesByStatus.entrySet()) {
+            // 기존 성공 응답과 헤더는 건드리지 않고, 선언된 오류 상태의 JSON 계약만 채운다.
             addErrorResponse(responses, entry.getKey(), entry.getValue());
         }
         return operation;
@@ -91,6 +92,7 @@ public class ErrorResponseOperationCustomizer implements OperationCustomizer {
         boolean hasGeneralError = errorCodes.stream()
                 .anyMatch(errorCode -> !CommonErrorCode.VALIDATION_FAILED.getCode().equals(errorCode.getCode()));
 
+        // 같은 상태 코드에 검증 오류와 일반 오류가 함께 있으면 두 응답 형태를 모두 허용한다.
         if (hasValidationError && hasGeneralError) {
             return new ComposedSchema()
                     .addOneOfItem(schemaRef(COMMON_ERROR_SCHEMA_REF))

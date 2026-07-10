@@ -24,6 +24,7 @@ public class ErrorResponseSchemaCustomizer implements OpenApiCustomizer {
     }
 
     private void registerSchemas(Components components, Class<?> schemaType) {
+        // 런타임 응답 로직을 바꾸지 않고 문서 전용 모델만 OpenAPI components에 등록한다.
         Map<String, Schema> resolvedSchemas = ModelConverters.getInstance().readAll(schemaType);
         resolvedSchemas.forEach(components::addSchemas);
     }

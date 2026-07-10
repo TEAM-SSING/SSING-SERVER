@@ -11,6 +11,7 @@ import org.springframework.web.method.HandlerMethod;
 public class ErrorCodeResolver {
 
     public List<ErrorCode> resolve(HandlerMethod handlerMethod) {
+        // Controller 구현 메서드뿐 아니라 ApiDocs 인터페이스에 선언된 반복 애노테이션까지 함께 읽는다.
         Set<ApiErrorCodes> declarations = AnnotatedElementUtils.findMergedRepeatableAnnotations(
                 handlerMethod.getMethod(),
                 ApiErrorCodes.class
