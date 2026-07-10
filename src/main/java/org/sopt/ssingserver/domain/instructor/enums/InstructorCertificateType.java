@@ -1,0 +1,16 @@
+package org.sopt.ssingserver.domain.instructor.enums;
+
+public enum InstructorCertificateType {
+    KSIA_SKI_LEVEL_1,
+    KSIA_SKI_LEVEL_2,
+    KSIA_SKI_LEVEL_3,
+    KSIA_SNOWBOARD_LEVEL_1,
+    KSIA_SNOWBOARD_LEVEL_2,
+    KSIA_SNOWBOARD_LEVEL_3,
+    SBAK_SKI_TEACHING_1,
+    SBAK_SKI_TEACHING_2,
+    SBAK_SKI_TEACHING_3,
+    SBAK_SNOWBOARD_TEACHING_1,
+    SBAK_SNOWBOARD_TEACHING_2,
+    SBAK_SNOWBOARD_TEACHING_3
+}

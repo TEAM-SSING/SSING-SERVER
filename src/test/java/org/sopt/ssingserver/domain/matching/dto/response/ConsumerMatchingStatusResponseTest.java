@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
+import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
@@ -92,9 +93,9 @@ class ConsumerMatchingStatusResponseTest {
     }
 
     @Test
-    void from은_강사프로필_factory_경로에서_level_null을_JSON에서_제외한다() throws Exception {
+    void from은_강사프로필_factory_경로에서_저장된_level을_JSON에_포함한다() throws Exception {
         MatchingStatusQueryResult.InstructorProfileResult instructorProfile =
-                MatchingStatusQueryResult.InstructorProfileResult.from(approvedInstructorProfile(40L));
+                MatchingStatusQueryResult.InstructorProfileResult.from(approvedInstructorProfile(40L, 2));
         MatchingStatusQueryResult result = new MatchingStatusQueryResult(
                 10L,
                 MatchingStatus.WAITING_FOR_CONFIRMATION,
@@ -113,16 +114,47 @@ class ConsumerMatchingStatusResponseTest {
         ConsumerMatchingStatusResponse response = ConsumerMatchingStatusResponse.from(result);
         String json = objectMapper.writeValueAsString(response);
 
-        assertThat(instructorProfile.level()).isNull();
+        assertThat(instructorProfile.level()).isEqualTo(2);
         assertThat(json).contains("\"instructorId\":40");
         assertThat(json).contains("\"name\":\"김강사\"");
         assertThat(json).contains("\"profileImageUrl\":\"https://example.com/instructor.png\"");
         assertThat(json).contains("\"gender\":\"FEMALE\"");
         assertThat(json).contains("\"birthYear\":1998");
-        assertThat(json).doesNotContain("level");
+        assertThat(json).contains("\"level\":2");
+        assertThat(json).doesNotContain("certificate");
     }
 
-    private InstructorProfile approvedInstructorProfile(Long id) {
+    @Test
+    void from은_강사프로필_level이_null이면_JSON에서_제외한다() throws Exception {
+        MatchingStatusQueryResult result = new MatchingStatusQueryResult(
+                10L,
+                MatchingStatus.WAITING_FOR_CONFIRMATION,
+                MatchingRequestStatus.MATCHED,
+                null,
+                20L,
+                MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
+                MatchingRequestGroupItemStatus.PENDING,
+                MatchingOfferStatus.ACCEPTED,
+                null,
+                null,
+                new MatchingStatusQueryResult.InstructorProfileResult(
+                        40L,
+                        "김강사",
+                        null,
+                        Gender.FEMALE,
+                        1998,
+                        null
+                ),
+                null
+        );
+
+        String json = objectMapper.writeValueAsString(ConsumerMatchingStatusResponse.from(result));
+
+        assertThat(json).contains("\"instructorId\":40");
+        assertThat(json).doesNotContain("\"level\"");
+    }
+
+    private InstructorProfile approvedInstructorProfile(Long id, int level) {
         Member member = Member.create(
                 "강사닉네임",
                 "https://example.com/instructor.png",
@@ -141,6 +173,12 @@ class ConsumerMatchingStatusResponseTest {
                 Instant.parse("2026-07-01T00:00:00Z")
         );
         ReflectionTestUtils.setField(instructorProfile, "id", id);
+        ReflectionTestUtils.setField(instructorProfile, "level", level);
+        ReflectionTestUtils.setField(
+                instructorProfile,
+                "certificateType",
+                InstructorCertificateType.KSIA_SKI_LEVEL_3
+        );
         return instructorProfile;
     }
 }

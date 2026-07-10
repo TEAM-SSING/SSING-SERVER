@@ -19,6 +19,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
+import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
@@ -69,6 +70,10 @@ public class InstructorProfile extends BaseTimeEntity {
 
     @Column(nullable = false)
     private int level = 1;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "certificate_type", length = 30)
+    private InstructorCertificateType certificateType;
 
     @Column(nullable = false)
     private int experience = 0;
