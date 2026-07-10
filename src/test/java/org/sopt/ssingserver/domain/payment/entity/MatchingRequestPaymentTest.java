@@ -26,7 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class MatchingRequestPaymentTest {
 
-    private static final int PAYMENT_AMOUNT = 80_000;
+    private static final int PAYMENT_AMOUNT = 100_000;
     private static final Instant REQUESTED_AT = Instant.parse("2026-07-10T10:00:00Z");
 
     @Test
@@ -114,14 +114,12 @@ class MatchingRequestPaymentTest {
         MatchingOffer matchingOffer = matchingOffer();
         MatchingRequestPriceSnapshot requestPriceSnapshot = MatchingRequestPriceSnapshot.create(
                 matchingRequest,
-                offerPriceSnapshot(matchingOffer),
-                PAYMENT_AMOUNT
+                offerPriceSnapshot(matchingOffer)
         );
         MatchingRequestPayment payment = MatchingRequestPayment.createPending(
                 matchingRequest,
                 requestPriceSnapshot,
                 matchingOffer,
-                PAYMENT_AMOUNT,
                 REQUESTED_AT,
                 null
         );
@@ -155,7 +153,8 @@ class MatchingRequestPaymentTest {
                 matchingOffer,
                 instructorPricePolicy,
                 platformFeePolicy,
-                2
+                2,
+                20_000
         );
     }
 

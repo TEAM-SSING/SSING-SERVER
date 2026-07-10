@@ -53,7 +53,7 @@ public interface ConsumerMatchingApiDocs {
 
     @Operation(
             summary = "소비자 매칭 최종 응답",
-            description = "강사가 수락한 매칭을 대표 소비자가 최종 수락하거나 거절합니다.",
+            description = "강사가 수락한 매칭을 대표 소비자가 최종 수락하거나 거절합니다. 이번 응답으로 PAYMENT_PENDING에 전환되면 고정된 가격 요약을 함께 반환합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "최종 응답 반영 성공")

@@ -45,7 +45,10 @@ public record ConsumerMatchingConfirmationResponse(
         Integer requiredCount,
 
         @Schema(description = "현재 단계 만료 시각", example = "2026-06-28T15:33:00+09:00")
-        OffsetDateTime expiresAt
+        OffsetDateTime expiresAt,
+
+        @Schema(description = "이번 응답으로 결제 대기로 전환될 때 포함되는 가격 요약. 값이 없으면 생략")
+        MatchingPriceSummaryResponse priceSummary
 ) {
 
     public static ConsumerMatchingConfirmationResponse from(ConsumerMatchingConfirmationResult result) {
@@ -60,7 +63,8 @@ public record ConsumerMatchingConfirmationResponse(
                 result.itemStatus(),
                 result.confirmedCount(),
                 result.requiredCount(),
-                toOffsetDateTime(result.expiresAt())
+                toOffsetDateTime(result.expiresAt()),
+                MatchingPriceSummaryResponse.from(result.priceSummary())
         );
     }
 

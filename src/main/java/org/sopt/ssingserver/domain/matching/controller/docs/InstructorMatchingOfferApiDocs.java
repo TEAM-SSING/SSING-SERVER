@@ -23,7 +23,7 @@ public interface InstructorMatchingOfferApiDocs {
 
     @Operation(
             summary = "강사 현재 노출 매칭 제안 조회",
-            description = "현재 로그인한 강사에게 노출된 활성 매칭 제안을 조회합니다.",
+            description = "현재 로그인한 강사에게 노출된 활성 매칭 제안과 제안 생성 시점에 고정된 강습비, 리조트 패스비, 최종 결제 금액을 조회합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "현재 노출 매칭 제안 조회 성공")

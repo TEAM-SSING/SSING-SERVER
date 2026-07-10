@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,4 +32,30 @@ public class Resort extends BaseTimeEntity {
     // API 응답에서 code와 함께 내려줄 Android 표시용 리조트명
     @Column(nullable = false, length = 100)
     private String displayName;
+
+    @PositiveOrZero
+    @Column(nullable = false)
+    private int passFeeAmount;
+
+    public static Resort create(
+            String code,
+            String name,
+            String displayName,
+            int passFeeAmount
+    ) {
+        validatePassFeeAmount(passFeeAmount);
+
+        Resort resort = new Resort();
+        resort.code = code;
+        resort.name = name;
+        resort.displayName = displayName;
+        resort.passFeeAmount = passFeeAmount;
+        return resort;
+    }
+
+    private static void validatePassFeeAmount(int passFeeAmount) {
+        if (passFeeAmount < 0) {
+            throw new IllegalArgumentException("passFeeAmount must be non-negative.");
+        }
+    }
 }

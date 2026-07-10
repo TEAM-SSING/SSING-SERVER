@@ -115,7 +115,7 @@ class ConsumerMatchingProgressServiceTest {
     void respond는_소비자_수락시_요청가격스냅샷과_PENDING_결제를_생성한다() {
         ConsumerMatchingProgressService service = createService();
         MatchingFixture fixture = matchedFixture();
-        MatchingOfferPriceSnapshot offerSnapshot = offerPriceSnapshot(70L, fixture.offer(), 80_000);
+        MatchingOfferPriceSnapshot offerSnapshot = offerPriceSnapshot(70L, fixture.offer(), 80_000, 20_000);
         givenConfirmableRequest(fixture);
         when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L)).thenReturn(Optional.of(offerSnapshot));
         when(matchingRequestPriceSnapshotRepository.save(any(MatchingRequestPriceSnapshot.class)))
@@ -138,6 +138,9 @@ class ConsumerMatchingProgressServiceTest {
         assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.PAYMENT_PENDING);
         assertThat(result.confirmedCount()).isNull();
         assertThat(result.requiredCount()).isNull();
+        assertThat(result.priceSummary().lessonPriceAmount()).isEqualTo(80_000);
+        assertThat(result.priceSummary().resortPassFeeAmount()).isEqualTo(20_000);
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
         assertThat(fixture.item().getStatus()).isSameAs(MatchingRequestGroupItemStatus.ACCEPTED);
         assertThat(fixture.group().getStatus()).isSameAs(MatchingRequestGroupStatus.PAYMENT_PENDING);
 
@@ -148,7 +151,9 @@ class ConsumerMatchingProgressServiceTest {
         assertThat(requestSnapshot.getMatchingRequest()).isSameAs(fixture.matchingRequest());
         assertThat(requestSnapshot.getMatchingOfferPriceSnapshot()).isSameAs(offerSnapshot);
         assertThat(requestSnapshot.getHeadcount()).isEqualTo(2);
-        assertThat(requestSnapshot.getConsumerPaymentAmount()).isEqualTo(80_000);
+        assertThat(requestSnapshot.getLessonPriceAmount()).isEqualTo(80_000);
+        assertThat(requestSnapshot.getResortPassFeeAmount()).isEqualTo(20_000);
+        assertThat(requestSnapshot.getTotalPaymentAmount()).isEqualTo(100_000);
 
         ArgumentCaptor<MatchingRequestPayment> paymentCaptor = ArgumentCaptor.forClass(MatchingRequestPayment.class);
         verify(matchingRequestPaymentRepository).save(paymentCaptor.capture());
@@ -156,7 +161,7 @@ class ConsumerMatchingProgressServiceTest {
         assertThat(payment.getMatchingRequest()).isSameAs(fixture.matchingRequest());
         assertThat(payment.getMatchingRequestPriceSnapshot()).isSameAs(requestSnapshot);
         assertThat(payment.getMatchingOffer()).isSameAs(fixture.offer());
-        assertThat(payment.getAmount()).isEqualTo(80_000);
+        assertThat(payment.getAmount()).isEqualTo(100_000);
         assertThat(payment.getStatus()).isSameAs(MatchingRequestPaymentStatus.PENDING);
         assertThat(payment.getPaymentRequestedAt()).isEqualTo(FIXED_CLOCK.instant());
         assertThat(payment.getPaymentExpiresAt()).isNull();
@@ -277,6 +282,7 @@ class ConsumerMatchingProgressServiceTest {
         assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_OTHER_CONFIRMATIONS);
         assertThat(result.confirmedCount()).isEqualTo(1);
         assertThat(result.requiredCount()).isEqualTo(2);
+        assertThat(result.priceSummary()).isNull();
         verify(matchingEventPublisher).publish(argThat(event ->
                 event instanceof RequesterConfirmationUpdatedEvent updatedEvent
                         && updatedEvent.acceptedRequesterCount() == 1
@@ -531,12 +537,19 @@ class ConsumerMatchingProgressServiceTest {
     private MatchingOfferPriceSnapshot offerPriceSnapshot(
             Long id,
             MatchingOffer matchingOffer,
-            int consumerTotalAmount
+            int lessonPriceAmount,
+            int resortPassFeeAmount
     ) {
         MatchingOfferPriceSnapshot snapshot = construct(MatchingOfferPriceSnapshot.class);
         ReflectionTestUtils.setField(snapshot, "id", id);
         ReflectionTestUtils.setField(snapshot, "matchingOffer", matchingOffer);
-        ReflectionTestUtils.setField(snapshot, "consumerTotalAmount", consumerTotalAmount);
+        ReflectionTestUtils.setField(snapshot, "consumerTotalAmount", lessonPriceAmount);
+        ReflectionTestUtils.setField(snapshot, "resortPassFeeAmount", resortPassFeeAmount);
+        ReflectionTestUtils.setField(
+                snapshot,
+                "totalPaymentAmount",
+                lessonPriceAmount + resortPassFeeAmount
+        );
         ReflectionTestUtils.setField(snapshot, "totalHeadcount", 2);
         return snapshot;
     }
@@ -550,7 +563,9 @@ class ConsumerMatchingProgressServiceTest {
         ReflectionTestUtils.setField(snapshot, "id", id);
         ReflectionTestUtils.setField(snapshot, "matchingRequest", matchingRequest);
         ReflectionTestUtils.setField(snapshot, "headcount", matchingRequest.getHeadcount());
-        ReflectionTestUtils.setField(snapshot, "consumerPaymentAmount", consumerPaymentAmount);
+        ReflectionTestUtils.setField(snapshot, "lessonPriceAmount", consumerPaymentAmount - 20_000);
+        ReflectionTestUtils.setField(snapshot, "resortPassFeeAmount", 20_000);
+        ReflectionTestUtils.setField(snapshot, "totalPaymentAmount", consumerPaymentAmount);
         return snapshot;
     }
 
@@ -564,7 +579,6 @@ class ConsumerMatchingProgressServiceTest {
                 matchingRequest,
                 requestPriceSnapshot,
                 matchingOffer,
-                requestPriceSnapshot.getConsumerPaymentAmount(),
                 FIXED_CLOCK.instant().minusSeconds(30),
                 null
         );

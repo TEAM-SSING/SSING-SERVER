@@ -20,7 +20,7 @@ public interface MatchingApiDocs {
 
     @Operation(
             summary = "소비자 매칭 진행 상태 조회",
-            description = "소비자가 생성한 즉시 매칭 요청의 현재 진행 상태를 조회합니다. 강사가 수락한 뒤에는 저장된 강사 레벨을 포함한 프로필 요약을 반환합니다.",
+            description = "소비자가 생성한 즉시 매칭 요청의 현재 진행 상태를 조회합니다. 강사가 수락한 뒤에는 저장된 강사 레벨을 포함한 프로필 요약을 반환하고, 최종 확인·결제·확정 단계에서는 제안 시점에 고정된 가격 요약을 함께 반환합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "매칭 진행 상태 조회 성공")

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
-import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
@@ -54,7 +53,10 @@ public record InstructorMatchingOffersResponse(
             Instant expiresAt,
 
             @Schema(description = "강습 조건 요약")
-            LessonSummaryResponse lessonSummary
+            LessonSummaryResponse lessonSummary,
+
+            @Schema(description = "제안 생성 시점에 고정된 예상 가격")
+            MatchingPriceSummaryResponse priceSummary
     ) {
 
         private static ItemResponse from(InstructorMatchingOffersResult.ItemResult result) {
@@ -63,7 +65,8 @@ public record InstructorMatchingOffersResponse(
                     result.groupId(),
                     result.offerStatus(),
                     result.expiresAt(),
-                    LessonSummaryResponse.from(result.lessonSummary())
+                    LessonSummaryResponse.from(result.lessonSummary()),
+                    MatchingPriceSummaryResponse.from(result.priceSummary())
             );
         }
     }
@@ -75,25 +78,13 @@ public record InstructorMatchingOffersResponse(
             ResortResponse resort,
 
             @Schema(description = "종목", example = "SNOWBOARD")
-            Sport sport,
-
-            @Schema(description = "강습 레벨", example = "FIRST_TIME")
-            LessonLevel lessonLevel,
-
-            @Schema(description = "총 인원", example = "4")
-            int headcount,
-
-            @Schema(description = "서버가 확정한 강습 시간", example = "120")
-            int durationMinutes
+            Sport sport
     ) {
 
         private static LessonSummaryResponse from(InstructorMatchingOffersResult.LessonSummaryResult result) {
             return new LessonSummaryResponse(
                     ResortResponse.from(result.resort()),
-                    result.sport(),
-                    result.lessonLevel(),
-                    result.headcount(),
-                    result.durationMinutes()
+                    result.sport()
             );
         }
     }
