@@ -18,17 +18,26 @@ public record InstructorLessonDetailResponse(
         LessonStatus lessonStatus,
 
         @Schema(description = "상태별 강습 진행 정보")
-        Object statusInfo,
+        StatusInfo statusInfo,
 
         @Schema(description = "취소 상태 정보. lessonStatus가 CANCELED일 때 사용")
         CancelInfoResponse cancelInfo,
 
         @Schema(description = "상태별 강습 정보")
-        Object lessonInfo,
+        LessonInfo lessonInfo,
 
         @Schema(description = "강습에 포함된 팀 목록")
-        List<?> matchingRequests
+        List<? extends MatchingRequest> matchingRequests
 ) {
+
+    public sealed interface StatusInfo permits ConfirmedStatusInfoResponse, InProgressStatusInfoResponse {
+    }
+
+    public sealed interface LessonInfo permits LessonInfoResponse, CompletedLessonInfoResponse, CanceledLessonInfoResponse {
+    }
+
+    public sealed interface MatchingRequest permits ConfirmedMatchingRequestResponse, MatchingRequestResponse {
+    }
 
     public static InstructorLessonDetailResponse confirmed(
             Long lessonId,
@@ -105,7 +114,7 @@ public record InstructorLessonDetailResponse(
 
             @Schema(description = "강사의 강습 시작 준비 완료 여부", example = "true")
             boolean instructorConfirmed
-    ) {
+    ) implements StatusInfo {
 
         public static ConfirmedStatusInfoResponse of(
                 int confirmedCount,
@@ -137,7 +146,7 @@ public record InstructorLessonDetailResponse(
 
             @Schema(description = "강습 종료까지 남은 시간", example = "3660")
             long remainingSeconds
-    ) {
+    ) implements StatusInfo {
 
         public static InProgressStatusInfoResponse of(
                 OffsetDateTime serverTime,
@@ -216,7 +225,7 @@ public record InstructorLessonDetailResponse(
 
             @Schema(description = "전체 강습 가격", example = "80000")
             int totalLessonPrice
-    ) {
+    ) implements LessonInfo {
 
         public static LessonInfoResponse of(
                 List<String> representativeConsumerNames,
@@ -271,7 +280,7 @@ public record InstructorLessonDetailResponse(
 
             @Schema(description = "전체 강습 가격", example = "80000")
             int totalLessonPrice
-    ) {
+    ) implements LessonInfo {
 
         public static CompletedLessonInfoResponse of(
                 List<String> representativeConsumerNames,
@@ -321,7 +330,7 @@ public record InstructorLessonDetailResponse(
 
             @Schema(description = "전체 강습 가격", example = "80000")
             int totalLessonPrice
-    ) {
+    ) implements LessonInfo {
 
         public static CanceledLessonInfoResponse of(
                 List<String> representativeConsumerNames,
@@ -381,7 +390,7 @@ public record InstructorLessonDetailResponse(
 
             @Schema(description = "해당 팀 참여자 목록")
             List<ParticipantResponse> participants
-    ) {
+    ) implements MatchingRequest {
 
         public static ConfirmedMatchingRequestResponse of(
                 Long matchingRequestId,
@@ -422,7 +431,7 @@ public record InstructorLessonDetailResponse(
 
             @Schema(description = "해당 팀 참여자 목록")
             List<ParticipantResponse> participants
-    ) {
+    ) implements MatchingRequest {
 
         public static MatchingRequestResponse of(
                 Long matchingRequestId,
