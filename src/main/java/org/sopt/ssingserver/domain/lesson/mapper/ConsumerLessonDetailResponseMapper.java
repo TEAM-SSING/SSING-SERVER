@@ -68,8 +68,7 @@ public class ConsumerLessonDetailResponseMapper {
                 confirmations
         );
         boolean instructorConfirmed = confirmations.stream().anyMatch(this::isConfirmedInstructor);
-        LessonParticipant representativeParticipant = firstParticipant(participants);
-        
+
         ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse statusInfo =
                 ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse.of(
                         confirmedByMatchingRequestId.size() + (instructorConfirmed ? 1 : 0),
@@ -81,7 +80,7 @@ public class ConsumerLessonDetailResponseMapper {
         return ConsumerLessonDetailResponse.confirmed(
                 lesson.getId(),
                 statusInfo,
-                activeLessonInfo(lesson, representativeParticipant, myTeamLessonPrice),
+                activeLessonInfo(lesson, participants, myTeamLessonPrice),
                 instructorProfile(lesson.getInstructorProfile()),
                 confirmedMatchingRequests(participants, confirmedByMatchingRequestId)
         );
@@ -96,7 +95,6 @@ public class ConsumerLessonDetailResponseMapper {
         Instant startedAt = requireInstant(lesson.getStartedAt());
         Instant serverTime = clock.instant();
         Instant expectedEndedAt = startedAt.plus(lesson.getDurationMinutes(), ChronoUnit.MINUTES);
-        LessonParticipant representativeParticipant = firstParticipant(participants);
 
         ConsumerLessonDetailResponse.InProgressStatusInfoResponse statusInfo =
                 ConsumerLessonDetailResponse.InProgressStatusInfoResponse.of(
@@ -110,7 +108,7 @@ public class ConsumerLessonDetailResponseMapper {
         return ConsumerLessonDetailResponse.inProgress(
                 lesson.getId(),
                 statusInfo,
-                activeLessonInfo(lesson, representativeParticipant, myTeamLessonPrice),
+                activeLessonInfo(lesson, participants, myTeamLessonPrice),
                 instructorProfile(lesson.getInstructorProfile()),
                 matchingRequests(participants)
         );
@@ -125,12 +123,11 @@ public class ConsumerLessonDetailResponseMapper {
         Instant startedAt = requireInstant(lesson.getStartedAt());
         Instant completedAt = requireInstant(lesson.getCompletedAt());
         int actualDurationMinutes = Math.toIntExact(Math.max(0, ChronoUnit.MINUTES.between(startedAt, completedAt)));
-        LessonParticipant representativeParticipant = firstParticipant(participants);
 
         return ConsumerLessonDetailResponse.completed(
                 lesson.getId(),
                 ConsumerLessonDetailResponse.CompletedLessonInfoResponse.of(
-                        representativeParticipant.getMatchingRequest().getMember().getNickname(),
+                        representativeConsumerNames(participants),
                         lesson.getTotalHeadcount(),
                         resort(lesson.getResort()),
                         lesson.getSport(),
@@ -159,15 +156,13 @@ public class ConsumerLessonDetailResponseMapper {
                 .flatMap(Optional::stream)
                 .max(Comparator.comparing(LessonCancellation::getCanceledAt))
                 .orElseThrow(() -> new BusinessException(LessonErrorCode.LESSON_CANCELLATION_NOT_FOUND));
-        LessonParticipant representativeParticipant = firstParticipant(participants);
-
         ConsumerLessonDetailResponse.CanceledByResponse canceledBy;
         if (cancellation.getCanceledBy() == LessonCancellationActor.INSTRUCTOR) {
             InstructorProfile instructorProfile = lesson.getInstructorProfile();
             canceledBy = ConsumerLessonDetailResponse.CanceledByResponse.of(
                     instructorProfile.getMember().getId(),
                     instructorProfile.getRealName()
-            );
+                );
         } else {
             Member member = cancellation.getMember();
             canceledBy = ConsumerLessonDetailResponse.CanceledByResponse.of(member.getId(), member.getNickname());
@@ -181,7 +176,7 @@ public class ConsumerLessonDetailResponseMapper {
                         cancellation.getCancelReason()
                 ),
                 ConsumerLessonDetailResponse.CanceledLessonInfoResponse.of(
-                        representativeParticipant.getMatchingRequest().getMember().getNickname(),
+                        representativeConsumerNames(participants),
                         lesson.getTotalHeadcount(),
                         resort(lesson.getResort()),
                         lesson.getSport(),
@@ -195,11 +190,11 @@ public class ConsumerLessonDetailResponseMapper {
 
     private ConsumerLessonDetailResponse.LessonInfoResponse activeLessonInfo(
             Lesson lesson,
-            LessonParticipant representativeParticipant,
+            List<LessonParticipant> participants,
             int myTeamLessonPrice
     ) {
         return ConsumerLessonDetailResponse.LessonInfoResponse.of(
-                representativeParticipant.getMatchingRequest().getMember().getNickname(),
+                representativeConsumerNames(participants),
                 lesson.getTotalHeadcount(),
                 resort(lesson.getResort()),
                 lesson.getSport(),
@@ -299,6 +294,14 @@ public class ConsumerLessonDetailResponseMapper {
                         LinkedHashMap::new,
                         Collectors.toList()
                 ));
+    }
+
+    private List<String> representativeConsumerNames(List<LessonParticipant> participants) {
+        return groupedParticipants(participants)
+                .values()
+                .stream()
+                .map(group -> firstParticipant(group).getMatchingRequest().getMember().getNickname())
+                .toList();
     }
 
     private Map<Long, LessonStartConfirmation> confirmedConsumerConfirmationsByRequestId(

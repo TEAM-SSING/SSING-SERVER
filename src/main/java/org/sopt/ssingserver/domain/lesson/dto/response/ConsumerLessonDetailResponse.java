@@ -202,8 +202,8 @@ public record ConsumerLessonDetailResponse(
     }
 
     public record LessonInfoResponse(
-            @Schema(description = "대표 소비자 이름", example = "김OO")
-            String representativeConsumerName,
+            @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
+            List<String> representativeConsumerNames,
 
             @Schema(description = "전체 강습 인원 수", example = "5")
             int totalHeadcount,
@@ -228,7 +228,7 @@ public record ConsumerLessonDetailResponse(
     ) {
 
         public static LessonInfoResponse of(
-                String representativeConsumerName,
+                List<String> representativeConsumerNames,
                 int totalHeadcount,
                 ResortResponse resort,
                 Sport sport,
@@ -238,7 +238,7 @@ public record ConsumerLessonDetailResponse(
                 int myTeamLessonPrice
         ) {
             return new LessonInfoResponse(
-                    representativeConsumerName,
+                    representativeConsumerNames,
                     totalHeadcount,
                     resort,
                     sport,
@@ -251,8 +251,8 @@ public record ConsumerLessonDetailResponse(
     }
 
     public record CompletedLessonInfoResponse(
-            @Schema(description = "대표 소비자 이름", example = "김OO")
-            String representativeConsumerName,
+            @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
+            List<String> representativeConsumerNames,
 
             @Schema(description = "전체 강습 인원 수", example = "5")
             int totalHeadcount,
@@ -283,7 +283,7 @@ public record ConsumerLessonDetailResponse(
     ) {
 
         public static CompletedLessonInfoResponse of(
-                String representativeConsumerName,
+                List<String> representativeConsumerNames,
                 int totalHeadcount,
                 ResortResponse resort,
                 Sport sport,
@@ -295,7 +295,7 @@ public record ConsumerLessonDetailResponse(
                 int myTeamLessonPrice
         ) {
             return new CompletedLessonInfoResponse(
-                    representativeConsumerName,
+                    representativeConsumerNames,
                     totalHeadcount,
                     resort,
                     sport,
@@ -310,8 +310,8 @@ public record ConsumerLessonDetailResponse(
     }
 
     public record CanceledLessonInfoResponse(
-            @Schema(description = "대표 소비자 이름", example = "김OO")
-            String representativeConsumerName,
+            @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
+            List<String> representativeConsumerNames,
 
             @Schema(description = "전체 강습 인원 수", example = "5")
             int totalHeadcount,
@@ -333,7 +333,7 @@ public record ConsumerLessonDetailResponse(
     ) {
 
         public static CanceledLessonInfoResponse of(
-                String representativeConsumerName,
+                List<String> representativeConsumerNames,
                 int totalHeadcount,
                 ResortResponse resort,
                 Sport sport,
@@ -342,7 +342,7 @@ public record ConsumerLessonDetailResponse(
                 int myTeamLessonPrice
         ) {
             return new CanceledLessonInfoResponse(
-                    representativeConsumerName,
+                    representativeConsumerNames,
                     totalHeadcount,
                     resort,
                     sport,
