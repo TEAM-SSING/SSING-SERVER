@@ -183,6 +183,10 @@ public class MatchingRequest extends BaseTimeEntity {
         updateStatus(MatchingRequestStatus.COMPLETED, null);
     }
 
+    public void cancelByLessonCancellation() {
+        updateStatus(MatchingRequestStatus.CANCELED, null);
+    }
+
     // 소비자 직접 중지 요청의 취소 사유 저장 및 상태 조회 원인 구분
     public void cancelByConsumer() {
         cancelByConsumer(null);

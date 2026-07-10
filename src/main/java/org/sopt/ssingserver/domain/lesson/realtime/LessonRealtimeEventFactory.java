@@ -95,6 +95,18 @@ public class LessonRealtimeEventFactory {
         );
     }
 
+    public List<LessonRealtimeDelivery> canceled(CanceledRealtimeContext context) {
+        return statusChanged(
+                context.eventId(),
+                context.occurredAt(),
+                context.lessonId(),
+                context.instructorMemberId(),
+                context.consumerRecipients(),
+                LessonRealtimeEventType.LESSON_CANCELED,
+                LessonStatus.CANCELED
+        );
+    }
+
     private List<LessonRealtimeDelivery> statusChanged(
             UUID eventId,
             Instant occurredAt,
@@ -184,6 +196,15 @@ public class LessonRealtimeEventFactory {
     }
 
     public record CompletedRealtimeContext(
+            UUID eventId,
+            Instant occurredAt,
+            Long lessonId,
+            Long instructorMemberId,
+            List<ConsumerRecipient> consumerRecipients
+    ) {
+    }
+
+    public record CanceledRealtimeContext(
             UUID eventId,
             Instant occurredAt,
             Long lessonId,
