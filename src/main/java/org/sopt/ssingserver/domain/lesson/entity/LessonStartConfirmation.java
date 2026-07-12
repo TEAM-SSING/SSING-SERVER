@@ -18,7 +18,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationActor;
-import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationStatus;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.global.entity.BaseTimeEntity;
@@ -54,10 +53,6 @@ public class LessonStartConfirmation extends BaseTimeEntity {
     @Column(nullable = false, length = 30)
     private LessonStartConfirmationActor actorType;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
-    private LessonStartConfirmationStatus status;
-
     private Instant confirmedAt;
 
     public static LessonStartConfirmation confirmInstructor(
@@ -91,7 +86,6 @@ public class LessonStartConfirmation extends BaseTimeEntity {
         LessonStartConfirmation confirmation = new LessonStartConfirmation();
         confirmation.lesson = lesson;
         confirmation.member = member;
-        confirmation.status = LessonStartConfirmationStatus.CONFIRMED;
         confirmation.confirmedAt = confirmedAt;
         return confirmation;
     }

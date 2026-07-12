@@ -14,7 +14,6 @@ import org.sopt.ssingserver.domain.lesson.dto.response.LessonStartConfirmationRe
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.entity.LessonStartConfirmation;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationActor;
-import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationStatus;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.error.LessonErrorCode;
 import org.sopt.ssingserver.domain.lesson.realtime.LessonRealtimeDelivery;
@@ -185,9 +184,6 @@ public class LessonStartConfirmationService {
         boolean instructorConfirmed = false;
         Set<Long> confirmedMatchingRequestIds = new LinkedHashSet<>();
         for (LessonStartConfirmation confirmation : confirmations) {
-            if (confirmation.getStatus() != LessonStartConfirmationStatus.CONFIRMED) {
-                continue;
-            }
             if (confirmation.getActorType() == LessonStartConfirmationActor.INSTRUCTOR) {
                 instructorConfirmed = true;
             }
@@ -198,7 +194,7 @@ public class LessonStartConfirmationService {
         }
 
         int confirmedConsumerCount = confirmations.stream()
-                .filter(this::isConfirmedConsumer)
+                .filter(confirmation -> confirmation.getActorType() == LessonStartConfirmationActor.CONSUMER)
                 .map(LessonStartConfirmation::getMatchingRequest)
                 .filter(Objects::nonNull)
                 .mapToInt(MatchingRequest::getHeadcount)
@@ -224,11 +220,6 @@ public class LessonStartConfirmationService {
 
     private OffsetDateTime toOffsetDateTime(Instant instant) {
         return instant.atZone(AppZoneId.SEOUL).toOffsetDateTime();
-    }
-
-    private boolean isConfirmedConsumer(LessonStartConfirmation confirmation) {
-        return confirmation.getActorType() == LessonStartConfirmationActor.CONSUMER
-                && confirmation.getStatus() == LessonStartConfirmationStatus.CONFIRMED;
     }
 
     // 서비스 내부 계산용 record

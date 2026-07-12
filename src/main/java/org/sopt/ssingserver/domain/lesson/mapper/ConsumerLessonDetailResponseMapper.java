@@ -20,7 +20,6 @@ import org.sopt.ssingserver.domain.lesson.entity.LessonParticipant;
 import org.sopt.ssingserver.domain.lesson.entity.LessonStartConfirmation;
 import org.sopt.ssingserver.domain.lesson.enums.LessonCancellationActor;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationActor;
-import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationStatus;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.error.LessonErrorCode;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
@@ -67,7 +66,8 @@ public class ConsumerLessonDetailResponseMapper {
         Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId = confirmedConsumerConfirmationsByRequestId(
                 confirmations
         );
-        boolean instructorConfirmed = confirmations.stream().anyMatch(this::isConfirmedInstructor);
+        boolean instructorConfirmed = confirmations.stream()
+                .anyMatch(confirmation -> confirmation.getActorType() == LessonStartConfirmationActor.INSTRUCTOR);
 
         ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse statusInfo =
                 ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse.of(
@@ -310,7 +310,8 @@ public class ConsumerLessonDetailResponseMapper {
     ) {
         Map<Long, LessonStartConfirmation> confirmedByMatchingRequestId = new LinkedHashMap<>();
         for (LessonStartConfirmation confirmation : confirmations) {
-            if (isConfirmedConsumer(confirmation) && confirmation.getMatchingRequest() != null) {
+            if (confirmation.getActorType() == LessonStartConfirmationActor.CONSUMER
+                    && confirmation.getMatchingRequest() != null) {
                 confirmedByMatchingRequestId.put(confirmation.getMatchingRequest().getId(), confirmation);
             }
         }
@@ -324,16 +325,6 @@ public class ConsumerLessonDetailResponseMapper {
                 .map(LessonStartConfirmation::getMatchingRequest)
                 .mapToInt(MatchingRequest::getHeadcount)
                 .sum();
-    }
-
-    private boolean isConfirmedInstructor(LessonStartConfirmation confirmation) {
-        return confirmation.getActorType() == LessonStartConfirmationActor.INSTRUCTOR
-                && confirmation.getStatus() == LessonStartConfirmationStatus.CONFIRMED;
-    }
-
-    private boolean isConfirmedConsumer(LessonStartConfirmation confirmation) {
-        return confirmation.getActorType() == LessonStartConfirmationActor.CONSUMER
-                && confirmation.getStatus() == LessonStartConfirmationStatus.CONFIRMED;
     }
 
     private LessonParticipant firstParticipant(List<LessonParticipant> participants) {
