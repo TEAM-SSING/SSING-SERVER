@@ -70,6 +70,8 @@ jobs:
           grep -q -- "--confirm-local-reset" <<< "$output"
 
       - name: 외부 Flyway runner와 local reset 검증
+        env:
+          SSING_LOCAL_DB_ROOT_PASSWORD: 'local seed #42;"quoted"=value'
         run: |
           ./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
           ./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
