@@ -28,10 +28,12 @@ class RequestIdErrorCorrelationTest {
 
     @Test
     void 내부_5xx_응답과_ERROR_로그는_같은_request_id를_사용한다() throws Exception {
-        Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+        Logger exceptionHandlerLogger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+        Logger httpLoggingFilterLogger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
-        logger.addAppender(appender);
+        exceptionHandlerLogger.addAppender(appender);
+        httpLoggingFilterLogger.addAppender(appender);
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new FailingController())
                 .setControllerAdvice(new GlobalExceptionHandler(new ErrorResponseFactory()))
                 .addFilters(new RequestIdFilter(), new HttpRequestLoggingFilter())
@@ -55,7 +57,8 @@ class RequestIdErrorCorrelationTest {
                     .containsEntry("request_id", "req-integration-500");
             assertThat(errorEvents.getFirst().getThrowableProxy()).isNull();
         } finally {
-            logger.detachAppender(appender);
+            exceptionHandlerLogger.detachAppender(appender);
+            httpLoggingFilterLogger.detachAppender(appender);
         }
     }
 

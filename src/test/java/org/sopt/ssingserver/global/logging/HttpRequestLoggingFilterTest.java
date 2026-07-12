@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.global.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -122,6 +123,60 @@ class HttpRequestLoggingFilterTest {
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);
+        }
+    }
+
+    @Test
+    void 처리되지_않은_filter_RuntimeException은_ERROR_한_번과_500_완료_로그를_남긴다() {
+        Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        Level originalLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+
+        try {
+            MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-filter-500");
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/test/42");
+            request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/test/{testId}");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            assertThatExceptionOfType(IllegalStateException.class)
+                    .isThrownBy(() -> new HttpRequestLoggingFilter().doFilter(
+                            request,
+                            response,
+                            (servletRequest, servletResponse) -> {
+                                throw new IllegalStateException("secret-filter-detail");
+                            }
+                    ));
+
+            assertThat(response.getStatus()).isEqualTo(500);
+            assertThat(appender.list).hasSize(2);
+
+            ILoggingEvent errorEvent = appender.list.stream()
+                    .filter(event -> "http.request.unhandled_exception"
+                            .equals(keyValueMap(event).get("event")))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(errorEvent.getLevel()).isSameAs(Level.ERROR);
+            assertThat(errorEvent.getMDCPropertyMap()).containsEntry("request_id", "req-filter-500");
+            assertThat(errorEvent.getThrowableProxy()).isNull();
+            assertThat(errorEvent.getFormattedMessage()).doesNotContain("secret-filter-detail");
+            assertThat(keyValueMap(errorEvent))
+                    .containsEntry("error_code", "INTERNAL_ERROR")
+                    .containsEntry("status", 500)
+                    .containsEntry("exception_type", IllegalStateException.class.getName());
+
+            ILoggingEvent completionEvent = appender.list.stream()
+                    .filter(event -> "http.request.completed".equals(keyValueMap(event).get("event")))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(completionEvent.getMDCPropertyMap()).containsEntry("request_id", "req-filter-500");
+            assertThat(keyValueMap(completionEvent)).containsEntry("status", 500);
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
+            MDC.remove(RequestIdFilter.REQUEST_ID_MDC_KEY);
         }
     }
 

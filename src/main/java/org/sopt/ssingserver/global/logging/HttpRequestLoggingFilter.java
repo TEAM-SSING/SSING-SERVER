@@ -8,6 +8,7 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,10 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
 
         try {
             filterChain.doFilter(request, response);
+        } catch (ServletException | RuntimeException exception) {
+            // MVC 예외 처리기에 닿지 못한 필터 예외는 이 경계가 안전한 ERROR 한 번을 소유한다.
+            logUnhandledFilterException(response, exception);
+            throw exception;
         } finally {
             if (!isSuccessfulHealthCheck(request, response)) {
                 // 예외가 발생해도 요청 종료 로그는 한 번 남겨 장애 추적 기준점을 유지한다.
@@ -42,6 +47,19 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
                         .log("HTTP request completed");
             }
         }
+    }
+
+    private void logUnhandledFilterException(HttpServletResponse response, Exception exception) {
+        if (!response.isCommitted() && response.getStatus() < 500) {
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        }
+
+        log.atError()
+                .addKeyValue("event", "http.request.unhandled_exception")
+                .addKeyValue("error_code", CommonErrorCode.INTERNAL_ERROR.getCode())
+                .addKeyValue("status", response.getStatus())
+                .addKeyValue("exception_type", exception.getClass().getName())
+                .log("Unhandled servlet filter exception");
     }
 
     private boolean isSuccessfulHealthCheck(HttpServletRequest request, HttpServletResponse response) {
