@@ -25,6 +25,8 @@ jobs:
       # 저장소 코드 체크아웃
       - name: 저장소 코드 체크아웃
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # 프로젝트 Java 21 실행 환경
       - name: Java 21 실행 환경 준비
