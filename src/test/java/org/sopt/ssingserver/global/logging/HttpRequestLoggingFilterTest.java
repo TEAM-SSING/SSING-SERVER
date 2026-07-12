@@ -56,8 +56,10 @@ class HttpRequestLoggingFilterTest {
     @Test
     void 정상_health_폴링은_완료_로그를_남기지_않는다() throws Exception {
         Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        Level originalLevel = logger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
+        logger.setLevel(Level.INFO);
         logger.addAppender(appender);
 
         try {
@@ -70,14 +72,17 @@ class HttpRequestLoggingFilterTest {
             assertThat(appender.list).isEmpty();
         } finally {
             logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
         }
     }
 
     @Test
     void 비정상_health_응답은_완료_로그를_남긴다() throws Exception {
         Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        Level originalLevel = logger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
+        logger.setLevel(Level.INFO);
         logger.addAppender(appender);
 
         try {
@@ -91,14 +96,17 @@ class HttpRequestLoggingFilterTest {
             assertThat(keyValueMap(appender.list.getFirst())).containsEntry("status", 503);
         } finally {
             logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
         }
     }
 
     @Test
     void 매핑_템플릿이_없으면_raw_URI_대신_unmapped를_기록한다() throws Exception {
         Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        Level originalLevel = logger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
+        logger.setLevel(Level.INFO);
         logger.addAppender(appender);
 
         try {
@@ -113,6 +121,7 @@ class HttpRequestLoggingFilterTest {
                     .doesNotContainValue("/unknown/private-value");
         } finally {
             logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
         }
     }
 
