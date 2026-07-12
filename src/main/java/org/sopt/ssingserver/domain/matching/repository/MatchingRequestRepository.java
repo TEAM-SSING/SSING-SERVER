@@ -62,6 +62,12 @@ public interface MatchingRequestRepository extends JpaRepository<MatchingRequest
             Pageable pageable
     );
 
-    long countByStatusIn(Collection<MatchingRequestStatus> statuses);
+    // 전체 서비스에서 매칭 중인 소비자 인원 수 계산을 위한 요청 headcount 합산
+    @Query("""
+            select coalesce(sum(matchingRequest.headcount), 0)
+            from MatchingRequest matchingRequest
+            where matchingRequest.status in :statuses
+            """)
+    long sumHeadcountByStatusIn(@Param("statuses") Collection<MatchingRequestStatus> statuses);
 
 }

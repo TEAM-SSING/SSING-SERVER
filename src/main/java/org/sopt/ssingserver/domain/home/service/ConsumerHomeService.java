@@ -8,6 +8,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse.LessonCardResponse;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
@@ -33,6 +34,7 @@ public class ConsumerHomeService {
 
     private final LessonParticipantRepository lessonParticipantRepository;
     private final MatchingRequestRepository matchingRequestRepository;
+    private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
     private final Clock clock;
 
     // 소비자 홈에 표시할 예약/진행 강습 카드 조회함
@@ -52,11 +54,13 @@ public class ConsumerHomeService {
 
         // TODO: 알림 읽음 여부 정책 확정 후 실제 조회로 교체함
         boolean hasUnreadNotification = false;
-        long matchingConsumerCount = matchingRequestRepository.countByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES);
+        long matchingConsumerCount = matchingRequestRepository.sumHeadcountByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES);
+        long matchingInstructorCount = instructorMatchingSettingRepository.countByIsExposedTrue();
+        long matchingPeopleCount = matchingConsumerCount + matchingInstructorCount;
 
         return ConsumerHomeResponse.from(
                 lessonCardResponses,
-                matchingConsumerCount,
+                matchingPeopleCount,
                 hasUnreadNotification
         );
     }

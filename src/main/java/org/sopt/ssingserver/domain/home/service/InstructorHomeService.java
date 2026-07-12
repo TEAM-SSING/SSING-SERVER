@@ -127,11 +127,13 @@ public class InstructorHomeService {
 
         // TODO: 알림 읽음 여부 정책 확정 후 실제 조회로 교체함
         boolean hasUnreadNotification = false;
-        long matchingConsumerCount = matchingRequestRepository.countByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES);
+        long matchingConsumerCount = matchingRequestRepository.sumHeadcountByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES);
+        long matchingInstructorCount = instructorMatchingSettingRepository.countByIsExposedTrue();
+        long matchingPeopleCount = matchingConsumerCount + matchingInstructorCount;
 
         return InstructorHomeResponse.from(
                 homeCards,
-                matchingConsumerCount,
+                matchingPeopleCount,
                 resolveReviewSummary(instructorProfile),
                 hasUnreadNotification
         );
