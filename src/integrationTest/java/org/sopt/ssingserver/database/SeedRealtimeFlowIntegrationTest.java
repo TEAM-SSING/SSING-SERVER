@@ -26,6 +26,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -40,14 +41,14 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler;
-import org.springframework.messaging.simp.config.ChannelRegistration;
-import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
-import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
+import org.springframework.messaging.support.AbstractMessageChannel;
 import org.springframework.messaging.support.ExecutorChannelInterceptor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.test.context.ActiveProfiles;
@@ -58,7 +59,6 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
-import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
@@ -136,6 +136,10 @@ class SeedRealtimeFlowIntegrationTest {
     @Autowired
     private SubscriptionObserver subscriptionObserver;
 
+    @Autowired
+    @Qualifier("brokerChannel")
+    private AbstractMessageChannel brokerChannel;
+
     private final List<StompSession> sessions = new ArrayList<>();
     private WebSocketStompClient stompClient;
     private ThreadPoolTaskScheduler clientScheduler;
@@ -156,6 +160,7 @@ class SeedRealtimeFlowIntegrationTest {
         stompClient = new WebSocketStompClient(new StandardWebSocketClient());
         stompClient.setTaskScheduler(clientScheduler);
         stompClient.start();
+        brokerChannel.addInterceptor(subscriptionObserver);
     }
 
     @AfterEach
@@ -166,6 +171,7 @@ class SeedRealtimeFlowIntegrationTest {
         sessions.clear();
         stompClient.stop();
         clientScheduler.shutdown();
+        brokerChannel.removeInterceptor(subscriptionObserver);
     }
 
     // 실제 네트워크 구독부터 REST 상태 변경, 개인 큐 이벤트, 최종 DB 조회까지 한 흐름으로 증명한다.
@@ -251,7 +257,7 @@ class SeedRealtimeFlowIntegrationTest {
 
         BlockingQueue<JsonNode> events = new LinkedBlockingQueue<>();
         session.subscribe(destination, new JsonFrameHandler(events));
-        subscriptionObserver.await(destination);
+        subscriptionObserver.await(destination.substring("/user".length()));
         return new EventSubscription(events);
     }
 
@@ -421,18 +427,11 @@ class SeedRealtimeFlowIntegrationTest {
     }
 
     @TestConfiguration
-    static class SubscriptionObserverConfig implements WebSocketMessageBrokerConfigurer {
-
-        private final SubscriptionObserver subscriptionObserver = new SubscriptionObserver();
+    static class SubscriptionObserverConfig {
 
         @Bean
         SubscriptionObserver subscriptionObserver() {
-            return subscriptionObserver;
-        }
-
-        @Override
-        public void configureClientInboundChannel(ChannelRegistration registration) {
-            registration.interceptors(subscriptionObserver);
+            return new SubscriptionObserver();
         }
     }
 
@@ -447,25 +446,27 @@ class SeedRealtimeFlowIntegrationTest {
                 MessageHandler handler,
                 Exception exception
         ) {
-            StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
+            String destination = SimpMessageHeaderAccessor.getDestination(message.getHeaders());
             if (exception == null
                     && handler instanceof SimpleBrokerMessageHandler
-                    && StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
-                // Simple broker의 구독 등록 처리가 끝난 시점을 테스트 준비 완료 신호로 사용한다.
-                destinations.add(accessor.getDestination());
+                    && SimpMessageType.SUBSCRIBE.equals(
+                            SimpMessageHeaderAccessor.getMessageType(message.getHeaders())
+                    )) {
+                // 사용자 destination 변환 후 simple broker 등록까지 끝난 시점을 준비 완료 신호로 사용한다.
+                destinations.add(destination);
             }
         }
 
-        void await(String expectedDestination) throws Exception {
+        void await(String expectedDestinationPrefix) throws Exception {
             long deadlineNanos = System.nanoTime() + REALTIME_TIMEOUT.toNanos();
             while (System.nanoTime() < deadlineNanos) {
                 long remainingNanos = deadlineNanos - System.nanoTime();
                 String destination = destinations.poll(remainingNanos, TimeUnit.NANOSECONDS);
-                if (expectedDestination.equals(destination)) {
+                if (destination != null && destination.startsWith(expectedDestinationPrefix)) {
                     return;
                 }
             }
-            throw new AssertionError("Server did not accept STOMP subscription: " + expectedDestination);
+            throw new AssertionError("Server did not register STOMP subscription: " + expectedDestinationPrefix);
         }
     }
 }
