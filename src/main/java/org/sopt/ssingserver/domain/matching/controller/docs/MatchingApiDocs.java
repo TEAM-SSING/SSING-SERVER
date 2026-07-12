@@ -26,7 +26,7 @@ public interface MatchingApiDocs {
     @ApiResponse(responseCode = "200", description = "매칭 진행 상태 조회 성공")
     @ApiErrorCodes(
             type = CommonErrorCode.class,
-            names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
+            names = {"BAD_REQUEST", "UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
     )
     @ApiErrorCodes(
             type = AuthErrorCode.class,

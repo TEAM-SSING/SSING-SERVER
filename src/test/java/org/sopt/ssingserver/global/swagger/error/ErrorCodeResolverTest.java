@@ -62,6 +62,15 @@ class ErrorCodeResolverTest {
                 .containsExactly(CommonErrorCode.INTERNAL_ERROR);
     }
 
+    @Test
+    void errorStatus가_4xx_또는_5xx가_아니면_ErrorCode를_거부한다() throws Exception {
+        HandlerMethod handlerMethod = handlerMethod(SuccessStatusController.class, "handle");
+
+        assertThatThrownBy(() -> errorCodeResolver.resolve(handlerMethod))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("4xx or 5xx");
+    }
+
     private HandlerMethod handlerMethod(Class<?> controllerType, String methodName) throws Exception {
         Object controller = controllerType.getDeclaredConstructor().newInstance();
         Method method = controllerType.getMethod(methodName);
@@ -166,6 +175,32 @@ class ErrorCodeResolverTest {
 
         @ApiErrorCodes(type = CommonErrorCode.class, names = "INTERNAL_ERROR")
         @ApiErrorCodes(type = CommonErrorCode.class, names = "INTERNAL_ERROR")
+        public void handle() {
+        }
+    }
+
+    private enum SuccessStatusErrorCode implements ErrorCode {
+        OK;
+
+        @Override
+        public HttpStatus getStatus() {
+            return HttpStatus.OK;
+        }
+
+        @Override
+        public String getCode() {
+            return "SUCCESS_CODE";
+        }
+
+        @Override
+        public String getMessage() {
+            return "성공 상태 오류";
+        }
+    }
+
+    private static final class SuccessStatusController {
+
+        @ApiErrorCodes(type = SuccessStatusErrorCode.class, names = "OK")
         public void handle() {
         }
     }

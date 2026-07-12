@@ -14,7 +14,7 @@ class SwaggerApiDocsOwnershipTest {
 
     private static final Path DOMAIN_SOURCE_ROOT = Path.of("src/main/java/org/sopt/ssingserver/domain");
     private static final Pattern API_DOCS_IMPLEMENTATION = Pattern.compile(
-            "\\bimplements\\s+[^{\\n]*ApiDocs\\b"
+            "\\bimplements\\s+[^{]*ApiDocs\\b"
     );
 
     @Test

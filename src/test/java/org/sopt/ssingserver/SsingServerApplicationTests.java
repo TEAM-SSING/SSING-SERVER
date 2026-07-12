@@ -191,6 +191,16 @@ class SsingServerApplicationTests {
 				.has("INTERNAL_ERROR")).isTrue();
 		assertThat(openApi.path("components").path("schemas").has("CommonErrorResponse")).isTrue();
 		assertThat(openApi.path("components").path("schemas").has("ValidationErrorResponse")).isTrue();
+
+		JsonNode matchingStatusResponses = openApi.path("paths")
+				.path("/api/v1/consumer/matching-requests/{matchingRequestId}")
+				.path("get")
+				.path("responses");
+		assertThat(matchingStatusResponses.path("400")
+				.path("content")
+				.path("application/json")
+				.path("examples")
+				.has("BAD_REQUEST")).isTrue();
 	}
 
 	@Test
