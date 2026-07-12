@@ -10,108 +10,204 @@ import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record ConsumerLessonDetailResponse(
-        @Schema(description = "강습 ID", example = "9101")
-        Long lessonId,
+@Schema(
+        name = "ConsumerLessonDetailResponse",
+        description = "소비자 강습 상세 응답. lessonStatus에 따라 응답 구조가 달라집니다.",
+        discriminatorProperty = "lessonStatus",
+        oneOf = {
+                ConsumerLessonDetailResponse.Confirmed.class,
+                ConsumerLessonDetailResponse.InProgress.class,
+                ConsumerLessonDetailResponse.Completed.class,
+                ConsumerLessonDetailResponse.Canceled.class
+        }
+)
+public sealed interface ConsumerLessonDetailResponse permits
+        ConsumerLessonDetailResponse.Confirmed,
+        ConsumerLessonDetailResponse.InProgress,
+        ConsumerLessonDetailResponse.Completed,
+        ConsumerLessonDetailResponse.Canceled {
 
-        @Schema(description = "강습 상태", example = "CONFIRMED")
-        LessonStatus lessonStatus,
+    @Schema(description = "강습 ID", example = "9101")
+    Long lessonId();
 
-        @Schema(description = "상태별 강습 진행 정보")
-        StatusInfo statusInfo,
+    @Schema(description = "강습 상태", example = "CONFIRMED")
+    LessonStatus lessonStatus();
 
-        @Schema(description = "취소 상태 정보. lessonStatus가 CANCELED일 때 사용")
-        CancelInfoResponse cancelInfo,
-
-        @Schema(description = "상태별 강습 정보")
-        LessonInfo lessonInfo,
-
-        @Schema(description = "강사 프로필 요약 정보")
-        InstructorProfileResponse instructorProfile,
-
-        @Schema(description = "강습에 포함된 팀 목록. 시작 전/진행 중 상태에서 사용")
-        List<? extends MatchingRequest> matchingRequests
-) {
-
-    public sealed interface StatusInfo permits ConfirmedStatusInfoResponse, InProgressStatusInfoResponse {
+    default StatusInfo statusInfo() {
+        return null;
     }
 
-    public sealed interface LessonInfo permits LessonInfoResponse, CompletedLessonInfoResponse, CanceledLessonInfoResponse {
+    default CancelInfoResponse cancelInfo() {
+        return null;
     }
 
-    public sealed interface MatchingRequest permits ConfirmedMatchingRequestResponse, MatchingRequestResponse {
+    default LessonInfo lessonInfo() {
+        return null;
     }
 
-    public static ConsumerLessonDetailResponse confirmed(
+    default InstructorProfileResponse instructorProfile() {
+        return null;
+    }
+
+    default List<? extends MatchingRequest> matchingRequests() {
+        return null;
+    }
+
+    static ConsumerLessonDetailResponse confirmed(
             Long lessonId,
             ConfirmedStatusInfoResponse statusInfo,
             LessonInfoResponse lessonInfo,
             InstructorProfileResponse instructorProfile,
             List<ConfirmedMatchingRequestResponse> matchingRequests
     ) {
-        return new ConsumerLessonDetailResponse(
+        return new Confirmed(
                 lessonId,
                 LessonStatus.CONFIRMED,
                 statusInfo,
-                null,
                 lessonInfo,
                 instructorProfile,
                 matchingRequests
         );
     }
 
-    public static ConsumerLessonDetailResponse inProgress(
+    static ConsumerLessonDetailResponse inProgress(
             Long lessonId,
             InProgressStatusInfoResponse statusInfo,
             LessonInfoResponse lessonInfo,
             InstructorProfileResponse instructorProfile,
             List<MatchingRequestResponse> matchingRequests
     ) {
-        return new ConsumerLessonDetailResponse(
+        return new InProgress(
                 lessonId,
                 LessonStatus.IN_PROGRESS,
                 statusInfo,
-                null,
                 lessonInfo,
                 instructorProfile,
                 matchingRequests
         );
     }
 
-    public static ConsumerLessonDetailResponse completed(
+    static ConsumerLessonDetailResponse completed(
             Long lessonId,
             CompletedLessonInfoResponse lessonInfo,
             InstructorProfileResponse instructorProfile
     ) {
-        return new ConsumerLessonDetailResponse(
+        return new Completed(
                 lessonId,
                 LessonStatus.COMPLETED,
-                null,
-                null,
                 lessonInfo,
-                instructorProfile,
-                null
+                instructorProfile
         );
     }
 
-    public static ConsumerLessonDetailResponse canceled(
+    static ConsumerLessonDetailResponse canceled(
             Long lessonId,
             CancelInfoResponse cancelInfo,
             CanceledLessonInfoResponse lessonInfo,
             InstructorProfileResponse instructorProfile
     ) {
-        return new ConsumerLessonDetailResponse(
+        return new Canceled(
                 lessonId,
                 LessonStatus.CANCELED,
-                null,
                 cancelInfo,
                 lessonInfo,
-                instructorProfile,
-                null
+                instructorProfile
         );
     }
 
-    public record ConfirmedStatusInfoResponse(
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "ConsumerLessonConfirmedDetail", description = "소비자 강습 상세 - 시작 전")
+    record Confirmed(
+            @Schema(description = "강습 ID", example = "9101")
+            Long lessonId,
+
+            @Schema(description = "강습 상태", example = "CONFIRMED")
+            LessonStatus lessonStatus,
+
+            @Schema(description = "강습 시작 확인 현황")
+            ConfirmedStatusInfoResponse statusInfo,
+
+            @Schema(description = "강습 정보")
+            LessonInfoResponse lessonInfo,
+
+            @Schema(description = "강사 프로필 요약 정보")
+            InstructorProfileResponse instructorProfile,
+
+            @Schema(description = "강습에 포함된 팀 목록")
+            List<ConfirmedMatchingRequestResponse> matchingRequests
+    ) implements ConsumerLessonDetailResponse {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "ConsumerLessonInProgressDetail", description = "소비자 강습 상세 - 진행 중")
+    record InProgress(
+            @Schema(description = "강습 ID", example = "9101")
+            Long lessonId,
+
+            @Schema(description = "강습 상태", example = "IN_PROGRESS")
+            LessonStatus lessonStatus,
+
+            @Schema(description = "진행 중 강습 시간 정보")
+            InProgressStatusInfoResponse statusInfo,
+
+            @Schema(description = "강습 정보")
+            LessonInfoResponse lessonInfo,
+
+            @Schema(description = "강사 프로필 요약 정보")
+            InstructorProfileResponse instructorProfile,
+
+            @Schema(description = "강습에 포함된 팀 목록")
+            List<MatchingRequestResponse> matchingRequests
+    ) implements ConsumerLessonDetailResponse {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "ConsumerLessonCompletedDetail", description = "소비자 강습 상세 - 완료")
+    record Completed(
+            @Schema(description = "강습 ID", example = "9101")
+            Long lessonId,
+
+            @Schema(description = "강습 상태", example = "COMPLETED")
+            LessonStatus lessonStatus,
+
+            @Schema(description = "완료된 강습 정보")
+            CompletedLessonInfoResponse lessonInfo,
+
+            @Schema(description = "강사 프로필 요약 정보")
+            InstructorProfileResponse instructorProfile
+    ) implements ConsumerLessonDetailResponse {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "ConsumerLessonCanceledDetail", description = "소비자 강습 상세 - 취소")
+    record Canceled(
+            @Schema(description = "강습 ID", example = "9101")
+            Long lessonId,
+
+            @Schema(description = "강습 상태", example = "CANCELED")
+            LessonStatus lessonStatus,
+
+            @Schema(description = "취소 상태 정보")
+            CancelInfoResponse cancelInfo,
+
+            @Schema(description = "취소된 강습 정보")
+            CanceledLessonInfoResponse lessonInfo,
+
+            @Schema(description = "강사 프로필 요약 정보")
+            InstructorProfileResponse instructorProfile
+    ) implements ConsumerLessonDetailResponse {
+    }
+
+    sealed interface StatusInfo permits ConfirmedStatusInfoResponse, InProgressStatusInfoResponse {
+    }
+
+    sealed interface LessonInfo permits LessonInfoResponse, CompletedLessonInfoResponse, CanceledLessonInfoResponse {
+    }
+
+    sealed interface MatchingRequest permits ConfirmedMatchingRequestResponse, MatchingRequestResponse {
+    }
+
+    record ConfirmedStatusInfoResponse(
             @Schema(description = "강습 시작을 누른 강사와 팀 수", example = "2")
             int confirmedCount,
 
@@ -140,7 +236,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record InProgressStatusInfoResponse(
+    record InProgressStatusInfoResponse(
             @Schema(description = "서버 현재 시각", example = "2026-01-01T10:59:00+09:00")
             OffsetDateTime serverTime,
 
@@ -174,7 +270,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record CancelInfoResponse(
+    record CancelInfoResponse(
             @Schema(description = "취소 시각", example = "2026-01-01T10:20:00+09:00")
             OffsetDateTime canceledAt,
 
@@ -194,7 +290,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record CanceledByResponse(
+    record CanceledByResponse(
             @Schema(description = "취소한 회원 ID", example = "9001")
             Long memberId,
 
@@ -210,7 +306,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record LessonInfoResponse(
+    record LessonInfoResponse(
             @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
             List<String> representativeConsumerNames,
 
@@ -259,7 +355,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record CompletedLessonInfoResponse(
+    record CompletedLessonInfoResponse(
             @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
             List<String> representativeConsumerNames,
 
@@ -318,7 +414,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record CanceledLessonInfoResponse(
+    record CanceledLessonInfoResponse(
             @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
             List<String> representativeConsumerNames,
 
@@ -362,7 +458,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record ResortResponse(
+    record ResortResponse(
             @Schema(description = "리조트 코드", example = "HIGH1")
             String code,
 
@@ -378,7 +474,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record InstructorProfileResponse(
+    record InstructorProfileResponse(
             @Schema(description = "강사 ID", example = "9001")
             Long instructorId,
 
@@ -417,7 +513,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record ConfirmedMatchingRequestResponse(
+    record ConfirmedMatchingRequestResponse(
             @Schema(description = "매칭 요청 ID", example = "91011")
             Long matchingRequestId,
 
@@ -456,7 +552,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record MatchingRequestResponse(
+    record MatchingRequestResponse(
             @Schema(description = "매칭 요청 ID", example = "91011")
             Long matchingRequestId,
 
@@ -490,7 +586,7 @@ public record ConsumerLessonDetailResponse(
         }
     }
 
-    public record ParticipantResponse(
+    record ParticipantResponse(
             @Schema(description = "강습 참여자 ID", example = "910111")
             Long participantId,
 
