@@ -23,6 +23,7 @@ import org.sopt.ssingserver.domain.home.error.HomeErrorCode;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
@@ -193,6 +194,9 @@ class InstructorHomeServiceTest {
                         InstructorHomeDisplayStatus.WAITING_FOR_CONFIRMATION.name(),
                         InstructorHomeDisplayStatus.PAYMENT_PENDING.name()
         );
+        assertThat(response.lessonCards())
+                .extracting(InstructorHomeResponse.LessonCardResponse::sport)
+                .containsExactly(Sport.SKI, Sport.SKI, Sport.SKI);
         assertThat(response.lessonCards().get(0).scheduledAt())
                 .isEqualTo(OffsetDateTime.of(2026, 7, 9, 10, 0, 0, 0, ZoneOffset.ofHours(9)));
     }
@@ -232,6 +236,7 @@ class InstructorHomeServiceTest {
         InstructorHomeResponse.LessonCardResponse lessonCard = response.lessonCards().get(0);
         assertThat(lessonCard.displayStatus()).isEqualTo(InstructorHomeDisplayStatus.MATCHING.name());
         assertThat(lessonCard.title()).isEqualTo("매칭중");
+        assertThat(lessonCard.sport()).isSameAs(Sport.SKI);
         assertThat(lessonCard.scheduledAt())
                 .isEqualTo(OffsetDateTime.of(2026, 7, 9, 9, 30, 0, 0, ZoneOffset.ofHours(9)));
         assertThat(response.matchingPeopleCount()).isEqualTo(10L);
@@ -321,6 +326,7 @@ class InstructorHomeServiceTest {
         assertThat(lessonCard.displayStatus()).isEqualTo(LessonStatus.CONFIRMED.name());
         assertThat(lessonCard.remainingDays()).isEqualTo(3);
         assertThat(lessonCard.title()).isEqualTo("김철수님 팀 4명");
+        assertThat(lessonCard.sport()).isSameAs(Sport.SKI);
         assertThat(lessonCard.scheduledAt())
                 .isEqualTo(OffsetDateTime.of(2026, 7, 12, 10, 0, 0, 0, ZoneOffset.ofHours(9)));
         assertThat(lessonCard.resort().code()).isEqualTo("HIGH1");
@@ -447,6 +453,7 @@ class InstructorHomeServiceTest {
             when(matchingRequest.getStatus()).thenReturn(status);
         }
         when(matchingRequest.getResort()).thenReturn(resort);
+        when(matchingRequest.getSport()).thenReturn(Sport.SKI);
         if (headcount > 0) {
             when(matchingRequest.getHeadcount()).thenReturn(headcount);
         }
@@ -500,6 +507,7 @@ class InstructorHomeServiceTest {
         when(lesson.getStatus()).thenReturn(status);
         when(lesson.getScheduledAt()).thenReturn(scheduledAt);
         when(lesson.getTotalHeadcount()).thenReturn(totalHeadcount);
+        when(lesson.getSport()).thenReturn(Sport.SKI);
         when(lesson.getResort()).thenReturn(resort);
         when(lesson.getMatchingOffer()).thenReturn(matchingOffer);
         return lesson;
@@ -521,6 +529,7 @@ class InstructorHomeServiceTest {
     ) {
         InstructorMatchingSetting setting = mock(InstructorMatchingSetting.class);
         when(setting.isExposed()).thenReturn(isExposed);
+        when(setting.getSport()).thenReturn(Sport.SKI);
         when(setting.getUpdatedAt()).thenReturn(updatedAt);
         return setting;
     }

@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.global.time.AppZoneId;
 
 public record InstructorHomeResponse(
@@ -77,6 +78,9 @@ public record InstructorHomeResponse(
             @Schema(description = "카드 제목", example = "김OO님 팀 3명")
             String title,
 
+            @Schema(description = "강습 종목", example = "SKI")
+            Sport sport,
+
             @Schema(description = "강습 예정 일시", example = "2025-07-20T10:00:00+09:00")
             OffsetDateTime scheduledAt,
 
@@ -90,6 +94,7 @@ public record InstructorHomeResponse(
                 int remainingDays,
                 String displayStatus,
                 String title,
+                Sport sport,
                 Instant scheduledAt,
                 String resortCode,
                 String resortDisplayName
@@ -100,6 +105,7 @@ public record InstructorHomeResponse(
                     remainingDays,
                     displayStatus,
                     title,
+                    sport,
                     toOffsetDateTime(scheduledAt),
                     new ResortResponse(resortCode, resortDisplayName)
             );

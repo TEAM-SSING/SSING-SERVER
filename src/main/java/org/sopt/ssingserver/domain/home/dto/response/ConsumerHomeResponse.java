@@ -3,6 +3,7 @@ package org.sopt.ssingserver.domain.home.dto.response;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
 import org.sopt.ssingserver.global.time.AppZoneId;
@@ -43,6 +44,9 @@ public record ConsumerHomeResponse(
             @Schema(description = "홈 강습 카드 제목", example = "김철수님 팀 4명")
             String title,
 
+            @Schema(description = "강습 종목", example = "SKI")
+            Sport sport,
+
             @Schema(description = "강습 예정 일시", example = "2025-07-15T19:00:00+09:00")
             OffsetDateTime scheduledAt,
 
@@ -60,6 +64,7 @@ public record ConsumerHomeResponse(
                     remainingDays,
                     lessonCard.getLessonStatus(),
                     title,
+                    lessonCard.getSport(),
                     lessonCard.getScheduledAt().atZone(AppZoneId.SEOUL).toOffsetDateTime(),
                     new ResortResponse(lessonCard.getResortCode(), lessonCard.getResortDisplayName())
             );

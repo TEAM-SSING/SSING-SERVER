@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse.LessonCardResponse;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
@@ -74,6 +75,7 @@ class ConsumerHomeServiceTest {
         assertThat(lesson.displayStatus()).isSameAs(LessonStatus.CONFIRMED);
         assertThat(lesson.remainingDays()).isEqualTo(2);
         assertThat(lesson.title()).isEqualTo("김철수님 팀 4명");
+        assertThat(lesson.sport()).isSameAs(Sport.SKI);
         assertThat(lesson.scheduledAt()).isEqualTo(OffsetDateTime.of(2026, 7, 11, 19, 0, 0, 0, ZoneOffset.ofHours(9)));
         assertThat(lesson.resort().code()).isEqualTo("HIGH1");
         assertThat(lesson.resort().displayName()).isEqualTo("하이원");
@@ -161,6 +163,7 @@ class ConsumerHomeServiceTest {
                 scheduledAt,
                 requesterNickname,
                 totalHeadcount,
+                Sport.SKI,
                 "HIGH1",
                 "하이원"
         );
@@ -172,6 +175,7 @@ class ConsumerHomeServiceTest {
             Instant scheduledAt,
             String requesterNickname,
             int totalHeadcount,
+            Sport sport,
             String resortCode,
             String resortDisplayName
     ) implements HomeLessonCardProjection {
@@ -199,6 +203,11 @@ class ConsumerHomeServiceTest {
         @Override
         public int getTotalHeadcount() {
             return totalHeadcount;
+        }
+
+        @Override
+        public Sport getSport() {
+            return sport;
         }
 
         @Override
