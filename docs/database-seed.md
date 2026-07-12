@@ -85,12 +85,13 @@ expertise, so this is not labeled an ideal persona match.
 ## CI
 
 .github/workflows/db-seed-check.yml runs the dedicated integrationTest task on a
-fresh MySQL 8.4.8 container. It first executes the same pinned Docker Flyway runner
-and reset script used locally. It then uses Flyway 12.10.0 on the integration-test
-classpath, lets Hibernate validate the schema, reapplies the seed contract on a
-separate disposable MySQL, creates the request through authenticated MockMvc,
-reads the result through consumer and instructor APIs, and invokes the scheduler
-entrypoint once to prove the STABLE price scenario remains unchanged.
+fresh MySQL 8.4.8 container. It first executes the same pinned Docker Flyway 12.10.0
+runner and reset script used locally. The integration-test classpath separately uses
+the Spring Boot 4.1.0 managed Flyway version (currently 12.4.0), lets Hibernate
+validate the schema, reapplies the seed contract on another disposable MySQL,
+creates the request through authenticated MockMvc, reads the result through consumer
+and instructor APIs, and invokes the scheduler entrypoint once to prove the STABLE
+price scenario remains unchanged.
 
 The application runtime does not include Flyway. Operational migration remains the
 responsibility of a pinned external runner.
