@@ -47,8 +47,23 @@ deferred_checks:
   - key: realtime-reconnect-recovery
     status: DEFERRED
     reason: MVP 일정상 WebSocket 재접속과 이벤트 유실 복구는 별도 일괄 작업으로 합의했다.
-    tracking: docs/database-seed.md#deferred-follow-ups
+    tracking:
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/79
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/86
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/109
     resume_when: 실시간 상태 복구 일괄 작업을 시작할 때
+  - key: dev-database-adoption
+    status: DEFERRED
+    reason: 기존 dev DB 스냅샷과 explicit baseline 전략이 확정된 뒤 승인된 수동 workflow로 적용한다.
+    tracking:
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/122
+    resume_when: dev DB 보존 또는 초기화 전략을 확정할 때
+  - key: scheduler-batch-fairness
+    status: DEFERRED
+    reason: 이 시나리오는 단일 요청 STABLE 계약만 증명하고 100건 초과 재탐색 공정성은 별도 버그로 관리한다.
+    tracking:
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/123
+    resume_when: 재탐색 배치 공정성 수정을 시작할 때
 notes:
   - availableDurationMinutes는 시트에 없어 request_006_a의 120분에서 보정했다.
   - MatchingRequest와 가격 snapshot은 SQL로 넣지 않고 API와 서버 계산으로 생성한다.

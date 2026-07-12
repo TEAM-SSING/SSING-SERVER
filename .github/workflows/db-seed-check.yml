@@ -12,6 +12,7 @@ on:
       - "db/seed/**"
       - "scripts/db/**"
       - "src/integrationTest/**"
+      - "docker-compose.local.yml"
       - "build.gradle"
       - ".github/workflows/db-seed-check.yml"
   push:
@@ -25,6 +26,7 @@ on:
       - "db/seed/**"
       - "scripts/db/**"
       - "src/integrationTest/**"
+      - "docker-compose.local.yml"
       - "build.gradle"
       - ".github/workflows/db-seed-check.yml"
 
@@ -51,6 +53,16 @@ jobs:
 
       - name: DB script 문법 검증
         run: bash -n scripts/db/*.sh
+
+      - name: 내부 reset 직접 실행 차단 검증
+        run: |
+          set +e
+          output=$(./scripts/db/reset-core.sh local matching-price-vivaldi 2>&1)
+          exit_code=$?
+          set -e
+
+          test "$exit_code" -eq 2
+          grep -q -- "--confirm-local-reset" <<< "$output"
 
       - name: 외부 Flyway runner와 local reset 검증
         run: |

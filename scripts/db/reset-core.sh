@@ -5,9 +5,15 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-target_env="${1:-}"
-scenario_key="${2:-}"
+confirmation="${1:-}"
+target_env="${2:-}"
+scenario_key="${3:-}"
 
+# Flyway clean 진입 전 wrapper와 core 양쪽에서 명시적 local reset 확인을 요구한다.
+[[ "$confirmation" == "--confirm-local-reset" ]] || {
+  printf 'Usage: %s --confirm-local-reset local [scenario-key]\n' "$0" >&2
+  exit 2
+}
 [[ "$target_env" == "local" ]] || fail "reset-core currently accepts only: local"
 [[ -n "$scenario_key" ]] || fail "scenario key is required"
 

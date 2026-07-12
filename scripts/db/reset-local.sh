@@ -26,4 +26,7 @@ docker compose \
   --file "$PROJECT_ROOT/docker-compose.local.yml" \
   up --detach --wait mysql
 
-exec "$SCRIPT_DIR/reset-core.sh" local "$scenario_key"
+exec "$SCRIPT_DIR/reset-core.sh" \
+  "$confirmation" \
+  local \
+  "$scenario_key"

@@ -2,7 +2,8 @@
 
 ## Scope
 
-This first slice provides a reproducible local/CI database for issue #105.
+This first slice provides a reproducible local/CI database for
+[issue #105](https://github.com/TEAM-SSING/SSING-SERVER/issues/105).
 
 - Flyway V1 owns the current full schema.
 - Flyway V2 owns the mandatory active 0% platform fee policy.
@@ -110,6 +111,9 @@ baseline.
 
 ## Deliberately not completed in this slice
 
+- Issue #105 remains open after this slice. This slice covers the local/CI seed
+  foundation and the single-request price flow, not every checklist item in the
+  umbrella issue.
 - public dev persona seed and dev reset workflow
 - normal dev deployment migration wiring
 - all PM spreadsheet personas and scenarios
@@ -121,11 +125,19 @@ baseline.
 ## Deferred follow-ups
 
 `realtime-reconnect-recovery` records the agreed deferral of WebSocket reconnect
-and event-loss recovery. This seed slice mocks only the external real-time event
-dispatcher; request creation, after-commit search, DB state, API readback, and the
-scheduler entrypoint remain real.
+and event-loss recovery. It is tracked by
+[#79](https://github.com/TEAM-SSING/SSING-SERVER/issues/79),
+[#86](https://github.com/TEAM-SSING/SSING-SERVER/issues/86), and
+[#109](https://github.com/TEAM-SSING/SSING-SERVER/issues/109). This seed slice
+mocks only the external real-time event dispatcher; request creation,
+after-commit search, DB state, API readback, and the scheduler entrypoint remain
+real.
 
 This deferral does not block the matching-price seed contract. It must be resumed
-when the real-time state-recovery batch starts, and a GitHub tracking issue must be
-linked before that broader recovery work is declared complete. Until then, this
-document and the scenario manifest are the repository-local tracking source.
+when the real-time state-recovery batch starts.
+
+Dev database adoption and an approved seed workflow are tracked by
+[#122](https://github.com/TEAM-SSING/SSING-SERVER/issues/122). The scheduler
+contract in this slice proves one-request stability only; 100-request batch
+fairness is tracked separately by
+[#123](https://github.com/TEAM-SSING/SSING-SERVER/issues/123).

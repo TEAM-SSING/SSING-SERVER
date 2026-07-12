@@ -151,7 +151,16 @@ class DatabaseSeedContractTest {
                 .isEqualTo(offerBeforeScheduler.at("/data/items/0/offerId").asLong());
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM matching_offers", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM matching_offer_price_snapshots",
+                """
+                SELECT COUNT(*)
+                FROM matching_offer_price_snapshots
+                WHERE fee_rate_bps = 0
+                  AND platform_fee_amount = 0
+                  AND consumer_total_amount = 60000
+                  AND resort_pass_fee_amount = 25000
+                  AND instructor_settlement_amount = 60000
+                  AND total_payment_amount = 85000
+                """,
                 Integer.class
         )).isEqualTo(1);
     }
