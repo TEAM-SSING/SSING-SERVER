@@ -175,6 +175,7 @@ public class InstructorHomeService {
                         0,
                         InstructorHomeDisplayStatus.MATCHING.name(),
                         "매칭중",
+                        setting.getSport(),
                         setting.getUpdatedAt(),
                         resort.getCode(),
                         resort.getDisplayName()
@@ -203,6 +204,7 @@ public class InstructorHomeService {
                 0,
                 displayStatus.name(),
                 title,
+                representativeRequest.getSport(),
                 matchingOffer.getExposedAt(),
                 representativeRequest.getResort().getCode(),
                 representativeRequest.getResort().getDisplayName()
@@ -253,6 +255,7 @@ public class InstructorHomeService {
                 resolveRemainingDays(lesson.getStatus(), lesson.getScheduledAt(), now),
                 lesson.getStatus().name(),
                 title,
+                lesson.getSport(),
                 lesson.getScheduledAt(),
                 lesson.getResort().getCode(),
                 lesson.getResort().getDisplayName()

@@ -20,6 +20,7 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
                    lesson.scheduledAt as scheduledAt,
                    member.nickname as requesterNickname,
                    lesson.totalHeadcount as totalHeadcount,
+                   lesson.sport as sport,
                    resort.code as resortCode,
                    resort.displayName as resortDisplayName
             from LessonParticipant lessonParticipant
