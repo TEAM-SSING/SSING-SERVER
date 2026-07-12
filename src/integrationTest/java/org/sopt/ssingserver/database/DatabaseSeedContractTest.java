@@ -30,7 +30,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.mysql.MySQLContainer;
+import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -48,7 +49,7 @@ import tools.jackson.databind.ObjectMapper;
 @ActiveProfiles("integration-test")
 class DatabaseSeedContractTest {
 
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.8")
+    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
             .withDatabaseName("ssing_seed_contract")
             .withUsername("ssing")
             .withPassword("ssing");
