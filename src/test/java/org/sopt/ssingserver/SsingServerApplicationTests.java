@@ -41,7 +41,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @ActiveProfiles({"test", "local"})
-@SpringBootTest(properties = "springdoc.api-docs.enabled=true")
+@SpringBootTest
 @AutoConfigureMockMvc
 class SsingServerApplicationTests {
 
