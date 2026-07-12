@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.auth.dev.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.sopt.ssingserver.domain.auth.dev.controller.docs.DevAuthApiDocs;
 import org.sopt.ssingserver.domain.auth.dev.dto.request.CreateDevPersonaRequest;
 import org.sopt.ssingserver.domain.auth.dev.dto.request.DevAuthTokenRequest;
 import org.sopt.ssingserver.domain.auth.dev.dto.response.CreateDevPersonaResponse;
@@ -25,15 +26,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/dev/auth")
-public class DevAuthController {
+public class DevAuthController implements DevAuthApiDocs {
 
     private final DevAuthService devAuthService;
 
+    @Override
     @GetMapping("/personas")
     public ResponseEntity<BaseResponse<DevPersonaListResponse>> getPersonas() {
         return SuccessResponseFactory.success(CommonSuccessCode.SUCCESS, devAuthService.getPersonas());
     }
 
+    @Override
     @PostMapping("/personas")
     public ResponseEntity<BaseResponse<CreateDevPersonaResponse>> createPersona(
             @Valid @RequestBody CreateDevPersonaRequest request
@@ -46,6 +49,7 @@ public class DevAuthController {
         return SuccessResponseFactory.success(DevAuthSuccessCode.DEV_PERSONA_CREATED, response);
     }
 
+    @Override
     @PostMapping("/token")
     public ResponseEntity<BaseResponse<DevAuthTokenResponse>> issueToken(
             @Valid @RequestBody DevAuthTokenRequest request

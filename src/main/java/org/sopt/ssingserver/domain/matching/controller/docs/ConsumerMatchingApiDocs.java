@@ -6,14 +6,18 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
 import org.sopt.ssingserver.domain.matching.dto.request.CreateConsumerMatchingRequest;
 import org.sopt.ssingserver.domain.matching.dto.request.RespondConsumerMatchingConfirmationRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerMatchingCancellationResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerMatchingConfirmationResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerMatchingPaymentResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerMatchingRequestCreateResponse;
+import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
+import org.sopt.ssingserver.global.swagger.error.ApiErrorCodes;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,6 +31,24 @@ public interface ConsumerMatchingApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "201", description = "매칭 요청 생성 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {
+                    "VALIDATION_FAILED",
+                    "BAD_REQUEST",
+                    "UNAUTHENTICATED",
+                    "FORBIDDEN",
+                    "INTERNAL_ERROR"
+            }
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = MatchingErrorCode.class,
+            names = {"MATCHING_MEMBER_NOT_FOUND", "MATCHING_RESORT_NOT_FOUND"}
+    )
     ResponseEntity<BaseResponse<ConsumerMatchingRequestCreateResponse>> createMatchingRequest(
             @Parameter(hidden = true)
             CurrentMember currentMember,
@@ -39,11 +61,18 @@ public interface ConsumerMatchingApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "매칭 요청 중지 성공")
-    @ApiResponse(responseCode = "401", description = "인증 실패")
-    @ApiResponse(responseCode = "403", description = "본인 소유의 매칭 요청이 아님")
-    @ApiResponse(responseCode = "404", description = "존재하지 않는 매칭 요청")
-    @ApiResponse(responseCode = "409", description = "취소 가능한 매칭 요청 상태가 아님")
-    @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = MatchingErrorCode.class,
+            names = {"MATCHING_REQUEST_NOT_FOUND", "MATCHING_CANCEL_NOT_ALLOWED"}
+    )
     ResponseEntity<BaseResponse<ConsumerMatchingCancellationResponse>> cancelMatchingRequest(
             @Parameter(hidden = true)
             CurrentMember currentMember,
@@ -57,12 +86,28 @@ public interface ConsumerMatchingApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "최종 응답 반영 성공")
-    @ApiResponse(responseCode = "400", description = "요청 값 검증 실패")
-    @ApiResponse(responseCode = "401", description = "인증 실패")
-    @ApiResponse(responseCode = "403", description = "본인 소유의 매칭 요청이 아님")
-    @ApiResponse(responseCode = "404", description = "존재하지 않는 매칭 요청")
-    @ApiResponse(responseCode = "409", description = "최종 응답 가능한 매칭 요청 상태가 아님")
-    @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {
+                    "VALIDATION_FAILED",
+                    "BAD_REQUEST",
+                    "UNAUTHENTICATED",
+                    "FORBIDDEN",
+                    "INTERNAL_ERROR"
+            }
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = MatchingErrorCode.class,
+            names = {
+                    "MATCHING_REQUEST_NOT_FOUND",
+                    "MATCHING_REQUEST_NOT_CONFIRMABLE",
+                    "MATCHING_GROUP_ALREADY_CLOSED"
+            }
+    )
     ResponseEntity<BaseResponse<ConsumerMatchingConfirmationResponse>> respondMatchingConfirmation(
             @Parameter(hidden = true)
             CurrentMember currentMember,
@@ -77,11 +122,22 @@ public interface ConsumerMatchingApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "결제 완료 처리 성공")
-    @ApiResponse(responseCode = "401", description = "인증 실패")
-    @ApiResponse(responseCode = "403", description = "본인 소유의 매칭 요청이 아님")
-    @ApiResponse(responseCode = "404", description = "존재하지 않는 매칭 요청")
-    @ApiResponse(responseCode = "409", description = "결제 대기 상태가 아닌 매칭 요청")
-    @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = MatchingErrorCode.class,
+            names = {
+                    "MATCHING_REQUEST_NOT_FOUND",
+                    "MATCHING_PAYMENT_NOT_PENDING",
+                    "MATCHING_GROUP_ALREADY_CLOSED"
+            }
+    )
     ResponseEntity<BaseResponse<ConsumerMatchingPaymentResponse>> completeMatchingPayment(
             @Parameter(hidden = true)
             CurrentMember currentMember,

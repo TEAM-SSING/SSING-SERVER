@@ -6,14 +6,18 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
 import org.sopt.ssingserver.domain.lesson.dto.request.LessonCancellationRequest;
 import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonCancellationResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonCompletionResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonStartConfirmationResponse;
+import org.sopt.ssingserver.domain.lesson.error.LessonErrorCode;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
+import org.sopt.ssingserver.global.swagger.error.ApiErrorCodes;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,6 +31,24 @@ public interface LessonApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강습 상세 조회 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = LessonErrorCode.class,
+            names = {
+                    "LESSON_NOT_FOUND",
+                    "LESSON_FORBIDDEN",
+                    "LESSON_PRICE_NOT_FOUND",
+                    "LESSON_CANCELLATION_NOT_FOUND",
+                    "LESSON_INVALID_STATE"
+            }
+    )
     ResponseEntity<BaseResponse<ConsumerLessonDetailResponse>> getConsumerLessonDetail(
             @Parameter(hidden = true)
             CurrentMember currentMember,
@@ -40,6 +62,23 @@ public interface LessonApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강습 상세 조회 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = LessonErrorCode.class,
+            names = {
+                    "LESSON_NOT_FOUND",
+                    "LESSON_PRICE_NOT_FOUND",
+                    "LESSON_CANCELLATION_NOT_FOUND",
+                    "LESSON_INVALID_STATE"
+            }
+    )
     ResponseEntity<BaseResponse<InstructorLessonDetailResponse>> getInstructorLessonDetail(
             @Parameter(hidden = true)
             CurrentMember currentMember,
@@ -53,6 +92,18 @@ public interface LessonApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강습 시작 확인 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = LessonErrorCode.class,
+            names = {"LESSON_NOT_FOUND", "LESSON_START_NOT_ALLOWED", "LESSON_INVALID_STATE"}
+    )
     ResponseEntity<BaseResponse<LessonStartConfirmationResponse>> confirmLessonStart(
             @Parameter(hidden = true)
             CurrentMember currentMember,
@@ -66,6 +117,18 @@ public interface LessonApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강습 종료 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = LessonErrorCode.class,
+            names = {"LESSON_NOT_FOUND", "LESSON_COMPLETE_NOT_ALLOWED"}
+    )
     ResponseEntity<BaseResponse<LessonCompletionResponse>> completeLesson(
             @Parameter(hidden = true)
             CurrentMember currentMember,
@@ -79,6 +142,24 @@ public interface LessonApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강습 취소 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {
+                    "VALIDATION_FAILED",
+                    "BAD_REQUEST",
+                    "UNAUTHENTICATED",
+                    "FORBIDDEN",
+                    "INTERNAL_ERROR"
+            }
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = LessonErrorCode.class,
+            names = {"LESSON_NOT_FOUND", "LESSON_CANCEL_NOT_ALLOWED"}
+    )
     ResponseEntity<BaseResponse<LessonCancellationResponse>> cancelLesson(
             @Parameter(hidden = true)
             CurrentMember currentMember,

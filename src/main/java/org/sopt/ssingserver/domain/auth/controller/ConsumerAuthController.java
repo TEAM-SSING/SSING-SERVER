@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.auth.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.sopt.ssingserver.domain.auth.controller.docs.ConsumerAuthApiDocs;
 import org.sopt.ssingserver.domain.auth.dto.request.KakaoLoginRequest;
 import org.sopt.ssingserver.domain.auth.dto.response.AuthLoginResult;
 import org.sopt.ssingserver.domain.auth.dto.response.ConsumerKakaoLoginResponse;
@@ -18,10 +19,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/consumer/auth")
-public class ConsumerAuthController {
+public class ConsumerAuthController implements ConsumerAuthApiDocs {
 
     private final AuthService authService;
 
+    @Override
     @PostMapping("/kakao")
     public ResponseEntity<BaseResponse<ConsumerKakaoLoginResponse>> loginWithKakao(
             @Valid @RequestBody KakaoLoginRequest request
