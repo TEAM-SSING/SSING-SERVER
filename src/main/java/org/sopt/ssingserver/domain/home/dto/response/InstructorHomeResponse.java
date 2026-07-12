@@ -11,7 +11,7 @@ public record InstructorHomeResponse(
         @Schema(description = "홈 상단 매칭/강습 카드 목록")
         List<LessonCardResponse> lessonCards,
 
-        @Schema(description = "해당 리조트에서 매칭 중인 소비자 수", example = "99")
+        @Schema(description = "전체 서비스에서 매칭 중인 소비자 요청 수", example = "99")
         long matchingConsumerCount,
 
         @Schema(description = "강습 후기/평점/Grade 요약")

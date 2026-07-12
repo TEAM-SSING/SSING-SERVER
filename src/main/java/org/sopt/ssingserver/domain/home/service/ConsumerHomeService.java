@@ -11,6 +11,8 @@ import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse.Lesson
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
+import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.global.time.AppZoneId;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,8 +25,14 @@ public class ConsumerHomeService {
             LessonStatus.CONFIRMED,
             LessonStatus.IN_PROGRESS
     );
+    private static final List<MatchingRequestStatus> MATCHING_CONSUMER_COUNT_STATUSES = List.of(
+            MatchingRequestStatus.REQUESTED,
+            MatchingRequestStatus.GROUPED,
+            MatchingRequestStatus.MATCHED
+    );
 
     private final LessonParticipantRepository lessonParticipantRepository;
+    private final MatchingRequestRepository matchingRequestRepository;
     private final Clock clock;
 
     // 소비자 홈에 표시할 예약/진행 강습 카드 조회함
@@ -44,8 +52,13 @@ public class ConsumerHomeService {
 
         // TODO: 알림 읽음 여부 정책 확정 후 실제 조회로 교체함
         boolean hasUnreadNotification = false;
+        long matchingConsumerCount = matchingRequestRepository.countByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES);
 
-        return ConsumerHomeResponse.from(lessonCardResponses, hasUnreadNotification);
+        return ConsumerHomeResponse.from(
+                lessonCardResponses,
+                matchingConsumerCount,
+                hasUnreadNotification
+        );
     }
 
     // 강습 상태와 예정일 기준으로 홈 카드의 D-day 값 계산함

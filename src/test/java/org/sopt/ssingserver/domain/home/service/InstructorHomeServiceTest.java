@@ -59,6 +59,11 @@ class InstructorHomeServiceTest {
             LessonStatus.CONFIRMED,
             LessonStatus.IN_PROGRESS
     );
+    private static final List<MatchingRequestStatus> MATCHING_CONSUMER_COUNT_STATUSES = List.of(
+            MatchingRequestStatus.REQUESTED,
+            MatchingRequestStatus.GROUPED,
+            MatchingRequestStatus.MATCHED
+    );
 
     @Mock
     private LessonRepository lessonRepository;
@@ -217,7 +222,7 @@ class InstructorHomeServiceTest {
                 1L,
                 UPCOMING_LESSON_STATUSES
         )).thenReturn(List.of());
-        when(matchingRequestRepository.sumHeadcountByResortIdAndStatus(100L, MatchingRequestStatus.REQUESTED))
+        when(matchingRequestRepository.countByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES))
                 .thenReturn(3L);
 
         InstructorHomeResponse response = service.getInstructorHome(1L);
@@ -395,7 +400,6 @@ class InstructorHomeServiceTest {
 
     private Resort resortWithDetails() {
         Resort resort = mock(Resort.class);
-        when(resort.getId()).thenReturn(100L);
         when(resort.getCode()).thenReturn("HIGH1");
         when(resort.getDisplayName()).thenReturn("하이원");
         return resort;
