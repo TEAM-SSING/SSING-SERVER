@@ -204,6 +204,39 @@ class SsingServerApplicationTests {
 	}
 
 	@Test
+	void generatedOpenApiReflectsSharedSuccessResponseContract() throws Exception {
+		JsonNode openApi = generatedOpenApi();
+
+		collectOperations(openApi.path("paths")).forEach(operationKey -> {
+			JsonNode operation = findOperation(openApi, operationKey);
+			operation.path("responses").forEachEntry((responseCode, response) -> {
+				if (!responseCode.matches("2\\d\\d") || "204".equals(responseCode)) {
+					return;
+				}
+
+				response.path("content").forEachEntry((mediaTypeName, mediaType) -> {
+					JsonNode schemaProperties = mediaType.path("schema").path("properties");
+					assertThat(schemaProperties.has("success"))
+							.as(operationKey + " " + responseCode + " " + mediaTypeName + " success")
+							.isTrue();
+					assertThat(schemaProperties.has("code"))
+							.as(operationKey + " " + responseCode + " " + mediaTypeName + " code")
+							.isTrue();
+					assertThat(schemaProperties.has("message"))
+							.as(operationKey + " " + responseCode + " " + mediaTypeName + " message")
+							.isTrue();
+					assertThat(schemaProperties.has("errors"))
+							.as(operationKey + " " + responseCode + " " + mediaTypeName + " errors")
+							.isFalse();
+					assertThat(schemaProperties.has("requestId"))
+							.as(operationKey + " " + responseCode + " " + mediaTypeName + " requestId")
+							.isFalse();
+				});
+			});
+		});
+	}
+
+	@Test
 	void generatedOpenApiDocumentsAuthAndHidesUnsafeDevOperations() throws Exception {
 		JsonNode openApi = generatedOpenApi();
 		JsonNode paths = openApi.path("paths");
@@ -229,6 +262,61 @@ class SsingServerApplicationTests {
 		JsonNode schemas = openApi.path("components").path("schemas");
 		assertThat(schemas.has("ConsumerAuthMemberResponse")).isTrue();
 		assertThat(schemas.has("InstructorAuthMemberResponse")).isTrue();
+	}
+
+	@Test
+	void generatedOpenApiDocumentsLessonStatusVariants() throws Exception {
+		JsonNode openApi = generatedOpenApi();
+		JsonNode schemas = openApi.path("components").path("schemas");
+
+		assertThat(schemaReferences(schemas.path("ConsumerLessonDetailResponse").path("oneOf")))
+				.contains(
+						"#/components/schemas/ConsumerLessonConfirmedDetail",
+						"#/components/schemas/ConsumerLessonInProgressDetail",
+						"#/components/schemas/ConsumerLessonCompletedDetail",
+						"#/components/schemas/ConsumerLessonCanceledDetail"
+				);
+		assertThat(schemaReferences(schemas.path("InstructorLessonDetailResponse").path("oneOf")))
+				.contains(
+						"#/components/schemas/InstructorLessonConfirmedDetail",
+						"#/components/schemas/InstructorLessonInProgressDetail",
+						"#/components/schemas/InstructorLessonCompletedDetail",
+						"#/components/schemas/InstructorLessonCanceledDetail"
+				);
+		assertThat(schemaReferences(schemas.path("LessonStartConfirmationResponse").path("oneOf")))
+				.contains(
+						"#/components/schemas/LessonStartConfirmationPending",
+						"#/components/schemas/LessonStartConfirmationStarted"
+				);
+
+		JsonNode consumerLessonContent = findOperation(openApi, "GET /api/v1/consumer/lessons/{lessonId}")
+				.path("responses")
+				.path("200")
+				.path("content");
+		assertThat(consumerLessonContent.has("application/json")).isFalse();
+		JsonNode consumerLessonExamples = consumerLessonContent.path("*/*").path("examples");
+		assertThat(consumerLessonExamples.has("CONFIRMED")).isTrue();
+		assertThat(consumerLessonExamples.has("IN_PROGRESS")).isTrue();
+		assertThat(consumerLessonExamples.has("COMPLETED")).isTrue();
+		assertThat(consumerLessonExamples.has("CANCELED")).isTrue();
+		assertThat(consumerLessonExamples.path("CONFIRMED").path("value").path("data").path("lessonStatus").asString())
+				.isEqualTo("CONFIRMED");
+		assertThat(consumerLessonExamples.path("COMPLETED").path("value").path("data").has("statusInfo"))
+				.isFalse();
+
+		JsonNode startConfirmationContent = findOperation(openApi, "POST /api/v1/lessons/{lessonId}/start-confirmation")
+				.path("responses")
+				.path("200")
+				.path("content");
+		assertThat(startConfirmationContent.has("application/json")).isFalse();
+		JsonNode startConfirmationExamples = startConfirmationContent.path("*/*").path("examples");
+		assertThat(startConfirmationExamples.has("CONFIRMED_PENDING")).isTrue();
+		assertThat(startConfirmationExamples.has("IN_PROGRESS_STARTED")).isTrue();
+		assertThat(startConfirmationExamples.path("IN_PROGRESS_STARTED")
+				.path("value")
+				.path("data")
+				.path("startedAt")
+				.asString()).isNotBlank();
 	}
 
 	@Test
@@ -278,6 +366,12 @@ class SsingServerApplicationTests {
 			}
 		}));
 		return operations;
+	}
+
+	private Set<String> schemaReferences(JsonNode schemas) {
+		Set<String> references = new TreeSet<>();
+		schemas.forEach(schema -> references.add(schema.path("$ref").asString()));
+		return references;
 	}
 
 	private JsonNode findOperation(JsonNode openApi, String operationKey) {

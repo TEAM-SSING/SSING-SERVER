@@ -9,6 +9,8 @@ import org.springdoc.core.customizers.OperationCustomizer;
 import org.sopt.ssingserver.global.swagger.error.ErrorCodeResolver;
 import org.sopt.ssingserver.global.swagger.error.ErrorResponseOperationCustomizer;
 import org.sopt.ssingserver.global.swagger.error.ErrorResponseSchemaCustomizer;
+import org.sopt.ssingserver.global.swagger.success.SuccessResponseExampleOperationCustomizer;
+import org.sopt.ssingserver.global.swagger.success.SuccessResponseSchemaOperationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -35,6 +37,16 @@ public class OpenApiConfig {
     @Bean
     OperationCustomizer errorResponseOperationCustomizer(ErrorCodeResolver errorCodeResolver) {
         return new ErrorResponseOperationCustomizer(errorCodeResolver);
+    }
+
+    @Bean
+    OperationCustomizer successResponseExampleOperationCustomizer() {
+        return new SuccessResponseExampleOperationCustomizer();
+    }
+
+    @Bean
+    OperationCustomizer successResponseSchemaOperationCustomizer() {
+        return new SuccessResponseSchemaOperationCustomizer();
     }
 
     @Bean

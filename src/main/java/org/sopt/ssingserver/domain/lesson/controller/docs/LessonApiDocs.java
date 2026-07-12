@@ -18,6 +18,7 @@ import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.sopt.ssingserver.global.swagger.error.ApiErrorCodes;
+import org.sopt.ssingserver.global.swagger.success.ApiSuccessExamples;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,6 +32,7 @@ public interface LessonApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강습 상세 조회 성공")
+    @ApiSuccessExamples(LessonApiExamples.ConsumerDetail.class)
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
@@ -62,6 +64,7 @@ public interface LessonApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강습 상세 조회 성공")
+    @ApiSuccessExamples(LessonApiExamples.InstructorDetail.class)
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
@@ -92,6 +95,7 @@ public interface LessonApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강습 시작 확인 성공")
+    @ApiSuccessExamples(LessonApiExamples.StartConfirmation.class)
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
