@@ -2,6 +2,8 @@ package org.sopt.ssingserver.domain.auth.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sopt.ssingserver.domain.auth.config.KakaoOAuthProperties;
 import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -20,8 +22,11 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
 
+    private static final Logger log = LoggerFactory.getLogger(RestClientKakaoOAuthClient.class);
     private static final String BEARER_PREFIX = "Bearer ";
     private static final int KAKAO_INVALID_TOKEN_CODE = -401;
+    private static final String VALIDATE_ACCESS_TOKEN_OPERATION = "validate_access_token";
+    private static final String GET_PROFILE_OPERATION = "get_profile";
     private final RestClient restClient;
     private final KakaoOAuthProperties properties;
     private final ObjectMapper objectMapper;
@@ -75,6 +80,7 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
     }
 
     private KakaoTokenInfoResponse requestTokenInfo(String kakaoAccessToken) {
+        long startedAt = System.nanoTime();
         try {
             // 카카오 토큰 유효성 검증용 경량 API
             return restClient.get()
@@ -83,15 +89,18 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
                     .retrieve()
                     .body(KakaoTokenInfoResponse.class);
         } catch (ResourceAccessException exception) {
+            logExternalFailure(VALIDATE_ACCESS_TOKEN_OPERATION, startedAt, exception, null);
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE, exception);
         } catch (RestClientResponseException exception) {
-            throw mapKakaoResponseException(exception);
+            throw mapKakaoResponseException(VALIDATE_ACCESS_TOKEN_OPERATION, startedAt, exception);
         } catch (RestClientException exception) {
+            logExternalFailure(VALIDATE_ACCESS_TOKEN_OPERATION, startedAt, exception, null);
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE, exception);
         }
     }
 
     private KakaoUserMeResponse requestUserMe(String kakaoAccessToken) {
+        long startedAt = System.nanoTime();
         try {
             // 신규 회원 생성용 카카오 프로필 조회
             return restClient.get()
@@ -100,19 +109,46 @@ public class RestClientKakaoOAuthClient implements KakaoOAuthClient {
                     .retrieve()
                     .body(KakaoUserMeResponse.class);
         } catch (ResourceAccessException exception) {
+            logExternalFailure(GET_PROFILE_OPERATION, startedAt, exception, null);
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE, exception);
         } catch (RestClientResponseException exception) {
-            throw mapKakaoResponseException(exception);
+            throw mapKakaoResponseException(GET_PROFILE_OPERATION, startedAt, exception);
         } catch (RestClientException exception) {
+            logExternalFailure(GET_PROFILE_OPERATION, startedAt, exception, null);
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE, exception);
         }
     }
 
-    private BusinessException mapKakaoResponseException(RestClientResponseException exception) {
+    private BusinessException mapKakaoResponseException(
+            String operation,
+            long startedAt,
+            RestClientResponseException exception
+    ) {
         if (isInvalidKakaoToken(exception)) {
             return new BusinessException(AuthErrorCode.AUTH_INVALID_KAKAO_TOKEN, exception);
         }
+        logExternalFailure(operation, startedAt, exception, exception.getStatusCode().value());
         return new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE, exception);
+    }
+
+    private void logExternalFailure(
+            String operation,
+            long startedAt,
+            RestClientException exception,
+            Integer providerStatus
+    ) {
+        // 외부 연동 최종 실패는 client 경계에서 한 번만 기록하며 토큰과 provider 응답은 제외한다.
+        var eventBuilder = log.atError()
+                .addKeyValue("event", "external.kakao.request.failed")
+                .addKeyValue("provider", "kakao")
+                .addKeyValue("operation", operation)
+                .addKeyValue("error_code", CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE.getCode())
+                .addKeyValue("duration_ms", (System.nanoTime() - startedAt) / 1_000_000L)
+                .addKeyValue("exception_type", exception.getClass().getName());
+        if (providerStatus != null) {
+            eventBuilder.addKeyValue("provider_status", providerStatus);
+        }
+        eventBuilder.log("Kakao request failed");
     }
 
     private boolean isInvalidKakaoToken(RestClientResponseException exception) {

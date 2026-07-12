@@ -58,6 +58,7 @@ public class MatchingCancellationService {
     private final MatchingRequestPaymentRepository matchingRequestPaymentRepository;
     private final MatchingStatusResolver matchingStatusResolver;
     private final MatchingEventDispatcher matchingEventDispatcher;
+    private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
     private final Clock clock;
 
     // Controller에서 들어온 소비자 중지 요청의 단일 트랜잭션 경계
@@ -117,12 +118,24 @@ public class MatchingCancellationService {
                 matchingRequest.getStatusReason()
         )));
 
-        logCancellationSuccess(
-                memberId,
-                matchingRequest,
-                matchingStatus,
-                activeOffers.size(),
-                matchingRequestPayment
+        boolean paymentCanceled = matchingRequestPayment
+                .map(payment -> payment.getStatus() == MatchingRequestPaymentStatus.CANCELED)
+                .orElse(false);
+        Long canceledRequestId = matchingRequest.getId();
+        String canceledMatchingStatus = matchingStatus.name();
+        String canceledRequestStatus = matchingRequest.getStatus().name();
+        int canceledOfferCount = activeOffers.size();
+        // rollback 시 거짓 성공 로그가 남지 않도록 안전한 값만 캡처해 커밋 이후로 넘긴다.
+        matchingAfterCommitExecutor.execute(
+                "matching-cancellation-success-log",
+                () -> logCancellationSuccess(
+                        memberId,
+                        canceledRequestId,
+                        canceledMatchingStatus,
+                        canceledRequestStatus,
+                        canceledOfferCount,
+                        paymentCanceled
+                )
         );
 
         return MatchingCancellationResult.of(matchingRequest, matchingStatus);
@@ -177,21 +190,18 @@ public class MatchingCancellationService {
 
     private void logCancellationSuccess(
             Long memberId,
-            MatchingRequest matchingRequest,
-            MatchingStatus matchingStatus,
+            Long matchingRequestId,
+            String matchingStatus,
+            String requestStatus,
             int canceledOfferCount,
-            Optional<MatchingRequestPayment> matchingRequestPayment
+            boolean paymentCanceled
     ) {
-        boolean paymentCanceled = matchingRequestPayment
-                .map(payment -> payment.getStatus() == MatchingRequestPaymentStatus.CANCELED)
-                .orElse(false);
-
         log.atInfo()
                 .addKeyValue("event", "matching.request.cancel.success")
-                .addKeyValue("matching_request_id", String.valueOf(matchingRequest.getId()))
+                .addKeyValue("matching_request_id", String.valueOf(matchingRequestId))
                 .addKeyValue("member_id", String.valueOf(memberId))
-                .addKeyValue("matching_status", matchingStatus.name())
-                .addKeyValue("request_status", matchingRequest.getStatus().name())
+                .addKeyValue("matching_status", matchingStatus)
+                .addKeyValue("request_status", requestStatus)
                 .addKeyValue("canceled_offer_count", canceledOfferCount)
                 .addKeyValue("payment_canceled", paymentCanceled)
                 .log("Matching request canceled");

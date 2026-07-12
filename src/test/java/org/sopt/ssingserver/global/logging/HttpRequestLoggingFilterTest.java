@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.global.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.servlet.HandlerMapping;
 
 class HttpRequestLoggingFilterTest {
 
@@ -28,6 +30,7 @@ class HttpRequestLoggingFilterTest {
         try {
             MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-123");
             MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/songs");
+            request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/songs/{songId}");
             MockHttpServletResponse response = new MockHttpServletResponse();
 
             new HttpRequestLoggingFilter().doFilter(request, response, (servletRequest, servletResponse) ->
@@ -41,9 +44,135 @@ class HttpRequestLoggingFilterTest {
             assertThat(keyValueMap(event))
                     .containsEntry("event", "http.request.completed")
                     .containsEntry("method", "POST")
-                    .containsEntry("path", "/api/songs")
+                    .containsEntry("path", "/api/songs/{songId}")
                     .containsEntry("status", 201);
             assertThat(keyValueMap(event).get("duration_ms")).isInstanceOf(Long.class);
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
+            MDC.remove(RequestIdFilter.REQUEST_ID_MDC_KEY);
+        }
+    }
+
+    @Test
+    void 정상_health_폴링은_완료_로그를_남기지_않는다() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        Level originalLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            new HttpRequestLoggingFilter().doFilter(request, response, (servletRequest, servletResponse) ->
+                    ((MockHttpServletResponse) servletResponse).setStatus(200));
+
+            assertThat(appender.list).isEmpty();
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
+        }
+    }
+
+    @Test
+    void 비정상_health_응답은_완료_로그를_남긴다() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        Level originalLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            new HttpRequestLoggingFilter().doFilter(request, response, (servletRequest, servletResponse) ->
+                    ((MockHttpServletResponse) servletResponse).setStatus(503));
+
+            assertThat(appender.list).hasSize(1);
+            assertThat(keyValueMap(appender.list.getFirst())).containsEntry("status", 503);
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
+        }
+    }
+
+    @Test
+    void 매핑_템플릿이_없으면_raw_URI_대신_unmapped를_기록한다() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        Level originalLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/unknown/private-value");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            new HttpRequestLoggingFilter().doFilter(request, response, (servletRequest, servletResponse) ->
+                    ((MockHttpServletResponse) servletResponse).setStatus(404));
+
+            assertThat(keyValueMap(appender.list.getFirst()))
+                    .containsEntry("path", "/unmapped")
+                    .doesNotContainValue("/unknown/private-value");
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
+        }
+    }
+
+    @Test
+    void 처리되지_않은_filter_RuntimeException은_ERROR_한_번과_500_완료_로그를_남긴다() {
+        Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        Level originalLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+
+        try {
+            MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-filter-500");
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/test/42");
+            request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/test/{testId}");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            assertThatExceptionOfType(IllegalStateException.class)
+                    .isThrownBy(() -> new HttpRequestLoggingFilter().doFilter(
+                            request,
+                            response,
+                            (servletRequest, servletResponse) -> {
+                                throw new IllegalStateException("secret-filter-detail");
+                            }
+                    ));
+
+            assertThat(response.getStatus()).isEqualTo(500);
+            assertThat(appender.list).hasSize(2);
+
+            ILoggingEvent errorEvent = appender.list.stream()
+                    .filter(event -> "http.request.unhandled_exception"
+                            .equals(keyValueMap(event).get("event")))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(errorEvent.getLevel()).isSameAs(Level.ERROR);
+            assertThat(errorEvent.getMDCPropertyMap()).containsEntry("request_id", "req-filter-500");
+            assertThat(errorEvent.getThrowableProxy()).isNull();
+            assertThat(errorEvent.getFormattedMessage()).doesNotContain("secret-filter-detail");
+            assertThat(keyValueMap(errorEvent))
+                    .containsEntry("error_code", "INTERNAL_ERROR")
+                    .containsEntry("status", 500)
+                    .containsEntry("exception_type", IllegalStateException.class.getName());
+
+            ILoggingEvent completionEvent = appender.list.stream()
+                    .filter(event -> "http.request.completed".equals(keyValueMap(event).get("event")))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(completionEvent.getMDCPropertyMap()).containsEntry("request_id", "req-filter-500");
+            assertThat(keyValueMap(completionEvent)).containsEntry("status", 500);
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);

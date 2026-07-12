@@ -59,6 +59,8 @@ import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class MatchingCancellationServiceTest {
@@ -112,9 +114,14 @@ class MatchingCancellationServiceTest {
         appender.start();
         logger.setLevel(Level.INFO);
         logger.addAppender(appender);
+        TransactionSynchronizationManager.initSynchronization();
 
         try {
             MatchingCancellationResult result = service.cancel(10L, 1L);
+
+            assertThat(appender.list).isEmpty();
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
 
             assertThat(result.matchingRequestId()).isEqualTo(1L);
             assertThat(result.matchingStatus()).isSameAs(MatchingStatus.CANCELED);
@@ -159,6 +166,40 @@ class MatchingCancellationServiceTest {
                     .containsEntry("canceled_offer_count", 1)
                     .containsEntry("payment_canceled", true);
         } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+            logger.detachAppender(appender);
+            logger.setLevel(originalLevel);
+        }
+    }
+
+    @Test
+    void cancel은_트랜잭션이_rollback되면_성공_로그를_남기지_않는다() {
+        MatchingCancellationService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(1L, member(10L));
+        when(matchingRequestRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(1L))
+                .thenReturn(Optional.empty());
+        when(matchingRequestPaymentRepository.findFirstByMatchingRequestIdOrderByIdDesc(1L))
+                .thenReturn(Optional.empty());
+        when(matchingStatusResolver.resolve(any(), any(), any(), any(), any()))
+                .thenReturn(MatchingStatus.CANCELED);
+        Logger logger = (Logger) LoggerFactory.getLogger(MatchingCancellationService.class);
+        Level originalLevel = logger.getLevel();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+        TransactionSynchronizationManager.initSynchronization();
+
+        try {
+            service.cancel(10L, 1L);
+            TransactionSynchronizationManager.getSynchronizations().forEach(synchronization ->
+                    synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+            assertThat(appender.list).isEmpty();
+            verifyNoInteractions(matchingEventPublisher);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);
         }
@@ -252,13 +293,15 @@ class MatchingCancellationServiceTest {
     }
 
     private MatchingCancellationService createService() {
+        MatchingAfterCommitExecutor afterCommitExecutor = new MatchingAfterCommitExecutor();
         return new MatchingCancellationService(
                 matchingRequestRepository,
                 matchingRequestGroupItemRepository,
                 matchingOfferRepository,
                 matchingRequestPaymentRepository,
                 matchingStatusResolver,
-                new MatchingEventDispatcher(matchingEventPublisher, new MatchingAfterCommitExecutor()),
+                new MatchingEventDispatcher(matchingEventPublisher, afterCommitExecutor),
+                afterCommitExecutor,
                 FIXED_CLOCK
         );
     }

@@ -60,6 +60,10 @@ hs_err_pid*
 replay_pid*
 *.hprof
 
+### Python ###
+__pycache__/
+*.py[cod]
+
 ### Gradle ###
 .gradle/
 build/
