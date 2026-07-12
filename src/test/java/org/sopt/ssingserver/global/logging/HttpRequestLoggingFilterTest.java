@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.servlet.HandlerMapping;
 
 class HttpRequestLoggingFilterTest {
 
@@ -28,6 +29,7 @@ class HttpRequestLoggingFilterTest {
         try {
             MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-123");
             MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/songs");
+            request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/songs/{songId}");
             MockHttpServletResponse response = new MockHttpServletResponse();
 
             new HttpRequestLoggingFilter().doFilter(request, response, (servletRequest, servletResponse) ->
@@ -41,13 +43,76 @@ class HttpRequestLoggingFilterTest {
             assertThat(keyValueMap(event))
                     .containsEntry("event", "http.request.completed")
                     .containsEntry("method", "POST")
-                    .containsEntry("path", "/api/songs")
+                    .containsEntry("path", "/api/songs/{songId}")
                     .containsEntry("status", 201);
             assertThat(keyValueMap(event).get("duration_ms")).isInstanceOf(Long.class);
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);
             MDC.remove(RequestIdFilter.REQUEST_ID_MDC_KEY);
+        }
+    }
+
+    @Test
+    void 정상_health_폴링은_완료_로그를_남기지_않는다() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            new HttpRequestLoggingFilter().doFilter(request, response, (servletRequest, servletResponse) ->
+                    ((MockHttpServletResponse) servletResponse).setStatus(200));
+
+            assertThat(appender.list).isEmpty();
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void 비정상_health_응답은_완료_로그를_남긴다() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            new HttpRequestLoggingFilter().doFilter(request, response, (servletRequest, servletResponse) ->
+                    ((MockHttpServletResponse) servletResponse).setStatus(503));
+
+            assertThat(appender.list).hasSize(1);
+            assertThat(keyValueMap(appender.list.getFirst())).containsEntry("status", 503);
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void 매핑_템플릿이_없으면_raw_URI_대신_unmapped를_기록한다() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/unknown/private-value");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            new HttpRequestLoggingFilter().doFilter(request, response, (servletRequest, servletResponse) ->
+                    ((MockHttpServletResponse) servletResponse).setStatus(404));
+
+            assertThat(keyValueMap(appender.list.getFirst()))
+                    .containsEntry("path", "/unmapped")
+                    .doesNotContainValue("/unknown/private-value");
+        } finally {
+            logger.detachAppender(appender);
         }
     }
 

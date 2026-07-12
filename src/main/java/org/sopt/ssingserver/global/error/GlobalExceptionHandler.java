@@ -42,6 +42,16 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         ErrorCode errorCode = exception.getErrorCode();
+        // 내부 5xx만 여기서 기록하고, 외부 연동 503은 호출 client가 단일 로그를 소유한다.
+        if (errorCode.getStatus().is5xxServerError()
+                && errorCode != CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE) {
+            log.atError()
+                    .addKeyValue("event", "http.request.business_exception")
+                    .addKeyValue("error_code", errorCode.getCode())
+                    .addKeyValue("status", errorCode.getStatus().value())
+                    .addKeyValue("exception_type", exception.getClass().getName())
+                    .log("Server business exception");
+        }
         return errorResponseFactory.error(errorCode, request);
     }
 
@@ -116,8 +126,13 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
-        String requestId = errorResponseFactory.resolveRequestId(request);
-        log.error("Unhandled exception. requestId={}", requestId, exception);
+        // 예외 원문 대신 안전한 분류 정보만 남겨 토큰·응답 본문·개인정보 노출을 막는다.
+        log.atError()
+                .addKeyValue("event", "http.request.unhandled_exception")
+                .addKeyValue("error_code", CommonErrorCode.INTERNAL_ERROR.getCode())
+                .addKeyValue("status", CommonErrorCode.INTERNAL_ERROR.getStatus().value())
+                .addKeyValue("exception_type", exception.getClass().getName())
+                .log("Unhandled server exception");
         return errorResponseFactory.error(CommonErrorCode.INTERNAL_ERROR, request);
     }
 }
