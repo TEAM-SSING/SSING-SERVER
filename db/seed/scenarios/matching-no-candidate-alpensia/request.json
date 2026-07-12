@@ -1,0 +1,15 @@
+{
+  "resort": "ALPENSIA",
+  "sport": "SKI",
+  "lessonLevel": "CERTIFIED",
+  "requestedDurationMinutes": [
+    180
+  ],
+  "participants": [
+    {
+      "age": 24,
+      "gender": "FEMALE"
+    }
+  ],
+  "equipmentReady": true
+}

@@ -1,0 +1,36 @@
+scenario_key: matching-no-candidate-alpensia
+purpose: 알펜시아 CERTIFIED 스키 요청이 후보 강사 없이 SEARCHING을 유지하는 FLOW
+schema_version: 2
+scenario_type: FLOW
+scheduler_type: STABLE
+execution_scope:
+  - local
+  - ci
+base_dependencies:
+  - db/seed/base/001_reference_data.sql
+  - db/seed/base/010_dev_personas.sql
+source:
+  spreadsheet: SSING 유저·강사 페르소나 목데이터
+  request: matching_requests!A8:L8
+  participant: matching_request_participants!A12:E12
+personas:
+  consumer:
+    persona_key: consumer-default
+    template: GENERAL_CONSUMER
+    technical_source: member_consumer_005
+start_state:
+  resort_code: ALPENSIA
+  exposed_instructor_count: 0
+  active_matching_request_count: 0
+action:
+  method: POST
+  path: /api/v1/consumer/matching-requests
+  payload: request.json
+expectation:
+  initial_matching_status: SEARCHING
+  request_status: REQUESTED
+  matching_group_count: 0
+  matching_offer_count: 0
+notes:
+  - PM request_005_a의 기술 조건만 사용하고 기존 익명 소비자 persona로 API FLOW를 검증한다.
+  - 후보 없음은 무제한 탐색 정책에서 즉시 FAILED로 바꾸지 않는다.

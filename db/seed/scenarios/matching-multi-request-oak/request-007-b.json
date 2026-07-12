@@ -1,0 +1,14 @@
+{
+  "resort": "OAK_VALLEY",
+  "sport": "SNOWBOARD",
+  "lessonLevel": "BEGINNER",
+  "requestedDurationMinutes": [180],
+  "participants": [
+    {"age": 34, "gender": "FEMALE"},
+    {"age": 30, "gender": "MALE"},
+    {"age": 33, "gender": "FEMALE"},
+    {"age": 27, "gender": "MALE"},
+    {"age": 36, "gender": "FEMALE"}
+  ],
+  "equipmentReady": true
+}
