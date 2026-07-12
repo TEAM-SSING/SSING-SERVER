@@ -56,6 +56,9 @@ jobs:
       - name: DB script 문법 검증
         run: bash -n scripts/db/*.sh
 
+      - name: MySQL client 인증 파일 계약 검증
+        run: bash scripts/db/test-mysql-client-auth.sh
+
       - name: 내부 reset 직접 실행 차단 검증
         run: |
           set +e

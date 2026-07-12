@@ -6,6 +6,7 @@ readonly DB_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="$(cd "$DB_SCRIPT_DIR/../.." && pwd)"
 readonly FLYWAY_IMAGE="flyway/flyway:12.10.0-alpine"
 readonly MYSQL_IMAGE="mysql:8.4.8"
+readonly MYSQL_CLIENT_DEFAULTS_PATH="/run/secrets/ssing-mysql-client.cnf"
 
 fail() {
   printf 'seed error: %s\n' "$*" >&2
@@ -58,37 +59,61 @@ run_flyway() {
     "$FLYWAY_IMAGE" "$@"
 }
 
-run_mysql_file() {
-  local sql_file="$1"
-  [[ -f "$sql_file" ]] || fail "SQL file not found: $sql_file"
+write_mysql_client_defaults_file() {
+  local output_file="$1"
+  local password="${SSING_LOCAL_DB_ROOT_PASSWORD}"
 
-  MYSQL_PWD="${SSING_LOCAL_DB_ROOT_PASSWORD}" docker run --rm --interactive \
+  # option file 구문 주입을 막기 위해 개행을 거부하고 따옴표·역슬래시를 escape한다.
+  [[ "$password" != *$'\n'* && "$password" != *$'\r'* ]] \
+    || fail "local database password must not contain CR or LF"
+
+  password="${password//\\/\\\\}"
+  password="${password//\"/\\\"}"
+  printf '[client]\npassword="%s"\n' "$password" > "$output_file"
+  chmod 600 "$output_file"
+}
+
+run_mysql_client() (
+  local cleanup_command
+  local defaults_file
+
+  umask 077
+  defaults_file="$(mktemp /tmp/ssing-mysql-client.XXXXXX)"
+  printf -v cleanup_command 'rm -f -- %q' "$defaults_file"
+  trap "$cleanup_command" EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  write_mysql_client_defaults_file "$defaults_file"
+
+  # MySQL client에는 임시 설정 파일만 전달하고 부모 프로세스의 비밀번호 환경변수는 상속하지 않는다.
+  unset MYSQL_PWD SSING_LOCAL_DB_ROOT_PASSWORD
+  docker run --rm --interactive \
     --network "container:${SSING_LOCAL_DB_CONTAINER}" \
-    --env MYSQL_PWD \
+    --mount "type=bind,src=${defaults_file},dst=${MYSQL_CLIENT_DEFAULTS_PATH},readonly" \
     "$MYSQL_IMAGE" \
     mysql \
+    "--defaults-extra-file=${MYSQL_CLIENT_DEFAULTS_PATH}" \
     --protocol=TCP \
     --host=127.0.0.1 \
     --port=3306 \
     --user=root \
     --database="${SSING_LOCAL_DB_NAME}" \
-    --show-warnings \
-    < "$sql_file"
+    "$@"
+)
+
+run_mysql_file() {
+  local sql_file="$1"
+  [[ -f "$sql_file" ]] || fail "SQL file not found: $sql_file"
+
+  run_mysql_client --show-warnings < "$sql_file"
 }
 
 run_mysql_query() {
   local sql="$1"
 
-  MYSQL_PWD="${SSING_LOCAL_DB_ROOT_PASSWORD}" docker run --rm \
-    --network "container:${SSING_LOCAL_DB_CONTAINER}" \
-    --env MYSQL_PWD \
-    "$MYSQL_IMAGE" \
-    mysql \
-    --protocol=TCP \
-    --host=127.0.0.1 \
-    --port=3306 \
-    --user=root \
-    --database="${SSING_LOCAL_DB_NAME}" \
+  run_mysql_client \
     --batch \
     --raw \
     --execute="$sql"
