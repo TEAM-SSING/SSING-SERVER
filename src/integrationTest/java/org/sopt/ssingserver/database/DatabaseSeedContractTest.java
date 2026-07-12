@@ -2,6 +2,7 @@ package org.sopt.ssingserver.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,6 +13,8 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.matching.service.MatchingEventDispatcher;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchScheduler;
@@ -47,6 +50,7 @@ import tools.jackson.databind.ObjectMapper;
 })
 @AutoConfigureMockMvc
 @ActiveProfiles("integration-test")
+@Execution(ExecutionMode.SAME_THREAD)
 class DatabaseSeedContractTest {
 
     private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
@@ -101,7 +105,7 @@ class DatabaseSeedContractTest {
     @Autowired
     private MatchingSearchScheduler matchingSearchScheduler;
 
-    // 외부 실시간 전달은 별도 후속 검증으로 분리하고, 요청 생성·탐색·가격 저장은 실제 빈으로 검증한다.
+    // 외부 실시간 전달만 후속 검증으로 분리하고, 요청부터 결제·강습 저장까지는 실제 빈으로 검증한다.
     @MockitoBean
     private MatchingEventDispatcher matchingEventDispatcher;
 
@@ -121,7 +125,7 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void 소비자_API_생성과_강사_API_readback_후_scheduler를_실행해도_85000원_상태가_유지된다() throws Exception {
+    void 단건_매칭은_scheduler_재실행_후에도_85000원으로_결제되고_강습까지_확정된다() throws Exception {
         Long consumerMemberId = personaMemberId("consumer-default");
         Long instructorMemberId = personaMemberId("instructor-approved-default");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
@@ -147,8 +151,8 @@ class DatabaseSeedContractTest {
         JsonNode offerAfterScheduler = readInstructorOffer(instructorToken);
         assertConsumerReadback(consumerToken, matchingRequestId);
         assertPriceReadback(offerAfterScheduler);
-        assertThat(offerAfterScheduler.at("/data/items/0/offerId").asLong())
-                .isEqualTo(offerBeforeScheduler.at("/data/items/0/offerId").asLong());
+        long offerId = offerAfterScheduler.at("/data/items/0/offerId").asLong();
+        assertThat(offerId).isEqualTo(offerBeforeScheduler.at("/data/items/0/offerId").asLong());
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM matching_offers", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
@@ -163,6 +167,13 @@ class DatabaseSeedContractTest {
                 """,
                 Integer.class
         )).isEqualTo(1);
+
+        acceptInstructorOffer(instructorToken, offerId);
+        acceptConsumerConfirmation(consumerToken, matchingRequestId);
+        long lessonId = completeConsumerPayment(consumerToken, matchingRequestId);
+
+        assertConsumerConfirmedReadback(consumerToken, matchingRequestId, lessonId);
+        assertSingleRequestPaymentAndLesson(matchingRequestId, offerId, lessonId);
     }
 
     private JsonNode readInstructorOffer(String instructorToken) throws Exception {
@@ -193,6 +204,130 @@ class DatabaseSeedContractTest {
         assertThat(offer.at("/priceSummary/lessonPriceAmount").asInt()).isEqualTo(60_000);
         assertThat(offer.at("/priceSummary/resortPassFeeAmount").asInt()).isEqualTo(25_000);
         assertThat(offer.at("/priceSummary/totalPaymentAmount").asInt()).isEqualTo(85_000);
+    }
+
+    private void acceptInstructorOffer(String instructorToken, long offerId) throws Exception {
+        mockMvc.perform(patch("/api/v1/instructor/matching-offers/{offerId}", offerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"decision":"ACCEPTED"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.offerStatus").value("ACCEPTED"))
+                .andExpect(jsonPath("$.data.groupStatus").value("INSTRUCTOR_ACCEPTED"));
+    }
+
+    private void acceptConsumerConfirmation(String consumerToken, long matchingRequestId) throws Exception {
+        mockMvc.perform(patch(
+                        "/api/v1/consumer/matching-requests/{matchingRequestId}/confirmation",
+                        matchingRequestId
+                )
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"decision":"ACCEPTED"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingStatus").value("PAYMENT_PENDING"))
+                .andExpect(jsonPath("$.data.confirmationStatus").value("ACCEPTED"))
+                .andExpect(jsonPath("$.data.groupStatus").value("PAYMENT_PENDING"))
+                .andExpect(jsonPath("$.data.priceSummary.lessonPriceAmount").value(60_000))
+                .andExpect(jsonPath("$.data.priceSummary.resortPassFeeAmount").value(25_000))
+                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000));
+    }
+
+    private long completeConsumerPayment(String consumerToken, long matchingRequestId) throws Exception {
+        MvcResult result = mockMvc.perform(post(
+                        "/api/v1/consumer/matching-requests/{matchingRequestId}/payment",
+                        matchingRequestId
+                )
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingStatus").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data.paymentStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.groupStatus").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data.paidCount").value(1))
+                .andExpect(jsonPath("$.data.requiredCount").value(1))
+                .andExpect(jsonPath("$.data.lessonId").isNumber())
+                .andReturn();
+        return responseJson(result).at("/data/lessonId").asLong();
+    }
+
+    private void assertConsumerConfirmedReadback(
+            String consumerToken,
+            long matchingRequestId,
+            long lessonId
+    ) throws Exception {
+        mockMvc.perform(get("/api/v1/consumer/matching-requests/{matchingRequestId}", matchingRequestId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingStatus").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data.requestStatus").value("CONFIRMED"))
+                .andExpect(jsonPath("$.data.paymentStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.lessonId").value(lessonId))
+                .andExpect(jsonPath("$.data.priceSummary.lessonPriceAmount").value(60_000))
+                .andExpect(jsonPath("$.data.priceSummary.resortPassFeeAmount").value(25_000))
+                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000));
+    }
+
+    private void assertSingleRequestPaymentAndLesson(
+            long matchingRequestId,
+            long offerId,
+            long lessonId
+    ) {
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM matching_request_price_snapshots
+                WHERE matching_request_id = ?
+                  AND lesson_price_amount = 60000
+                  AND resort_pass_fee_amount = 25000
+                  AND consumer_payment_amount = 85000
+                """,
+                Integer.class,
+                matchingRequestId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM matching_request_payments
+                WHERE matching_request_id = ?
+                  AND matching_offer_id = ?
+                  AND amount = 85000
+                  AND status = 'COMPLETED'
+                  AND paid_at IS NOT NULL
+                """,
+                Integer.class,
+                matchingRequestId,
+                offerId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM lessons
+                WHERE id = ?
+                  AND matching_offer_id = ?
+                  AND total_headcount = 1
+                  AND status = 'CONFIRMED'
+                  AND confirmed_at = scheduled_at
+                """,
+                Integer.class,
+                lessonId,
+                offerId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM lesson_participants
+                WHERE lesson_id = ?
+                  AND matching_request_id = ?
+                """,
+                Integer.class,
+                lessonId,
+                matchingRequestId
+        )).isEqualTo(1);
     }
 
     private JsonNode responseJson(MvcResult result) throws Exception {

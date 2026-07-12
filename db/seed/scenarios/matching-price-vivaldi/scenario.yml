@@ -1,5 +1,5 @@
 scenario_key: matching-price-vivaldi
-purpose: Vivaldi Park single-request price calculation
+purpose: Vivaldi Park single-request price, payment, and lesson confirmation flow
 schema_version: 2
 scenario_type: FLOW
 scheduler_type: STABLE
@@ -36,6 +36,10 @@ action:
 expectation:
   initial_matching_status: SEARCHING
   next_matching_status: WAITING_FOR_INSTRUCTOR
+  confirmation_status: ACCEPTED
+  payment_status: COMPLETED
+  final_matching_status: CONFIRMED
+  lesson_status: CONFIRMED
   lesson_price_amount: 60000
   resort_pass_fee_amount: 25000
   total_payment_amount: 85000
@@ -54,16 +58,19 @@ deferred_checks:
     resume_when: 실시간 상태 복구 일괄 작업을 시작할 때
   - key: dev-database-adoption
     status: DEFERRED
-    reason: 기존 dev DB 스냅샷과 explicit baseline 전략이 확정된 뒤 승인된 수동 workflow로 적용한다.
+    reason: dev DB는 빈 DB로 V1부터 초기화하며, 승인된 migration·seed workflow와 dev auth 2차 경계는 별도 작업으로 적용한다.
     tracking:
       - https://github.com/TEAM-SSING/SSING-SERVER/issues/122
-    resume_when: dev DB 보존 또는 초기화 전략을 확정할 때
+    resume_when: dev migration·seed 적용 흐름을 구현할 때
   - key: scheduler-batch-fairness
     status: DEFERRED
     reason: 이 시나리오는 단일 요청 STABLE 계약만 증명하고 100건 초과 재탐색 공정성은 별도 버그로 관리한다.
     tracking:
       - https://github.com/TEAM-SSING/SSING-SERVER/issues/123
     resume_when: 재탐색 배치 공정성 수정을 시작할 때
+out_of_scope:
+  - key: multi-request-group-payment
+    reason: 다중 요청 그룹의 강습비 분담·반올림 정책은 현재 MVP에서 활성화하지 않는다.
 notes:
   - availableDurationMinutes는 시트에 없어 request_006_a의 120분에서 보정했다.
-  - MatchingRequest와 가격 snapshot은 SQL로 넣지 않고 API와 서버 계산으로 생성한다.
+  - MatchingRequest, 가격 snapshot, 결제, 강습은 SQL로 넣지 않고 API와 서버 계산으로 생성한다.

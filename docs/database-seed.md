@@ -9,11 +9,12 @@ This first slice provides a reproducible local/CI database for
 - Flyway V2 owns the mandatory active 0% platform fee policy.
 - Base seed owns the minimum Vivaldi resort and two anonymized login personas.
 - The matching-price-vivaldi FLOW scenario owns instructor exposure and price inputs.
-- The active matching request is created through the application flow, not direct SQL.
+- The matching request, payment, and lesson are created through the application flow,
+  not direct SQL.
 
 Development and production databases are not reset by these scripts. A dev reset
-workflow is intentionally deferred until /dev/auth/** has a second access boundary,
-the existing database adoption strategy is chosen, and an RDS snapshot is taken.
+workflow is intentionally deferred until /dev/auth/** has a second access boundary
+and an approved migration/seed workflow is implemented in issue #122.
 
 ## Local reset
 
@@ -60,6 +61,9 @@ db/seed/scenarios/matching-price-vivaldi/scenario.yml.
 3. The initial response is SEARCHING.
 4. The server creates the group, offer, and price snapshot through the normal flow.
 5. The expected next status is WAITING_FOR_INSTRUCTOR.
+6. The instructor accepts the offer and the consumer gives the final acceptance.
+7. The server creates a PENDING payment for 85,000 and the consumer completes it.
+8. The matching request becomes CONFIRMED and one confirmed lesson is created.
 
 Expected price:
 
@@ -91,12 +95,19 @@ the Spring Boot 4.1.0 managed Flyway version (currently 12.4.0), lets Hibernate
 validate the schema, reapplies the seed contract on another disposable MySQL,
 creates the request through authenticated MockMvc, reads the result through consumer
 and instructor APIs, and invokes the scheduler entrypoint once to prove the STABLE
-price scenario remains unchanged.
+price scenario remains unchanged. It then accepts the offer, accepts the consumer
+confirmation, completes the payment, and verifies the request price snapshot,
+85,000 payment, confirmed lesson, and participant through the real application flow.
 
 The application runtime does not include Flyway. Operational migration remains the
 responsibility of a pinned external runner.
 
 ## Existing database adoption
+
+The current shared dev database is empty. Issue #122 therefore adopts it as a fresh
+database by migrating V1 and then V2 without an explicit baseline or legacy backfill.
+The approved dev workflow and second `/dev/auth/**` access boundary remain separate
+from this local/CI slice.
 
 Do not enable baselineOnMigrate. For a non-empty existing database:
 
@@ -110,18 +121,17 @@ Do not enable baselineOnMigrate. For a non-empty existing database:
 V2 is separate from V1 so the mandatory policy still runs after an explicit V1
 baseline.
 
-## Deliberately not completed in this slice
+## Outside the current MVP slice
 
-- Issue #105 remains open after this slice. This slice covers the local/CI seed
-  foundation and the single-request price flow, not every checklist item in the
-  umbrella issue.
+- Issue #105 is complete when this local/CI seed foundation and single-request
+  request-to-payment flow merge.
 - public dev persona seed and dev reset workflow
 - normal dev deployment migration wiring
 - all PM spreadsheet personas and scenarios
-- multi-request payment verification (the current service rejects grouped payment
-  creation when more than one request is present)
-- legacy data backfill when an existing database must be preserved
-- old-binary rollback compatibility for the current NOT NULL price columns
+- multi-request group payment, which the current MVP intentionally disables until
+  lesson-price allocation and rounding policy are decided
+- legacy data backfill and old-binary rollback for a future non-empty database;
+  these do not apply to the currently empty dev database
 
 ## Deferred follow-ups
 
