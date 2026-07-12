@@ -18,7 +18,7 @@ import org.springframework.web.method.HandlerMethod;
 public class SuccessResponseSchemaOperationCustomizer implements OperationCustomizer {
 
     private static final String NO_CONTENT = "204";
-    private static final String WILDCARD_MEDIA_TYPE = "*/*";
+    private static final String APPLICATION_JSON_MEDIA_TYPE = "application/json";
     private static final String COMPONENT_SCHEMA_PREFIX = "#/components/schemas/";
 
     @Override
@@ -36,7 +36,7 @@ public class SuccessResponseSchemaOperationCustomizer implements OperationCustom
         Schema<?> successSchema = createSuccessSchema(dataType.get());
         responses.forEach((responseCode, response) -> {
             if (isDocumentedSuccessResponse(responseCode)) {
-                resolveMediaTypes(response).forEach(mediaType -> mediaType.setSchema(successSchema));
+                resolveApplicationJsonMediaType(response).setSchema(successSchema);
             }
         });
         return operation;
@@ -66,17 +66,20 @@ public class SuccessResponseSchemaOperationCustomizer implements OperationCustom
                 && !NO_CONTENT.equals(responseCode);
     }
 
-    private Iterable<MediaType> resolveMediaTypes(ApiResponse response) {
+    private MediaType resolveApplicationJsonMediaType(ApiResponse response) {
         Content content = response.getContent();
         if (content == null) {
             content = new Content();
             response.setContent(content);
         }
 
-        if (content.isEmpty()) {
-            content.addMediaType(WILDCARD_MEDIA_TYPE, new MediaType());
+        MediaType applicationJson = content.get(APPLICATION_JSON_MEDIA_TYPE);
+        if (applicationJson == null) {
+            applicationJson = new MediaType();
+            content.addMediaType(APPLICATION_JSON_MEDIA_TYPE, applicationJson);
         }
-        return content.values();
+        content.remove("*/*");
+        return applicationJson;
     }
 
     private Schema<?> createSuccessSchema(ResolvableType dataType) {
@@ -91,14 +94,12 @@ public class SuccessResponseSchemaOperationCustomizer implements OperationCustom
         schema.addProperty(
                 "code",
                 new StringSchema()
-                        .description("성공 응답 코드")
-                        .example("SUCCESS")
+                        .description("API별 성공 응답 코드")
         );
         schema.addProperty(
                 "message",
                 new StringSchema()
-                        .description("성공 메시지")
-                        .example("요청이 성공했습니다.")
+                        .description("API별 성공 메시지")
         );
 
         Class<?> dataClass = dataType.resolve();

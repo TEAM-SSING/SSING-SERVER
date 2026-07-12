@@ -16,7 +16,7 @@ import org.springframework.web.method.HandlerMethod;
 public class SuccessResponseExampleOperationCustomizer implements OperationCustomizer {
 
     private static final String NO_CONTENT = "204";
-    private static final String WILDCARD_MEDIA_TYPE = "*/*";
+    private static final String APPLICATION_JSON_MEDIA_TYPE = "application/json";
 
     @Override
     public Operation customize(Operation operation, HandlerMethod handlerMethod) {
@@ -36,7 +36,7 @@ public class SuccessResponseExampleOperationCustomizer implements OperationCusto
         Map<String, Example> examples = createExamples(declaration);
         responses.forEach((responseCode, response) -> {
             if (isDocumentedSuccessResponse(responseCode)) {
-                resolveMediaTypes(response).forEach(mediaType -> mediaType.setExamples(examples));
+                resolveApplicationJsonMediaType(response).setExamples(examples);
             }
         });
         return operation;
@@ -49,17 +49,20 @@ public class SuccessResponseExampleOperationCustomizer implements OperationCusto
                 && !NO_CONTENT.equals(responseCode);
     }
 
-    private Iterable<MediaType> resolveMediaTypes(ApiResponse response) {
+    private MediaType resolveApplicationJsonMediaType(ApiResponse response) {
         Content content = response.getContent();
         if (content == null) {
             content = new Content();
             response.setContent(content);
         }
 
-        if (content.isEmpty()) {
-            content.addMediaType(WILDCARD_MEDIA_TYPE, new MediaType());
+        MediaType applicationJson = content.get(APPLICATION_JSON_MEDIA_TYPE);
+        if (applicationJson == null) {
+            applicationJson = new MediaType();
+            content.addMediaType(APPLICATION_JSON_MEDIA_TYPE, applicationJson);
         }
-        return content.values();
+        content.remove("*/*");
+        return applicationJson;
     }
 
     private Map<String, Example> createExamples(ApiSuccessExamples declaration) {

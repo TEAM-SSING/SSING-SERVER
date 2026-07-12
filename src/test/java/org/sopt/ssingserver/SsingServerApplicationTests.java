@@ -214,6 +214,9 @@ class SsingServerApplicationTests {
 					return;
 				}
 
+				assertThat(response.path("content").has("application/json"))
+						.as(operationKey + " " + responseCode + " application/json")
+						.isTrue();
 				response.path("content").forEachEntry((mediaTypeName, mediaType) -> {
 					JsonNode schemaProperties = mediaType.path("schema").path("properties");
 					assertThat(schemaProperties.has("success"))
@@ -230,6 +233,12 @@ class SsingServerApplicationTests {
 							.isFalse();
 					assertThat(schemaProperties.has("requestId"))
 							.as(operationKey + " " + responseCode + " " + mediaTypeName + " requestId")
+							.isFalse();
+					assertThat(schemaProperties.path("code").has("example"))
+							.as(operationKey + " " + responseCode + " " + mediaTypeName + " code example")
+							.isFalse();
+					assertThat(schemaProperties.path("message").has("example"))
+							.as(operationKey + " " + responseCode + " " + mediaTypeName + " message example")
 							.isFalse();
 				});
 			});
@@ -293,8 +302,8 @@ class SsingServerApplicationTests {
 				.path("responses")
 				.path("200")
 				.path("content");
-		assertThat(consumerLessonContent.has("application/json")).isFalse();
-		JsonNode consumerLessonExamples = consumerLessonContent.path("*/*").path("examples");
+		assertThat(consumerLessonContent.has("application/json")).isTrue();
+		JsonNode consumerLessonExamples = consumerLessonContent.path("application/json").path("examples");
 		assertThat(consumerLessonExamples.has("CONFIRMED")).isTrue();
 		assertThat(consumerLessonExamples.has("IN_PROGRESS")).isTrue();
 		assertThat(consumerLessonExamples.has("COMPLETED")).isTrue();
@@ -308,8 +317,8 @@ class SsingServerApplicationTests {
 				.path("responses")
 				.path("200")
 				.path("content");
-		assertThat(startConfirmationContent.has("application/json")).isFalse();
-		JsonNode startConfirmationExamples = startConfirmationContent.path("*/*").path("examples");
+		assertThat(startConfirmationContent.has("application/json")).isTrue();
+		JsonNode startConfirmationExamples = startConfirmationContent.path("application/json").path("examples");
 		assertThat(startConfirmationExamples.has("CONFIRMED_PENDING")).isTrue();
 		assertThat(startConfirmationExamples.has("IN_PROGRESS_STARTED")).isTrue();
 		assertThat(startConfirmationExamples.path("IN_PROGRESS_STARTED")
