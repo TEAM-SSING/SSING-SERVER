@@ -1,0 +1,15 @@
+{
+  "resort": "VIVALDI_PARK",
+  "sport": "SKI",
+  "lessonLevel": "FIRST_TIME",
+  "requestedDurationMinutes": [
+    120
+  ],
+  "participants": [
+    {
+      "age": 10,
+      "gender": "MALE"
+    }
+  ],
+  "equipmentReady": true
+}

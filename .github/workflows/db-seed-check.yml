@@ -1,0 +1,71 @@
+name: DB Seed Check
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/main/resources/db/migration/**"
+      - "src/main/java/org/sopt/ssingserver/domain/**/entity/**"
+      - "src/main/java/org/sopt/ssingserver/domain/**/enums/**"
+      - "src/main/java/org/sopt/ssingserver/global/entity/**"
+      - "db/seed/**"
+      - "scripts/db/**"
+      - "src/integrationTest/**"
+      - "build.gradle"
+      - ".github/workflows/db-seed-check.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/main/resources/db/migration/**"
+      - "src/main/java/org/sopt/ssingserver/domain/**/entity/**"
+      - "src/main/java/org/sopt/ssingserver/domain/**/enums/**"
+      - "src/main/java/org/sopt/ssingserver/global/entity/**"
+      - "db/seed/**"
+      - "scripts/db/**"
+      - "src/integrationTest/**"
+      - "build.gradle"
+      - ".github/workflows/db-seed-check.yml"
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  migration-and-seed:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: 저장소 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Java 21 실행 환경 준비
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Gradle 캐시와 실행 환경 준비
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: DB script 문법 검증
+        run: bash -n scripts/db/*.sh
+
+      - name: 외부 Flyway runner와 local reset 검증
+        run: |
+          ./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
+          ./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
+
+      - name: MySQL migration과 seed 계약 검증
+        run: ./gradlew integrationTest --no-daemon
+
+      - name: DB 테스트 결과 게시
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: (!cancelled())
+        with:
+          files: build/test-results/integrationTest/TEST-*.xml
+
+      - name: CI MySQL 정리
+        if: always()
+        run: docker compose --file docker-compose.local.yml down --volumes
