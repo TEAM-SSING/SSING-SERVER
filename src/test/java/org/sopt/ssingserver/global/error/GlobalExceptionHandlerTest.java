@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.sopt.ssingserver.global.logging.RequestIdFilter;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.springframework.http.HttpStatus;
@@ -65,6 +66,7 @@ class GlobalExceptionHandlerTest {
         try {
             GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory());
             MockHttpServletRequest request = requestWithRequestId("req-500");
+            MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-500");
 
             handler.handleException(new IllegalStateException("secret-detail"), request);
 
@@ -74,12 +76,14 @@ class GlobalExceptionHandlerTest {
             assertThat(event.getFormattedMessage()).isEqualTo("Unhandled server exception");
             assertThat(event.getThrowableProxy()).isNull();
             assertThat(event.getFormattedMessage()).doesNotContain("secret-detail", "req-500");
+            assertThat(event.getMDCPropertyMap()).containsEntry("request_id", "req-500");
             assertThat(keyValueMap(event))
                     .containsEntry("event", "http.request.unhandled_exception")
                     .containsEntry("error_code", "INTERNAL_ERROR")
                     .containsEntry("status", 500)
                     .containsEntry("exception_type", IllegalStateException.class.getName());
         } finally {
+            MDC.remove(RequestIdFilter.REQUEST_ID_MDC_KEY);
             logger.detachAppender(appender);
         }
     }
@@ -91,6 +95,7 @@ class GlobalExceptionHandlerTest {
 
         try {
             GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory());
+            MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-business-500");
 
             handler.handleBusinessException(
                     new BusinessException(CommonErrorCode.INTERNAL_ERROR),
@@ -100,12 +105,14 @@ class GlobalExceptionHandlerTest {
             assertThat(appender.list).hasSize(1);
             ILoggingEvent event = appender.list.getFirst();
             assertThat(event.getThrowableProxy()).isNull();
+            assertThat(event.getMDCPropertyMap()).containsEntry("request_id", "req-business-500");
             assertThat(keyValueMap(event))
-                    .containsEntry("event", "http.request.business_exception")
+                    .containsEntry("event", "http.request.unhandled_exception")
                     .containsEntry("error_code", "INTERNAL_ERROR")
                     .containsEntry("status", 500)
                     .containsEntry("exception_type", BusinessException.class.getName());
         } finally {
+            MDC.remove(RequestIdFilter.REQUEST_ID_MDC_KEY);
             logger.detachAppender(appender);
         }
     }

@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
         if (errorCode.getStatus().is5xxServerError()
                 && errorCode != CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE) {
             log.atError()
-                    .addKeyValue("event", "http.request.business_exception")
+                    .addKeyValue("event", "http.request.unhandled_exception")
                     .addKeyValue("error_code", errorCode.getCode())
                     .addKeyValue("status", errorCode.getStatus().value())
                     .addKeyValue("exception_type", exception.getClass().getName())
