@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDate;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
@@ -23,18 +25,29 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mysql.MySQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
-@DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=create")
+@DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=validate")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Testcontainers(disabledWithoutDocker = true)
 @Import(JpaAuditingConfig.class)
 class InstructorProfileJpaTest {
 
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.8");
+    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"));
+
+    static {
+        MYSQL.start();
+        Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .validateMigrationNaming(true)
+                .failOnMissingLocations(true)
+                .validateOnMigrate(true)
+                .baselineOnMigrate(false)
+                .cleanDisabled(true)
+                .load()
+                .migrate();
+    }
 
     @Autowired
     private EntityManager entityManager;
@@ -48,6 +61,11 @@ class InstructorProfileJpaTest {
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("spring.datasource.driver-class-name", MYSQL::getDriverClassName);
+    }
+
+    @AfterAll
+    static void stopMysql() {
+        MYSQL.stop();
     }
 
     @Test

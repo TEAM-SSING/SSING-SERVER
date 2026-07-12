@@ -13,14 +13,22 @@ java {
 	}
 }
 
-repositories {
-	mavenCentral()
+sourceSets {
+	integrationTest {
+		java.srcDir file('src/integrationTest/java')
+		resources.srcDir file('src/integrationTest/resources')
+		compileClasspath += sourceSets.main.output
+		runtimeClasspath += output + compileClasspath
+	}
 }
 
-dependencyManagement {
-	imports {
-		mavenBom 'org.testcontainers:testcontainers-bom:1.21.4'
-	}
+configurations {
+	integrationTestImplementation.extendsFrom testImplementation
+	integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+repositories {
+	mavenCentral()
 }
 
 dependencies {
@@ -42,9 +50,11 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-	testImplementation 'org.testcontainers:junit-jupiter'
-	testImplementation 'org.testcontainers:mysql'
+	integrationTestImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	integrationTestImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+	integrationTestImplementation 'org.testcontainers:testcontainers-mysql'
+	integrationTestImplementation 'org.flywaydb:flyway-core'
+	integrationTestImplementation 'org.flywaydb:flyway-mysql'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
@@ -52,4 +62,17 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+tasks.register('integrationTest', Test) {
+	description = 'Runs MySQL migration and seed contract tests.'
+	group = 'verification'
+	testClassesDirs = sourceSets.integrationTest.output.classesDirs
+	classpath = sourceSets.integrationTest.runtimeClasspath
+	shouldRunAfter tasks.named('test')
+	useJUnitPlatform()
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('integrationTest')
 }
