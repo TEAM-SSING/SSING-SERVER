@@ -1,154 +1,186 @@
-# Database migration and seed
+# 테스트 Seed 사용 가이드
 
-## Scope
+## 한눈에 보기
 
-This first slice provides a reproducible local/CI database for
-[issue #105](https://github.com/TEAM-SSING/SSING-SERVER/issues/105).
+테스트 seed는 두 층으로 나뉜다.
 
-- Flyway V1 owns the current full schema.
-- Flyway V2 owns the mandatory active 0% platform fee policy.
-- Base seed owns the minimum Vivaldi resort and two anonymized login personas.
-- The matching-price-vivaldi FLOW scenario owns instructor exposure and price inputs.
-- The matching request, payment, and lesson are created through the application flow,
-  not direct SQL.
+1. `db/seed/base`: 앱이 반드시 필요로 하는 공통 데이터
+2. `db/seed/scenarios`: 테스트 목적에 따라 골라 넣는 시나리오 데이터
 
-Development and production databases are not reset by these scripts. A dev reset
-workflow is intentionally deferred until /dev/auth/** has a second access boundary
-and an approved migration/seed workflow is implemented in issue #122.
+로컬 DB를 초기화할 때는 SQL 파일을 직접 하나씩 실행하지 말고 reset 스크립트를 사용한다.
+스크립트가 `clean → migrate → base → scenario → verify` 순서를 보장한다.
 
-## Local reset
+공유 dev DB와 운영 DB에는 이 스크립트를 사용할 수 없다. dev 적용은
+[#122](https://github.com/TEAM-SSING/SSING-SERVER/issues/122)에서 별도로 관리한다.
 
-Prerequisites:
+## 데이터 구성
 
-- Docker with Compose
-- no local data that must be preserved
-- the local application process is stopped
+### Base seed
 
-Run:
+- 스키장 9곳과 리프트권 금액
+- 활성 플랫폼 수수료 정책 1건(현재 0%)
+- API 흐름 검증용 익명 소비자 `consumer-default`
+- 승인 강사 `instructor-approved-default`
 
-    ./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
+수수료 정책은 Flyway migration이 소유한다. Base seed는 migration 이후 시나리오가
+공통으로 참조할 데이터만 넣는다.
 
-The command verifies the exact local container and schema before it connects, then
-runs:
+### Scenario seed
 
-    Flyway clean
-    → Flyway migrate
-    → Flyway validate
-    → base seed
-    → scenario seed
-    → SQL verification
-    → second migrate with no pending migration
-    → final validate
+| scenario key | 종류 | 용도 | 주의점 |
+| --- | --- | --- | --- |
+| `matching-price-vivaldi` | FLOW / STABLE | 매칭 요청부터 85,000원 결제와 강습 확정까지 검증 | 기본 골든 플로우 |
+| `matching-no-candidate-alpensia` | FLOW / STABLE | 후보가 없을 때 `SEARCHING` 유지 검증 | 즉시 `FAILED`가 되지 않음 |
+| `matching-multi-request-oak` | FLOW / STABLE | 한 소비자가 요청 4건과 참가자 16명을 독립 생성 | 다중 요청 묶음 결제는 MVP 제외 |
+| `pm-full-requested-catalog` | SNAPSHOT / TRANSITION | PM 스프레드시트 전체 입력 상태 조회 | 앱 실행 시 scheduler를 꺼야 함 |
 
-Seed SQL uses strict inserts against a clean schema. Do not execute an individual
-seed file twice and do not add INSERT IGNORE, unconditional upserts, or disabled
-foreign-key checks. Repeatability is provided by running the complete reset command.
+`FLOW`는 SQL로 시작 조건만 만들고 REST API로 상태를 바꾼다. `SNAPSHOT`은 PM이 준
+입력을 특정 시점의 DB 상태로 바로 구성한다. 따라서 `pm-full-requested-catalog`가
+정상 API 흐름을 모두 거쳤다는 뜻은 아니다.
 
-After reset, create the ignored local Spring configuration if needed:
+## 로컬에서 시나리오 하나 사용하기
 
-    cp config/application-local.example.yml application-local.yml
+필수 조건:
 
-Hibernate runs with ddl-auto=validate; it no longer owns local schema creation.
+- Docker와 Docker Compose가 실행 중이어야 한다.
+- 보존해야 할 로컬 DB 데이터가 없어야 한다.
+- 초기화 중에는 로컬 Spring 서버를 꺼야 한다.
 
-## Golden price flow
+기본 골든 플로우를 적용한다.
 
-The source mapping is documented in
-db/seed/scenarios/matching-price-vivaldi/scenario.yml.
+```bash
+./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
+```
 
-1. Issue a local token for consumer-default through POST /dev/auth/token.
-2. Send db/seed/scenarios/matching-price-vivaldi/request.json to
-   POST /api/v1/consumer/matching-requests.
-3. The initial response is SEARCHING.
-4. The server creates the group, offer, and price snapshot through the normal flow.
-5. The expected next status is WAITING_FOR_INSTRUCTOR.
-6. The instructor accepts the offer and the consumer gives the final acceptance.
-7. The server creates a PENDING payment for 85,000 and the consumer completes it.
-8. The matching request becomes CONFIRMED and one confirmed lesson is created.
+다른 시나리오는 마지막 key만 바꾼다.
 
-Expected price:
+```bash
+./scripts/db/reset-local.sh --confirm-local-reset matching-no-candidate-alpensia
+./scripts/db/reset-local.sh --confirm-local-reset matching-multi-request-oak
+./scripts/db/reset-local.sh --confirm-local-reset pm-full-requested-catalog
+```
 
-    lesson price       60,000
-    resort pass fee  + 25,000
-    platform fee      +     0
-    total payment     = 85,000
+모든 시나리오가 각각 깨끗한 DB에서 적용되는지 한 번에 확인하려면 다음 명령을 쓴다.
+마지막에는 알파벳순으로 가장 뒤인 `pm-full-requested-catalog` 상태가 DB에 남는다.
 
-The request maps PM request_006_a to instructor_profile_004 only as a technical
-price-flow match. The PM persona description does not establish child-teaching
-expertise, so this is not labeled an ideal persona match.
+```bash
+./scripts/db/reset-all-local.sh --confirm-local-reset
+```
 
-## Spreadsheet normalization recorded in this slice
+개별 seed SQL은 strict insert를 사용한다. 같은 DB에 SQL 파일만 두 번 실행하지 않는다.
+재실행이 필요하면 전체 reset 명령을 다시 실행한다.
 
-- lessonPassFeeAmount maps to resorts.pass_fee_amount.
-- Missing displayName reuses the confirmed resort name.
-- The setting sheet's resort belongs to instructor_profiles.resort_id.
-- minLevel/maxLevel becomes the lessonLevels collection.
-- Missing availableDurationMinutes is derived as 120 minutes from request_006_a.
-- Certification details are reduced to the current enum KSIA_SKI_LEVEL_1.
-- PM names and phone numbers are not copied into executable seed data.
+## 로컬 서버와 토큰 사용하기
 
-## CI
+최초 한 번 로컬 설정 파일을 만든다.
 
-.github/workflows/db-seed-check.yml runs the dedicated integrationTest task on a
-fresh MySQL 8.4.8 container. It first executes the same pinned Docker Flyway 12.10.0
-runner and reset script used locally. The integration-test classpath separately uses
-the Spring Boot 4.1.0 managed Flyway version (currently 12.4.0), lets Hibernate
-validate the schema, reapplies the seed contract on another disposable MySQL,
-creates the request through authenticated MockMvc, reads the result through consumer
-and instructor APIs, and invokes the scheduler entrypoint once to prove the STABLE
-price scenario remains unchanged. It then accepts the offer, accepts the consumer
-confirmation, completes the payment, and verifies the request price snapshot,
-85,000 payment, confirmed lesson, and participant through the real application flow.
+```bash
+cp config/application-local.example.yml application-local.yml
+```
 
-The application runtime does not include Flyway. Operational migration remains the
-responsibility of a pinned external runner.
+서버를 실행한 뒤 브라우저에서 `http://localhost:8080/dev/auth/console`을 열거나 API를
+직접 호출한다.
 
-## Existing database adoption
+```bash
+curl -X POST http://localhost:8080/dev/auth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"personaKey":"consumer-default"}'
 
-The current shared dev database is empty. Issue #122 therefore adopts it as a fresh
-database by migrating V1 and then V2 without an explicit baseline or legacy backfill.
-The approved dev workflow and second `/dev/auth/**` access boundary remain separate
-from this local/CI slice.
+curl -X POST http://localhost:8080/dev/auth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"personaKey":"instructor-approved-default"}'
+```
 
-Do not enable baselineOnMigrate. For a non-empty existing database:
+응답의 access token을 REST 요청의 `Authorization: Bearer <token>`에 넣는다.
+사용 가능한 persona는 `GET /dev/auth/personas`에서 확인한다.
 
-1. compare the live schema with V1;
-2. take a snapshot;
-3. prove Hibernate validation against the live schema;
-4. explicitly baseline at version 1;
-5. run V2 and later migrations;
-6. keep baselineOnMigrate=false.
+## PM 전체 스프레드시트 확인하기
 
-V2 is separate from V1 so the mandatory policy still runs after an explicit V1
-baseline.
+`pm-full-requested-catalog`는 PM 원본 105행을 모두 추적한다.
 
-## Outside the current MVP slice
+- 스키장 9건
+- 회원 13건
+- 매칭 요청 16건
+- 참가자 49건
+- 강사 프로필 4건
+- 매칭 설정 4건
+- 가격 정책 4건
+- 자격 원본 6건
 
-- Issue #105 is complete when this local/CI seed foundation and single-request
-  request-to-payment flow merge.
-- public dev persona seed and dev reset workflow
-- normal dev deployment migration wiring
-- all PM spreadsheet personas and scenarios
-- multi-request group payment, which the current MVP intentionally disables until
-  lesson-price allocation and rounding policy are decided
-- legacy data backfill and old-binary rollback for a future non-empty database;
-  these do not apply to the currently empty dev database
+현재 스키마로 표현 가능한 103행은 seed에 반영했다. 지원 enum이 없는 아래 자격 2행은
+억지 값으로 바꾸지 않고 `source-mapping.tsv`에 제외 사유를 기록했다.
 
-## Deferred follow-ups
+- `instructor_certification_003`: `TEAM_INTERNAL BASIC`
+- `instructor_certification_005`: `ATHLETE_CAREER`
 
-`realtime-reconnect-recovery` records the agreed deferral of WebSocket reconnect
-and event-loss recovery. It is tracked by
-[#79](https://github.com/TEAM-SSING/SSING-SERVER/issues/79),
-[#86](https://github.com/TEAM-SSING/SSING-SERVER/issues/86), and
-[#109](https://github.com/TEAM-SSING/SSING-SERVER/issues/109). This seed slice
-mocks only the external real-time event dispatcher; request creation,
-after-commit search, DB state, API readback, and the scheduler entrypoint remain
-real.
+실명·전화번호·생년월일·원문 persona 서사는 실행 SQL에 복사하지 않고 익명 기술
+fixture로 치환했다. 구조화된 승인/자격 값과 PM 설명이 충돌하는 강사 1명은
+`MAPPED_REVIEW_REQUIRED`로 표시해 실제 페르소나 적합성 판단과 분리했다.
 
-This deferral does not block the matching-price seed contract. It must be resumed
-when the real-time state-recovery batch starts.
+전체 snapshot의 매칭 요청은 모두 `REQUESTED` 시작 상태다. 조건이 맞는 강사가 있어
+scheduler가 실행되면 일부 요청이 `GROUPED`로 바뀔 수 있다. 원본 상태를 조회하려면
+다음처럼 scheduler를 끄고 서버를 실행한다.
 
-Dev database adoption and an approved seed workflow are tracked by
-[#122](https://github.com/TEAM-SSING/SSING-SERVER/issues/122). The scheduler
-contract in this slice proves one-request stability only; 100-request batch
-fairness is tracked separately by
-[#123](https://github.com/TEAM-SSING/SSING-SERVER/issues/123).
+```bash
+SSING_MATCHING_SEARCH_SCHEDULER_ENABLED=false ./gradlew bootRun
+```
+
+원본 행과 seed 행의 대응 관계는 다음 파일이 기준이다.
+
+```text
+db/seed/scenarios/pm-full-requested-catalog/source-mapping.tsv
+```
+
+## WebSocket 검증 방법
+
+WebSocket 이벤트 자체는 seed SQL에 저장할 수 없다. 대신 통합 테스트가 실제 임의
+포트에 접속해 다음 순서를 자동 검증한다.
+
+1. STOMP `CONNECT`에 seed 사용자의 access token을 전달한다.
+2. 강사가 `/user/queue/matching`을 구독한다.
+3. 소비자가 REST로 매칭을 요청하고 강사가 `MATCHING_OFFER_RECEIVED`를 받는다.
+4. 결제와 강습 생성 후 소비자·강사가 `/user/queue/lesson`을 구독한다.
+5. 두 사용자가 `LESSON_STARTED`, `LESSON_COMPLETED`를 받는다.
+6. 마지막 REST 조회와 DB 상태도 `COMPLETED`인지 확인한다.
+
+WebSocket 통합 테스트만 실행한다.
+
+```bash
+./gradlew integrationTest \
+  --tests 'org.sopt.ssingserver.database.SeedRealtimeFlowIntegrationTest'
+```
+
+전체 seed 계약과 REST/WebSocket 흐름을 함께 실행한다.
+
+```bash
+./gradlew integrationTest
+```
+
+이 테스트는 실제 handshake·인증·개인 큐 구독·메시지 직렬화를 확인하지만, 재접속과
+이벤트 유실 복구는 확인하지 않는다. 재접속은 [#79](https://github.com/TEAM-SSING/SSING-SERVER/issues/79),
+[#86](https://github.com/TEAM-SSING/SSING-SERVER/issues/86),
+[#109](https://github.com/TEAM-SSING/SSING-SERVER/issues/109)의 후속 범위다. 이벤트는 화면
+갱신 신호이고 최종 상태의 기준은 REST/DB라는 원칙은 그대로 유지한다.
+
+## 자동 검증과 CI
+
+`DatabaseSeedContractTest`는 모든 scenario 디렉터리를 찾아 각각 다음 조건으로 검증한다.
+
+- 깨끗한 MySQL 8.4.8에서 migration과 base seed 적용
+- scenario의 `scenario.yml`, `seed.sql`, `verify.sql` 존재 확인
+- scenario SQL과 검증 SQL 실행
+- 대표 FLOW를 REST와 scheduler 진입점까지 실행
+
+`db-seed-check.yml`은 로컬과 같은 `reset-all-local.sh`을 두 번 실행해 전체 reset의
+재실행 안전성을 확인하고, 별도의 Testcontainers DB에서 통합 테스트를 실행한다.
+
+## 현재 범위 밖의 후속 작업
+
+- 공유 dev DB migration/seed 적용: [#122](https://github.com/TEAM-SSING/SSING-SERVER/issues/122)
+- WebSocket 재접속과 이벤트 유실 복구: [#109](https://github.com/TEAM-SSING/SSING-SERVER/issues/109)
+- 100건을 넘는 재탐색 공정성: [#123](https://github.com/TEAM-SSING/SSING-SERVER/issues/123)
+- 다중 요청 그룹 결제와 강습비 분담/반올림 정책: 현재 MVP 범위 밖
+
+현재 비어 있는 dev DB는 #122에서 V1부터 fresh migration하는 방향이다. 비어 있지 않은
+기존 DB를 다룰 때만 live schema 비교·snapshot·명시적 baseline 절차를 별도로 설계하며,
+`baselineOnMigrate`는 자동 활성화하지 않는다.
