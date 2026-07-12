@@ -2,38 +2,39 @@ package org.sopt.ssingserver.global.swagger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class OpenApiProfileExposureTest {
 
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withInitializer(new ConfigDataApplicationContextInitializer());
+
     @Test
-    void 기본_설정은_Swagger를_끄고_dev와_local_설정은_켠다() throws Exception {
-        String baseConfig = Files.readString(Path.of("src/main/resources/application.yml"));
-        String devConfig = Files.readString(Path.of("src/main/resources/application-dev.yml"));
-        String localConfig = Files.readString(Path.of("src/main/resources/application-local.yml"));
-        String localExampleConfig = Files.readString(Path.of("config/application-local.example.yml"));
-
-        assertSwaggerExposure(baseConfig, false);
-        assertSwaggerExposure(devConfig, true);
-        assertSwaggerExposure(localConfig, true);
-        assertSwaggerExposure(localExampleConfig, true);
+    void 기본_profile은_local로_Swagger를_활성화한다() {
+        assertSwaggerExposure(contextRunner, true);
     }
 
-    private void assertSwaggerExposure(String config, boolean enabled) {
-        String expected = "enabled: " + enabled;
-        assertThat(config)
-                .contains("springdoc:")
-                .contains("api-docs:")
-                .contains("swagger-ui:");
-        assertThat(occurrenceCount(config, expected)).isGreaterThanOrEqualTo(2);
+    @Test
+    void local과_dev_profile은_Swagger를_활성화한다() {
+        assertSwaggerExposure(contextRunner.withPropertyValues("spring.profiles.active=local"), true);
+        assertSwaggerExposure(contextRunner.withPropertyValues("spring.profiles.active=dev"), true);
     }
 
-    private long occurrenceCount(String value, String target) {
-        return value.lines()
-                .map(String::trim)
-                .filter(target::equals)
-                .count();
+    @Test
+    void prod_profile은_Swagger를_비활성화한다() {
+        assertSwaggerExposure(contextRunner.withPropertyValues("spring.profiles.active=prod"), false);
+    }
+
+    private void assertSwaggerExposure(ApplicationContextRunner runner, boolean enabled) {
+        runner.run(context -> {
+            assertThat(context.getEnvironment()
+                    .getProperty("springdoc.api-docs.enabled", Boolean.class))
+                    .isEqualTo(enabled);
+            assertThat(context.getEnvironment()
+                    .getProperty("springdoc.swagger-ui.enabled", Boolean.class))
+                    .isEqualTo(enabled);
+        });
     }
 }

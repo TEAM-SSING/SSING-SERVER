@@ -11,6 +11,8 @@ HELP.md
 application-local.properties
 application-local.yml
 application-local.yaml
+# 공용 local 프로필 기본값은 추적하고, 루트/config의 개인 설정은 계속 무시한다.
+!src/main/resources/application-local.yml
 application-secret.properties
 application-secret.yml
 application-secret.yaml
