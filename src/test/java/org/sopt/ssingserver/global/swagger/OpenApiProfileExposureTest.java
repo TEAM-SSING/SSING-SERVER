@@ -9,13 +9,15 @@ import org.junit.jupiter.api.Test;
 class OpenApiProfileExposureTest {
 
     @Test
-    void 기본_설정은_Swagger를_끄고_dev와_local_예시는_켠다() throws Exception {
+    void 기본_설정은_Swagger를_끄고_dev와_local_설정은_켠다() throws Exception {
         String baseConfig = Files.readString(Path.of("src/main/resources/application.yml"));
         String devConfig = Files.readString(Path.of("src/main/resources/application-dev.yml"));
+        String localConfig = Files.readString(Path.of("src/main/resources/application-local.yml"));
         String localExampleConfig = Files.readString(Path.of("config/application-local.example.yml"));
 
         assertSwaggerExposure(baseConfig, false);
         assertSwaggerExposure(devConfig, true);
+        assertSwaggerExposure(localConfig, true);
         assertSwaggerExposure(localExampleConfig, true);
     }
 
