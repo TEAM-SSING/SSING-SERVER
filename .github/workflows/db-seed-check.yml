@@ -69,12 +69,12 @@ jobs:
           test "$exit_code" -eq 2
           grep -q -- "--confirm-local-reset" <<< "$output"
 
-      - name: 외부 Flyway runner와 local reset 검증
+      - name: 모든 seed scenario local reset 검증
         env:
           SSING_LOCAL_DB_ROOT_PASSWORD: 'local seed #42;"quoted"=value'
         run: |
-          ./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
-          ./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
+          ./scripts/db/reset-all-local.sh --confirm-local-reset
+          ./scripts/db/reset-all-local.sh --confirm-local-reset
 
       - name: MySQL migration과 seed 계약 검증
         run: ./gradlew integrationTest --no-daemon
