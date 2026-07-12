@@ -21,6 +21,8 @@ public interface InstructorMatchingSettingRepository extends JpaRepository<Instr
     // 강사 본인 노출 조건 조회/수정 API의 기존 설정 조회
     Optional<InstructorMatchingSetting> findByInstructorProfileId(Long instructorProfileId);
 
+    long countByIsExposedTrue();
+
     // 소비자 요청 조건과 강사 노출 조건이 모두 맞고 희망 시간 교집합이 있는 강사 후보 조회
     @Query("""
             select distinct setting

@@ -14,9 +14,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse;
 import org.sopt.ssingserver.domain.home.dto.response.ConsumerHomeResponse.LessonCardResponse;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository;
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
+import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ConsumerHomeServiceTest {
@@ -29,9 +32,20 @@ class ConsumerHomeServiceTest {
             LessonStatus.CONFIRMED,
             LessonStatus.IN_PROGRESS
     );
+    private static final List<MatchingRequestStatus> MATCHING_CONSUMER_COUNT_STATUSES = List.of(
+            MatchingRequestStatus.REQUESTED,
+            MatchingRequestStatus.GROUPED,
+            MatchingRequestStatus.MATCHED
+    );
 
     @Mock
     private LessonParticipantRepository lessonParticipantRepository;
+
+    @Mock
+    private MatchingRequestRepository matchingRequestRepository;
+
+    @Mock
+    private InstructorMatchingSettingRepository instructorMatchingSettingRepository;
 
     @Test
     void getConsumerHome은_예정된_강습을_D_day와_함께_반환한다() {
@@ -45,10 +59,15 @@ class ConsumerHomeServiceTest {
         );
         when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(1L, UPCOMING_LESSON_STATUSES))
                 .thenReturn(List.of(lessonCard));
+        when(matchingRequestRepository.sumHeadcountByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES))
+                .thenReturn(7L);
+        when(instructorMatchingSettingRepository.countByIsExposedTrue())
+                .thenReturn(4L);
 
         ConsumerHomeResponse response = service.getConsumerHome(1L);
 
         assertThat(response.hasUnreadNotification()).isFalse();
+        assertThat(response.matchingPeopleCount()).isEqualTo(11L);
         assertThat(response.lessonCards()).hasSize(1);
         LessonCardResponse lesson = response.lessonCards().get(0);
         assertThat(lesson.lessonId()).isEqualTo(1L);
@@ -123,6 +142,8 @@ class ConsumerHomeServiceTest {
     private ConsumerHomeService createService() {
         return new ConsumerHomeService(
                 lessonParticipantRepository,
+                matchingRequestRepository,
+                instructorMatchingSettingRepository,
                 FIXED_CLOCK
         );
     }

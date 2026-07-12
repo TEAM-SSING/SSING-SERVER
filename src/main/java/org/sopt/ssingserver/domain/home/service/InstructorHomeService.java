@@ -52,6 +52,11 @@ public class InstructorHomeService {
             MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
             MatchingRequestGroupStatus.PAYMENT_PENDING
     );
+    private static final List<MatchingRequestStatus> MATCHING_CONSUMER_COUNT_STATUSES = List.of(
+            MatchingRequestStatus.REQUESTED,
+            MatchingRequestStatus.GROUPED,
+            MatchingRequestStatus.MATCHED
+    );
 
     private final LessonRepository lessonRepository;
     private final MatchingOfferRepository matchingOfferRepository;
@@ -122,10 +127,13 @@ public class InstructorHomeService {
 
         // TODO: 알림 읽음 여부 정책 확정 후 실제 조회로 교체함
         boolean hasUnreadNotification = false;
+        long matchingConsumerCount = matchingRequestRepository.sumHeadcountByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES);
+        long matchingInstructorCount = instructorMatchingSettingRepository.countByIsExposedTrue();
+        long matchingPeopleCount = matchingConsumerCount + matchingInstructorCount;
 
         return InstructorHomeResponse.from(
                 homeCards,
-                countSearchingConsumers(instructorProfile.getResort()),
+                matchingPeopleCount,
                 resolveReviewSummary(instructorProfile),
                 hasUnreadNotification
         );
@@ -286,18 +294,6 @@ public class InstructorHomeService {
                 .map(MatchingRequestGroupItem::getMatchingRequest)
                 .mapToLong(MatchingRequest::getHeadcount)
                 .sum();
-    }
-
-    // 강사 소속 리조트에서 아직 매칭 그룹으로 확정되지 않은 대기 수요 인원 계산함
-    private long countSearchingConsumers(Resort resort) {
-        if (resort == null) {
-            return 0;
-        }
-
-        return matchingRequestRepository.sumHeadcountByResortIdAndStatus(
-                resort.getId(),
-                MatchingRequestStatus.REQUESTED
-        );
     }
 
     // 강습 상태와 예정일 기준으로 홈 카드의 D-day 값 계산함

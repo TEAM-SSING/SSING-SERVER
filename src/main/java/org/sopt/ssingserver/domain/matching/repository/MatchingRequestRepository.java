@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.matching.repository;
 
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
@@ -61,16 +62,12 @@ public interface MatchingRequestRepository extends JpaRepository<MatchingRequest
             Pageable pageable
     );
 
-    // 강사 홈 상단에 표시할 리조트별 매칭 중 소비자 수 합산
+    // 전체 서비스에서 매칭 중인 소비자 인원 수 계산을 위한 요청 headcount 합산
     @Query("""
             select coalesce(sum(matchingRequest.headcount), 0)
             from MatchingRequest matchingRequest
-            where matchingRequest.resort.id = :resortId
-              and matchingRequest.status = :status
+            where matchingRequest.status in :statuses
             """)
-    long sumHeadcountByResortIdAndStatus(
-            @Param("resortId") Long resortId,
-            @Param("status") MatchingRequestStatus status
-    );
+    long sumHeadcountByStatusIn(@Param("statuses") Collection<MatchingRequestStatus> statuses);
 
 }

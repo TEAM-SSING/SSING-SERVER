@@ -59,6 +59,11 @@ class InstructorHomeServiceTest {
             LessonStatus.CONFIRMED,
             LessonStatus.IN_PROGRESS
     );
+    private static final List<MatchingRequestStatus> MATCHING_CONSUMER_COUNT_STATUSES = List.of(
+            MatchingRequestStatus.REQUESTED,
+            MatchingRequestStatus.GROUPED,
+            MatchingRequestStatus.MATCHED
+    );
 
     @Mock
     private LessonRepository lessonRepository;
@@ -105,7 +110,7 @@ class InstructorHomeServiceTest {
         InstructorHomeResponse response = service.getInstructorHome(1L);
 
         assertThat(response.lessonCards()).isEmpty();
-        assertThat(response.matchingConsumerCount()).isZero();
+        assertThat(response.matchingPeopleCount()).isZero();
         assertThat(response.reviewSummary().averageRating()).isNull();
         assertThat(response.reviewSummary().grade()).isNull();
         assertThat(response.reviewSummary().achievementRate()).isNull();
@@ -217,7 +222,9 @@ class InstructorHomeServiceTest {
                 1L,
                 UPCOMING_LESSON_STATUSES
         )).thenReturn(List.of());
-        when(matchingRequestRepository.sumHeadcountByResortIdAndStatus(100L, MatchingRequestStatus.REQUESTED))
+        when(matchingRequestRepository.sumHeadcountByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES))
+                .thenReturn(7L);
+        when(instructorMatchingSettingRepository.countByIsExposedTrue())
                 .thenReturn(3L);
 
         InstructorHomeResponse response = service.getInstructorHome(1L);
@@ -227,7 +234,7 @@ class InstructorHomeServiceTest {
         assertThat(lessonCard.title()).isEqualTo("매칭중");
         assertThat(lessonCard.scheduledAt())
                 .isEqualTo(OffsetDateTime.of(2026, 7, 9, 9, 30, 0, 0, ZoneOffset.ofHours(9)));
-        assertThat(response.matchingConsumerCount()).isEqualTo(3L);
+        assertThat(response.matchingPeopleCount()).isEqualTo(10L);
     }
 
     @Test
@@ -395,7 +402,6 @@ class InstructorHomeServiceTest {
 
     private Resort resortWithDetails() {
         Resort resort = mock(Resort.class);
-        when(resort.getId()).thenReturn(100L);
         when(resort.getCode()).thenReturn("HIGH1");
         when(resort.getDisplayName()).thenReturn("하이원");
         return resort;
