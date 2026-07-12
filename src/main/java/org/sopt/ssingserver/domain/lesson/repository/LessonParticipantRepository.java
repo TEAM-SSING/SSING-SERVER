@@ -32,12 +32,10 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
               and lesson.status in :statuses
             order by lesson.scheduledAt asc
             """)
-    default List<HomeLessonCardProjection> findHomeLessonCardsByMemberIdAndLessonStatusIn(
+    List<HomeLessonCardProjection> findHomeLessonCardsByMemberIdAndLessonStatusIn(
             @Param("memberId") Long memberId,
             @Param("statuses") Collection<LessonStatus> statuses
-    ) {
-        return null;
-    }
+    );
 
     // 강습 상세에 표시할 전체 강습생을 팀별 순서로 조회
     @Query("""
