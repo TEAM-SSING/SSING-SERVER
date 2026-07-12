@@ -99,7 +99,9 @@ def read_lines(path):
 
 def validate_lines(lines, required_events=()):
     parsed_events = []
-    for number, line in enumerate((line for line in lines if line.strip()), start=1):
+    for number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
         try:
             event = json.loads(line)
         except json.JSONDecodeError as exc:

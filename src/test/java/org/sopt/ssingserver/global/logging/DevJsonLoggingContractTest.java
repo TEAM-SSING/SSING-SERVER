@@ -198,6 +198,9 @@ class DevJsonLoggingContractTest {
         assertThat(events).hasSize(2);
         JsonNode detail = encode(events.getFirst());
         JsonNode summary = encode(events.getLast());
+        assertBaseFields(detail);
+        assertThat(detail.path("event").asString())
+                .isEqualTo("matching.offer.expiration.failed");
         assertBaseFields(summary);
         assertThat(summary.path("event").asString())
                 .isEqualTo("matching.offer.expiration.batch.completed");

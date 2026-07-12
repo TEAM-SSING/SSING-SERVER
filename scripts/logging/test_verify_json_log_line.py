@@ -27,6 +27,16 @@ class VerifyJsonLogLineTest(unittest.TestCase):
 
         self.assertTrue(valid, message)
 
+    def test_blank_lines_preserve_original_error_line_number(self):
+        valid, message = validate_lines([
+            json.dumps(BASE_EVENT),
+            "",
+            "not-json",
+        ])
+
+        self.assertFalse(valid)
+        self.assertIn("line 3", message)
+
     def test_http_event_requires_request_id(self):
         event = {
             **BASE_EVENT,
@@ -42,13 +52,13 @@ class VerifyJsonLogLineTest(unittest.TestCase):
         self.assertFalse(valid)
         self.assertIn("request_id", message)
 
-    def test_ids_must_be_strings(self):
-        event = {**BASE_EVENT, "event": "domain.event.failed", "event_id": 42}
+    def test_custom_id_suffix_fields_must_be_strings(self):
+        event = {**BASE_EVENT, "matching_request_id": 42}
 
         valid, message = validate_lines([json.dumps(event)])
 
         self.assertFalse(valid)
-        self.assertIn("non-string", message)
+        self.assertIn("non-string id fields", message)
 
     def test_partial_batch_requires_job_run_id(self):
         event = {
