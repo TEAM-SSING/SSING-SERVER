@@ -16,7 +16,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingSearchResult;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -138,10 +141,16 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
         }
     }
 
-    // OFFERED만이 아니라 수락 후 결제 대기인 협상도 같은 강사를 새 후보로 뽑지 않는 실제 JPQL 조건을 검증한다.
-    @Test
-    void paymentPending_수락협상이_있는강사는_새제안을_받지않는다() {
-        long firstRequestId = createRequestedMatchingRequest("결제대기소비자1");
+    // 강사 수락 직후부터 결제 대기까지 모든 활성 협상 상태가 실제 JPQL에서 새 후보 선정을 막는지 검증한다.
+    @ParameterizedTest(name = "{0} 활성 협상이 있으면 새 제안을 차단한다")
+    @EnumSource(
+            value = MatchingRequestGroupStatus.class,
+            names = {"INSTRUCTOR_ACCEPTED", "PAYMENT_PENDING"}
+    )
+    void accepted_활성협상이_있는강사는_새제안을_받지않는다(
+            MatchingRequestGroupStatus activeGroupStatus
+    ) {
+        long firstRequestId = createRequestedMatchingRequest("활성협상소비자1");
         MatchingSearchResult firstResult = matchingSearchService.search(firstRequestId);
         assertThat(firstResult.matchingStatus())
                 .isSameAs(MatchingStatus.WAITING_FOR_INSTRUCTOR);
@@ -151,11 +160,12 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
                 firstResult.groupId()
         );
         jdbcTemplate.update(
-                "UPDATE matching_request_groups SET status = 'PAYMENT_PENDING' WHERE id = ?",
+                "UPDATE matching_request_groups SET status = ? WHERE id = ?",
+                activeGroupStatus.name(),
                 firstResult.groupId()
         );
 
-        long secondRequestId = createRequestedMatchingRequest("결제대기소비자2");
+        long secondRequestId = createRequestedMatchingRequest("활성협상소비자2");
         MatchingSearchResult secondResult = matchingSearchService.search(secondRequestId);
 
         assertThat(secondResult.matchingStatus())

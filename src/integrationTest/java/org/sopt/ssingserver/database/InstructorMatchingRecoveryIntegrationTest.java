@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
+import org.sopt.ssingserver.domain.matching.enums.MatchingOfferDecision;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -38,6 +39,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
@@ -221,6 +224,96 @@ class InstructorMatchingRecoveryIntegrationTest {
                 .andExpect(jsonPath("$.data.expiresAt").doesNotExist());
     }
 
+    @Test
+    void WebSocket이끊긴강사는_강사수락직후_WAITING_FOR_CONFIRMATION을복구하고_확정후홈으로전환한다()
+            throws Exception {
+        Long consumerMemberId = personaMemberId("consumer-default");
+        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
+        String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
+
+        EventSubscription initialSubscription = subscribe(instructorToken, "/user/queue/matching");
+        long matchingRequestId = createMatchingRequest(consumerToken);
+        JsonNode matchingEvent = awaitEvent(initialSubscription.events(), "MATCHING_OFFER_RECEIVED");
+        long offerId = matchingEvent.path("offerId").asLong();
+        long groupId = matchingEvent.path("groupId").asLong();
+
+        initialSubscription.session().disconnect();
+        acceptInstructorOffer(instructorToken, offerId);
+
+        EventSubscription recoveredSubscription = subscribe(instructorToken, "/user/queue/matching");
+        assertThat(recoveredSubscription.session().isConnected()).isTrue();
+
+        mockMvc.perform(get("/api/v1/instructor/home")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lessonCards[0].offerId").value(offerId))
+                .andExpect(jsonPath("$.data.lessonCards[0].lessonId").doesNotExist())
+                .andExpect(jsonPath("$.data.lessonCards[0].displayStatus")
+                        .value("WAITING_FOR_CONFIRMATION"));
+
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.groupId").value(groupId))
+                .andExpect(jsonPath("$.data.offerStatus").value("ACCEPTED"))
+                .andExpect(jsonPath("$.data.groupStatus").value("INSTRUCTOR_ACCEPTED"))
+                .andExpect(jsonPath("$.data.matchingStatus").value("WAITING_FOR_CONFIRMATION"));
+
+        acceptConsumerConfirmation(consumerToken, matchingRequestId);
+        long lessonId = completeMatchingPayment(consumerToken, matchingRequestId);
+
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("MATCHING_OFFER_NOT_FOUND"))
+                .andExpect(jsonPath("$.errors").doesNotExist())
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        MvcResult homeResult = mockMvc.perform(get("/api/v1/instructor/home")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode confirmedLessonCard = findLessonCardByLessonId(
+                objectMapper.readTree(homeResult.getResponse().getContentAsByteArray()),
+                lessonId
+        );
+        assertThat(confirmedLessonCard.has("offerId")).isFalse();
+        assertThat(confirmedLessonCard.path("displayStatus").asText()).isEqualTo("CONFIRMED");
+    }
+
+    @Test
+    void 다른승인강사와_종료된제안의_상세조회는_MATCHING_OFFER_NOT_FOUND를_반환한다() throws Exception {
+        Long consumerMemberId = personaMemberId("consumer-default");
+        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
+        String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
+
+        EventSubscription subscription = subscribe(instructorToken, "/user/queue/matching");
+        createMatchingRequest(consumerToken);
+        long offerId = awaitEvent(subscription.events(), "MATCHING_OFFER_RECEIVED")
+                .path("offerId")
+                .asLong();
+
+        Long otherInstructorMemberId = createApprovedInstructorMember(
+                "복구검증다른강사",
+                "010-0000-0001"
+        );
+        String otherInstructorToken = accessTokenProvider.createAccessToken(
+                otherInstructorMemberId,
+                MemberRole.INSTRUCTOR
+        );
+
+        assertOfferDetailNotFound(otherInstructorToken, offerId);
+
+        respondInstructorOffer(instructorToken, offerId, MatchingOfferDecision.REJECTED);
+
+        assertOfferDetailNotFound(instructorToken, offerId);
+    }
+
     private EventSubscription subscribe(String token, String destination) throws Exception {
         StompHeaders connectHeaders = new StompHeaders();
         connectHeaders.add(HttpHeaders.AUTHORIZATION, bearer(token));
@@ -272,12 +365,20 @@ class InstructorMatchingRecoveryIntegrationTest {
     }
 
     private void acceptInstructorOffer(String instructorToken, long offerId) throws Exception {
+        respondInstructorOffer(instructorToken, offerId, MatchingOfferDecision.ACCEPTED);
+    }
+
+    private void respondInstructorOffer(
+            String instructorToken,
+            long offerId,
+            MatchingOfferDecision decision
+    ) throws Exception {
         mockMvc.perform(patch("/api/v1/instructor/matching-offers/{offerId}", offerId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"decision":"ACCEPTED"}
-                                """))
+                                {"decision":"%s"}
+                                """.formatted(decision.name())))
                 .andExpect(status().isOk());
     }
 
@@ -292,6 +393,106 @@ class InstructorMatchingRecoveryIntegrationTest {
                                 {"decision":"ACCEPTED"}
                                 """))
                 .andExpect(status().isOk());
+    }
+
+    private long completeMatchingPayment(String consumerToken, long matchingRequestId) throws Exception {
+        MvcResult result = mockMvc.perform(post(
+                        "/api/v1/consumer/matching-requests/{matchingRequestId}/payment",
+                        matchingRequestId
+                )
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsByteArray())
+                .at("/data/lessonId")
+                .asLong();
+    }
+
+    private Long createApprovedInstructorMember(String nickname, String phone) {
+        long memberId = insertAndGetId(
+                """
+                INSERT INTO members (nickname, role, status, created_at, updated_at)
+                VALUES (?, 'INSTRUCTOR', 'ACTIVE', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+                """,
+                nickname
+        );
+        Long sourceInstructorMemberId = personaMemberId("instructor-approved-default");
+        int insertedProfiles = jdbcTemplate.update(
+                """
+                INSERT INTO instructor_profiles (
+                    member_id,
+                    resort_id,
+                    real_name,
+                    phone,
+                    gender,
+                    birth_date,
+                    intro,
+                    career_start_date,
+                    level,
+                    certificate_type,
+                    experience,
+                    approval_status,
+                    approved_at,
+                    created_at,
+                    updated_at
+                )
+                SELECT ?,
+                       resort_id,
+                       ?,
+                       ?,
+                       gender,
+                       birth_date,
+                       intro,
+                       career_start_date,
+                       level,
+                       certificate_type,
+                       experience,
+                       'APPROVED',
+                       UTC_TIMESTAMP(6),
+                       UTC_TIMESTAMP(6),
+                       UTC_TIMESTAMP(6)
+                FROM instructor_profiles
+                WHERE member_id = ?
+                """,
+                memberId,
+                nickname,
+                phone,
+                sourceInstructorMemberId
+        );
+        assertThat(insertedProfiles).isEqualTo(1);
+        return memberId;
+    }
+
+    private long insertAndGetId(String sql, Object... arguments) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> {
+            var statement = connection.prepareStatement(sql, new String[]{"id"});
+            for (int index = 0; index < arguments.length; index++) {
+                statement.setObject(index + 1, arguments[index]);
+            }
+            return statement;
+        }, keyHolder);
+        return keyHolder.getKey().longValue();
+    }
+
+    private void assertOfferDetailNotFound(String instructorToken, long offerId) throws Exception {
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("MATCHING_OFFER_NOT_FOUND"))
+                .andExpect(jsonPath("$.errors").doesNotExist())
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    private JsonNode findLessonCardByLessonId(JsonNode homeResponse, long lessonId) {
+        for (JsonNode lessonCard : homeResponse.at("/data/lessonCards")) {
+            if (lessonCard.has("lessonId") && lessonCard.path("lessonId").asLong() == lessonId) {
+                return lessonCard;
+            }
+        }
+        throw new AssertionError("Instructor home did not contain lesson card: " + lessonId);
     }
 
     private Long personaMemberId(String personaKey) {
