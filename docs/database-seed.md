@@ -177,12 +177,13 @@ WebSocket 통합 테스트만 실행한다.
 - 깨끗한 MySQL 8.4.8에서 migration과 base seed 적용
 - scenario의 `scenario.yml`, `seed.sql`, `verify.sql` 존재 확인
 - scenario SQL과 검증 SQL 실행
-- `integration-test` 공통 프로필에서 모든 `@Scheduled` 자동 실행과 매칭 scheduler 빈 차단
-- 대표 FLOW는 실제 업무 진입점인 `MatchingSearchTriggerService`를 명시적으로 실행
+- `integration-test` 공통 프로필에서 모든 `@Scheduled` 자동 실행 차단
+- `DatabaseSeedContractTest`에서만 실제 매칭 scheduler 빈을 선택 활성화하고 `runScheduledSearch()`를 수동 실행
 - PM snapshot의 103개 원본 매핑과 실제 DB 관계를 비교한 뒤, 조건이 맞는 2건의 전이와 재실행 멱등성 확인
 
-통합 테스트가 scheduler를 끄는 이유는 테스트가 60초 안에 끝나기를 기대하지 않고, 상태를
-바꾸는 시점을 테스트 코드가 직접 소유하기 위해서다. 전역 예약 작업이 꺼져 있어도 실제
+통합 테스트가 `@Scheduled` 자동 등록을 끄는 이유는 테스트가 60초 안에 끝나기를 기대하지 않고,
+상태를 바꾸는 시점을 테스트 코드가 직접 소유하기 위해서다. 실제 매칭 scheduler 빈은 수동
+호출하므로 운영 진입점부터 DB 상태 전이까지 검증한다. 전역 예약 작업이 꺼져 있어도 실제
 WebSocket 통합 테스트는 통과하므로 STOMP heartbeat와 업무 `@Scheduled` 작업도 분리해 검증한다.
 
 `db-seed-check.yml`은 로컬과 같은 `reset-all-local.sh`을 두 번 실행해 전체 reset의

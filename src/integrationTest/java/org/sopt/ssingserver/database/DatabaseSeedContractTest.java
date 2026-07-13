@@ -26,7 +26,6 @@ import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.matching.config.MatchingSearchSchedulerConfig;
 import org.sopt.ssingserver.domain.matching.service.MatchingEventDispatcher;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchScheduler;
-import org.sopt.ssingserver.domain.matching.service.MatchingSearchTriggerService;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -53,6 +52,7 @@ import tools.jackson.databind.ObjectMapper;
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.open-in-view=false",
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC",
+        "ssing.matching.search-scheduler.enabled=true",
         "ssing.auth.jwt.issuer=ssing-integration-test",
         "ssing.auth.jwt.secret=integration-test-secret-key-for-hs256-signature",
         "ssing.auth.kakao.app-id=1234"
@@ -112,7 +112,7 @@ class DatabaseSeedContractTest {
     private AccessTokenProvider accessTokenProvider;
 
     @Autowired
-    private MatchingSearchTriggerService matchingSearchTriggerService;
+    private MatchingSearchScheduler matchingSearchScheduler;
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -137,30 +137,30 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void integration_test에서는_시간에_따른_scheduler가_자동_실행되지_않는다() {
+    void integration_test에서는_예약_작업_자동_등록을_끄고_실제_매칭_scheduler_빈은_유지한다() {
         assertThat(applicationContext.containsBean(
                 TaskManagementConfigUtils.SCHEDULED_ANNOTATION_PROCESSOR_BEAN_NAME
         )).isFalse();
-        assertThat(applicationContext.getBeansOfType(MatchingSearchScheduler.class)).isEmpty();
+        assertThat(applicationContext.getBeansOfType(MatchingSearchScheduler.class)).hasSize(1);
         assertThat(applicationContext.containsBean(
                 MatchingSearchSchedulerConfig.MATCHING_SEARCH_TASK_SCHEDULER
-        )).isFalse();
+        )).isTrue();
     }
 
     @Test
-    void PM_snapshot은_원본_계약과_일치하고_명시적_재탐색에서만_GROUPED로_전이한다() throws Exception {
+    void PM_snapshot은_원본_계약과_일치하고_명시적_scheduler_실행에서만_GROUPED로_전이한다() throws Exception {
         applyScenario("pm-full-requested-catalog");
 
         PmSeedSnapshotContract.assertMatches(jdbcTemplate, objectMapper);
         assertPmCatalogTransitionCounts(16, 0, 0);
 
-        matchingSearchTriggerService.triggerAllRequested();
+        matchingSearchScheduler.runScheduledSearch();
 
         assertPmCatalogTransitionCounts(14, 2, 2);
         List<PmTransitionRelation> firstTransitionRelations = pmTransitionRelations();
         assertExpectedPmTransitionRelations(firstTransitionRelations);
 
-        matchingSearchTriggerService.triggerAllRequested();
+        matchingSearchScheduler.runScheduledSearch();
 
         assertPmCatalogTransitionCounts(14, 2, 2);
         List<PmTransitionRelation> secondTransitionRelations = pmTransitionRelations();
@@ -169,7 +169,7 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void 단건_매칭은_명시적_재탐색_후에도_85000원으로_결제되고_강습까지_확정된다() throws Exception {
+    void 단건_매칭은_scheduler_재실행_후에도_85000원으로_결제되고_강습까지_확정된다() throws Exception {
         applyScenario("matching-price-vivaldi");
         assertMandatoryAndSeedInvariants();
 
@@ -189,17 +189,17 @@ class DatabaseSeedContractTest {
                 .andReturn();
 
         long matchingRequestId = responseJson(creation).at("/data/matchingRequestId").asLong();
-        JsonNode offerBeforeRetrigger = readInstructorOffer(instructorToken);
+        JsonNode offerBeforeScheduler = readInstructorOffer(instructorToken);
         assertConsumerReadback(consumerToken, matchingRequestId);
-        assertPriceReadback(offerBeforeRetrigger);
+        assertPriceReadback(offerBeforeScheduler);
 
-        matchingSearchTriggerService.triggerAllRequested();
+        matchingSearchScheduler.runScheduledSearch();
 
-        JsonNode offerAfterRetrigger = readInstructorOffer(instructorToken);
+        JsonNode offerAfterScheduler = readInstructorOffer(instructorToken);
         assertConsumerReadback(consumerToken, matchingRequestId);
-        assertPriceReadback(offerAfterRetrigger);
-        long offerId = offerAfterRetrigger.at("/data/items/0/offerId").asLong();
-        assertThat(offerId).isEqualTo(offerBeforeRetrigger.at("/data/items/0/offerId").asLong());
+        assertPriceReadback(offerAfterScheduler);
+        long offerId = offerAfterScheduler.at("/data/items/0/offerId").asLong();
+        assertThat(offerId).isEqualTo(offerBeforeScheduler.at("/data/items/0/offerId").asLong());
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM matching_offers", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
@@ -224,7 +224,7 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void 후보가_없는_요청은_명시적_재탐색_후에도_SEARCHING을_유지한다() throws Exception {
+    void 후보가_없는_요청은_scheduler_실행_후에도_SEARCHING을_유지한다() throws Exception {
         applyScenario("matching-no-candidate-alpensia");
         String consumerToken = accessTokenProvider.createAccessToken(
                 personaMemberId("consumer-default"),
@@ -236,7 +236,7 @@ class DatabaseSeedContractTest {
                 "db/seed/scenarios/matching-no-candidate-alpensia/request.json"
         );
 
-        matchingSearchTriggerService.triggerAllRequested();
+        matchingSearchScheduler.runScheduledSearch();
 
         mockMvc.perform(get("/api/v1/consumer/matching-requests/{matchingRequestId}", matchingRequestId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
@@ -250,7 +250,7 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void 한_소비자는_오크밸리_네_요청과_열여섯_참가자를_독립적으로_생성한다() throws Exception {
+    void scheduler_실행_후에도_한_소비자의_오크밸리_네_요청과_열여섯_참가자를_유지한다() throws Exception {
         applyScenario("matching-multi-request-oak");
         Long memberId = personaMemberId("pm-consumer-007");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
@@ -263,7 +263,7 @@ class DatabaseSeedContractTest {
             ));
         }
 
-        matchingSearchTriggerService.triggerAllRequested();
+        matchingSearchScheduler.runScheduledSearch();
 
         for (Long matchingRequestId : matchingRequestIds) {
             mockMvc.perform(get("/api/v1/consumer/matching-requests/{matchingRequestId}", matchingRequestId)
@@ -287,6 +287,14 @@ class DatabaseSeedContractTest {
                 Integer.class,
                 memberId
         )).isEqualTo(16);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_request_groups",
+                Integer.class
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_offers",
+                Integer.class
+        )).isZero();
     }
 
     private JsonNode readInstructorOffer(String instructorToken) throws Exception {
