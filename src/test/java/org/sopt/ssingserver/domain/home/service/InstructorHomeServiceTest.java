@@ -3,7 +3,6 @@ package org.sopt.ssingserver.domain.home.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +22,7 @@ import org.sopt.ssingserver.domain.home.error.HomeErrorCode;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
+import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
@@ -150,16 +150,18 @@ class InstructorHomeServiceTest {
     @Test
     void getInstructorHome은_강사_제안_상태를_홈_displayStatus로_변환한다() {
         InstructorHomeService service = createService();
-        Resort resort = resortDisplayOnly();
-        MatchingRequest offeredRequest = matchingRequest(10L, MatchingRequestStatus.GROUPED, resort, 3, "김철수");
-        MatchingRequest acceptedRequest = matchingRequest(11L, MatchingRequestStatus.MATCHED, resort, 2, "박영희");
-        MatchingRequest paymentPendingRequest = matchingRequest(12L, null, resort, 4, "이민수");
+        Resort resort = highOneResort();
+        MatchingRequest offeredRequest = matchingRequest(resort, 3, "김철수");
+        offeredRequest.markGrouped();
+        MatchingRequest acceptedRequest = matchingRequest(resort, 2, "박영희");
+        MatchingRequest paymentPendingRequest = matchingRequest(resort, 4, "이민수");
         MatchingRequestGroup offeredGroup = matchingRequestGroup(20L, MatchingRequestGroupStatus.EXPOSED);
         MatchingRequestGroup acceptedGroup = matchingRequestGroup(21L, MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED);
         MatchingRequestGroup paymentPendingGroup = matchingRequestGroup(22L, MatchingRequestGroupStatus.PAYMENT_PENDING);
         MatchingOffer offeredOffer = matchingOffer(31L, offeredGroup, Instant.parse("2026-07-09T01:00:00Z"));
         MatchingOffer acceptedOffer = matchingOffer(32L, acceptedGroup, Instant.parse("2026-07-09T02:00:00Z"));
         MatchingOffer paymentPendingOffer = matchingOffer(33L, paymentPendingGroup, Instant.parse("2026-07-09T03:00:00Z"));
+        acceptedRequest.markMatched(acceptedOffer);
         MatchingRequestGroupItem offeredItem = groupItem(offeredRequest, offeredGroup);
         MatchingRequestGroupItem acceptedItem = groupItem(acceptedRequest, acceptedGroup);
         MatchingRequestGroupItem paymentPendingItem = groupItem(paymentPendingRequest, paymentPendingGroup);
@@ -204,9 +206,12 @@ class InstructorHomeServiceTest {
     @Test
     void getInstructorHome은_강사가_즉시노출_중이면_MATCHING_카드로_반환한다() {
         InstructorHomeService service = createService();
-        Resort resort = resortWithDetails();
+        Resort resort = highOneResort();
         InstructorProfile instructorProfile = instructorProfileWithResort(resort);
-        InstructorMatchingSetting matchingSetting = instructorMatchingSetting(true, Instant.parse("2026-07-09T00:30:00Z"));
+        InstructorMatchingSetting matchingSetting = exposedMatchingSetting(
+                instructorProfile,
+                Instant.parse("2026-07-09T00:30:00Z")
+        );
         when(instructorProfileRepository.findByMemberId(1L))
                 .thenReturn(Optional.of(instructorProfile));
         stubReviewSummary(null);
@@ -245,8 +250,9 @@ class InstructorHomeServiceTest {
     @Test
     void getInstructorHome은_제안_카드가_있으면_즉시노출_MATCHING_카드를_함께_반환하지_않는다() {
         InstructorHomeService service = createService();
-        Resort resort = resortDisplayOnly();
-        MatchingRequest matchingRequest = matchingRequest(10L, MatchingRequestStatus.GROUPED, resort, 3, "김철수");
+        Resort resort = highOneResort();
+        MatchingRequest matchingRequest = matchingRequest(resort, 3, "김철수");
+        matchingRequest.markGrouped();
         MatchingRequestGroup matchingRequestGroup = matchingRequestGroup(20L, MatchingRequestGroupStatus.EXPOSED);
         MatchingOffer matchingOffer = matchingOffer(30L, matchingRequestGroup, Instant.parse("2026-07-09T01:00:00Z"));
         MatchingRequestGroupItem groupItem = groupItem(matchingRequest, matchingRequestGroup);
@@ -283,14 +289,13 @@ class InstructorHomeServiceTest {
     @Test
     void getInstructorHome은_강사에게_배정된_확정_강습을_카드로_반환한다() {
         InstructorHomeService service = createService();
-        Resort resort = resortDisplayOnly();
-        MatchingRequest matchingRequest = matchingRequestWithRequesterNickname("김철수");
+        Resort resort = highOneResort();
+        MatchingRequest matchingRequest = matchingRequest(resort, 1, "김철수");
         MatchingRequestGroup matchingRequestGroup = matchingRequestGroupWithId(20L);
         MatchingOffer matchingOffer = matchingOfferWithGroup(matchingRequestGroup);
         MatchingRequestGroupItem groupItem = groupItem(matchingRequest, matchingRequestGroup);
-        Lesson lesson = lesson(
+        Lesson lesson = confirmedLesson(
                 40L,
-                LessonStatus.CONFIRMED,
                 Instant.parse("2026-07-12T01:00:00Z"),
                 4,
                 resort,
@@ -406,74 +411,51 @@ class InstructorHomeServiceTest {
         return instructorProfile;
     }
 
-    private Resort resortWithDetails() {
-        Resort resort = mock(Resort.class);
-        when(resort.getCode()).thenReturn("HIGH1");
-        when(resort.getDisplayName()).thenReturn("하이원");
-        return resort;
-    }
-
-    private Resort resortDisplayOnly() {
-        Resort resort = mock(Resort.class);
-        when(resort.getCode()).thenReturn("HIGH1");
-        when(resort.getDisplayName()).thenReturn("하이원");
-        return resort;
+    private Resort highOneResort() {
+        return Resort.create("HIGH1", "하이원 리조트", "하이원", 0);
     }
 
     private MatchingRequest matchingRequest(
-            Long id,
-            MatchingRequestStatus status,
             Resort resort,
             int headcount,
             String requesterNickname
     ) {
-        MatchingRequest matchingRequest = matchingRequest(id, status, resort, headcount);
-        Member member = mock(Member.class);
-        when(member.getNickname()).thenReturn(requesterNickname);
-        when(matchingRequest.getMember()).thenReturn(member);
-        return matchingRequest;
-    }
-
-    private MatchingRequest matchingRequestWithRequesterNickname(String requesterNickname) {
-        MatchingRequest matchingRequest = mock(MatchingRequest.class);
-        Member member = mock(Member.class);
-        when(member.getNickname()).thenReturn(requesterNickname);
-        when(matchingRequest.getMember()).thenReturn(member);
-        return matchingRequest;
-    }
-
-    private MatchingRequest matchingRequest(
-            Long id,
-            MatchingRequestStatus status,
-            Resort resort,
-            int headcount
-    ) {
-        MatchingRequest matchingRequest = mock(MatchingRequest.class);
-        if (status != null) {
-            when(matchingRequest.getStatus()).thenReturn(status);
-        }
-        when(matchingRequest.getResort()).thenReturn(resort);
-        when(matchingRequest.getSport()).thenReturn(Sport.SKI);
-        if (headcount > 0) {
-            when(matchingRequest.getHeadcount()).thenReturn(headcount);
-        }
-        return matchingRequest;
+        Member member = Member.create(
+                requesterNickname,
+                null,
+                MemberRole.CONSUMER,
+                MemberStatus.ACTIVE
+        );
+        return MatchingRequest.create(
+                member,
+                resort,
+                Sport.SKI,
+                LessonLevel.BEGINNER,
+                headcount,
+                List.of(60),
+                true
+        );
     }
 
     private MatchingRequestGroup matchingRequestGroup(
             Long id,
             MatchingRequestGroupStatus status
     ) {
-        MatchingRequestGroup matchingRequestGroup = mock(MatchingRequestGroup.class);
-        when(matchingRequestGroup.getId()).thenReturn(id);
-        when(matchingRequestGroup.getStatus()).thenReturn(status);
+        MatchingRequestGroup matchingRequestGroup = MatchingRequestGroup.createCandidate(60);
+        ReflectionTestUtils.setField(matchingRequestGroup, "id", id);
+        switch (status) {
+            case CANDIDATE -> {
+            }
+            case EXPOSED -> matchingRequestGroup.expose();
+            case INSTRUCTOR_ACCEPTED -> matchingRequestGroup.markInstructorAccepted();
+            case PAYMENT_PENDING -> matchingRequestGroup.markPaymentPending();
+            default -> throw new IllegalArgumentException("Unsupported home fixture group status: " + status);
+        }
         return matchingRequestGroup;
     }
 
     private MatchingRequestGroup matchingRequestGroupWithId(Long id) {
-        MatchingRequestGroup matchingRequestGroup = mock(MatchingRequestGroup.class);
-        when(matchingRequestGroup.getId()).thenReturn(id);
-        return matchingRequestGroup;
+        return matchingRequestGroup(id, MatchingRequestGroupStatus.CANDIDATE);
     }
 
     private MatchingOffer matchingOffer(
@@ -481,35 +463,41 @@ class InstructorHomeServiceTest {
             MatchingRequestGroup matchingRequestGroup,
             Instant exposedAt
     ) {
-        MatchingOffer matchingOffer = mock(MatchingOffer.class);
-        when(matchingOffer.getId()).thenReturn(id);
-        when(matchingOffer.getMatchingRequestGroup()).thenReturn(matchingRequestGroup);
-        when(matchingOffer.getExposedAt()).thenReturn(exposedAt);
+        MatchingOffer matchingOffer = MatchingOffer.create(
+                instructorProfile(),
+                matchingRequestGroup,
+                exposedAt
+        );
+        ReflectionTestUtils.setField(matchingOffer, "id", id);
         return matchingOffer;
     }
 
     private MatchingOffer matchingOfferWithGroup(MatchingRequestGroup matchingRequestGroup) {
-        MatchingOffer matchingOffer = mock(MatchingOffer.class);
-        when(matchingOffer.getMatchingRequestGroup()).thenReturn(matchingRequestGroup);
-        return matchingOffer;
+        return MatchingOffer.create(
+                instructorProfile(),
+                matchingRequestGroup,
+                Instant.parse("2026-07-09T00:00:00Z")
+        );
     }
 
-    private Lesson lesson(
+    private Lesson confirmedLesson(
             Long id,
-            LessonStatus status,
             Instant scheduledAt,
             int totalHeadcount,
             Resort resort,
             MatchingOffer matchingOffer
     ) {
-        Lesson lesson = mock(Lesson.class);
-        when(lesson.getId()).thenReturn(id);
-        when(lesson.getStatus()).thenReturn(status);
-        when(lesson.getScheduledAt()).thenReturn(scheduledAt);
-        when(lesson.getTotalHeadcount()).thenReturn(totalHeadcount);
-        when(lesson.getSport()).thenReturn(Sport.SKI);
-        when(lesson.getResort()).thenReturn(resort);
-        when(lesson.getMatchingOffer()).thenReturn(matchingOffer);
+        Lesson lesson = Lesson.createImmediateConfirmed(
+                instructorProfile(),
+                resort,
+                matchingOffer,
+                Sport.SKI,
+                LessonLevel.BEGINNER,
+                totalHeadcount,
+                60,
+                scheduledAt
+        );
+        ReflectionTestUtils.setField(lesson, "id", id);
         return lesson;
     }
 
@@ -517,20 +505,22 @@ class InstructorHomeServiceTest {
             MatchingRequest matchingRequest,
             MatchingRequestGroup matchingRequestGroup
     ) {
-        MatchingRequestGroupItem groupItem = mock(MatchingRequestGroupItem.class);
-        when(groupItem.getMatchingRequest()).thenReturn(matchingRequest);
-        when(groupItem.getMatchingRequestGroup()).thenReturn(matchingRequestGroup);
-        return groupItem;
+        return MatchingRequestGroupItem.createNotRequested(matchingRequest, matchingRequestGroup);
     }
 
-    private InstructorMatchingSetting instructorMatchingSetting(
-            boolean isExposed,
+    private InstructorMatchingSetting exposedMatchingSetting(
+            InstructorProfile instructorProfile,
             Instant updatedAt
     ) {
-        InstructorMatchingSetting setting = mock(InstructorMatchingSetting.class);
-        when(setting.isExposed()).thenReturn(isExposed);
-        when(setting.getSport()).thenReturn(Sport.SKI);
-        when(setting.getUpdatedAt()).thenReturn(updatedAt);
+        InstructorMatchingSetting setting = InstructorMatchingSetting.create(
+                instructorProfile,
+                Sport.SKI,
+                List.of(LessonLevel.BEGINNER),
+                List.of(60),
+                5,
+                true
+        );
+        ReflectionTestUtils.setField(setting, "updatedAt", updatedAt);
         return setting;
     }
 
