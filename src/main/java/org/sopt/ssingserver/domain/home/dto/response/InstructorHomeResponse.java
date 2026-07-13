@@ -61,6 +61,7 @@ public record InstructorHomeResponse(
         }
     }
 
+    @Schema(name = "InstructorHomeLessonCardResponse")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record LessonCardResponse(
             @Schema(description = "매칭 제안 ID", example = "21")
