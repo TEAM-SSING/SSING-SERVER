@@ -14,7 +14,6 @@ base_dependencies:
   - db/seed/base/010_dev_personas.sql
 source:
   spreadsheet: SSING 유저·강사 페르소나 목데이터
-  spreadsheet_id: 1d9HXXmTqaqIAzmMNy7eYw2djo9JQrC88asd8-o11cCU
   ranges:
     - resorts!A4:C12
     - members!A4:F16
