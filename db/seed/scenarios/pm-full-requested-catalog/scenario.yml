@@ -1,0 +1,84 @@
+scenario_key: pm-full-requested-catalog
+purpose: PM spreadsheet 전체 입력을 REQUESTED 시작 상태로 조회하는 local/CI catalog
+schema_version: 2
+scenario_type: SNAPSHOT
+scheduler_type: TRANSITION
+execution_scope:
+  - local
+  - ci
+required_runtime:
+  scheduled_jobs_enabled: false
+  matching_search_scheduler_enabled: false
+base_dependencies:
+  - db/seed/base/001_reference_data.sql
+  - db/seed/base/010_dev_personas.sql
+source:
+  spreadsheet: SSING 유저·강사 페르소나 목데이터
+  ranges:
+    - resorts!A4:C12
+    - members!A4:F16
+    - matching_requests!A4:L19
+    - matching_request_participants!A4:E52
+    - instructor_profiles!A4:K7
+    - instructor_matching_settings!A4:J7
+    - instructor_price_policies!A4:F7
+    - instructor_certifications_pending!A4:J9
+  mapping: source-mapping.tsv
+  snapshot_contract: expected-snapshot.tsv
+expected_rows:
+  resorts: 9
+  dev_personas: 13
+  instructor_profiles: 4
+  instructor_matching_settings: 4
+  instructor_price_policies: 4
+  instructor_profile_certificates: 4
+  matching_requests: 16
+  matching_request_participants: 49
+start_state:
+  matching_request_status: REQUESTED
+  matching_request_group_count: 0
+  matching_offer_count: 0
+  payment_count: 0
+  lesson_count: 0
+normalization:
+  personal_data: PM 실명·전화·생년월일·persona_raw를 복사하지 않고 익명 기술 fixture로 치환한다.
+  display_name: 리조트 name을 displayName으로 사용한다.
+  lesson_levels: minLevel부터 maxLevel까지 현재 enum의 명시 목록으로 펼친다.
+  instructor_level_experience: 시트에 없어 모든 강사를 level 1, experience 0으로 둔다.
+  available_durations:
+    instructor_matching_setting_001: [240]
+    instructor_matching_setting_002: [240]
+    instructor_matching_setting_003: [120]
+    instructor_matching_setting_004: [120]
+  certification: 지원 가능한 KSIA 자격만 현재 enum collection으로 축약한다.
+persona_review:
+  status: REVIEW_REQUIRED
+  source_keys:
+    - member_instructor_001
+    - instructor_profile_001
+    - instructor_matching_setting_001
+    - instructor_price_policy_001
+    - instructor_certification_001
+  reason: 구조화된 승인·자격값과 PM 서사가 모순되어 기술 fixture로만 재현하고 실제 적합성 판단은 보류한다.
+excluded_sources:
+  - source_key: instructor_certification_003
+    reason: TEAM_INTERNAL BASIC은 현재 certificate enum으로 표현할 수 없다.
+  - source_key: instructor_certification_005
+    reason: ATHLETE_CAREER는 현재 certificate enum으로 표현할 수 없다.
+notes:
+  - 이 SNAPSHOT은 앱 정상 FLOW로 도달했다는 뜻이 아니라 PM 입력 catalog를 보존한다.
+  - scheduler를 켜면 조건이 맞는 REQUESTED 요청이 GROUPED로 전이될 수 있다.
+  - 통합 테스트는 @Scheduled 자동 등록을 끄고 실제 MatchingSearchScheduler.runScheduledSearch()를 수동 호출해 전이를 검증한다.
+  - 공용 dev 기본 scenario로 사용하지 않고 local/CI에서만 선택 실행한다.
+  - WebSocket event와 계산 상태는 seed하지 않는다.
+deferred_checks:
+  - key: realtime-reconnect-recovery
+    status: DEFERRED
+    tracking:
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/79
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/86
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/109
+  - key: scheduler-batch-fairness
+    status: DEFERRED
+    tracking:
+      - https://github.com/TEAM-SSING/SSING-SERVER/issues/123

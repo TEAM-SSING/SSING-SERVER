@@ -1,0 +1,14 @@
+{
+  "resort": "OAK_VALLEY",
+  "sport": "SKI",
+  "lessonLevel": "BEGINNER",
+  "requestedDurationMinutes": [180],
+  "participants": [
+    {"age": 29, "gender": "MALE"},
+    {"age": 31, "gender": "FEMALE"},
+    {"age": 32, "gender": "MALE"},
+    {"age": 28, "gender": "FEMALE"},
+    {"age": 35, "gender": "MALE"}
+  ],
+  "equipmentReady": true
+}
