@@ -7,6 +7,7 @@ execution_scope:
   - local
   - ci
 required_runtime:
+  scheduled_jobs_enabled: false
   matching_search_scheduler_enabled: false
 base_dependencies:
   - db/seed/base/001_reference_data.sql
@@ -24,6 +25,7 @@ source:
     - instructor_price_policies!A4:F7
     - instructor_certifications_pending!A4:J9
   mapping: source-mapping.tsv
+  snapshot_contract: expected-snapshot.tsv
 expected_rows:
   resorts: 9
   dev_personas: 13
@@ -67,6 +69,7 @@ excluded_sources:
 notes:
   - 이 SNAPSHOT은 앱 정상 FLOW로 도달했다는 뜻이 아니라 PM 입력 catalog를 보존한다.
   - scheduler를 켜면 조건이 맞는 REQUESTED 요청이 GROUPED로 전이될 수 있다.
+  - 통합 테스트는 scheduler를 자동 실행하지 않고 MatchingSearchTriggerService를 명시적으로 호출해 전이를 검증한다.
   - 공용 dev 기본 scenario로 사용하지 않고 local/CI에서만 선택 실행한다.
   - WebSocket event와 계산 상태는 seed하지 않는다.
 deferred_checks:

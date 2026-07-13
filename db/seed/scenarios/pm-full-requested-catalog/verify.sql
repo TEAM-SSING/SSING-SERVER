@@ -17,6 +17,18 @@ SELECT (
     (SELECT COUNT(*)
      FROM dev_personas persona
      JOIN members member ON member.id = persona.member_id
+     WHERE member.role = 'CONSUMER'
+       AND (
+           (persona.persona_key LIKE 'pm-consumer-%'
+            AND member.nickname REGEXP '^목데이터소비자[0-9]{2}$')
+           OR
+           (persona.persona_key = 'consumer-default'
+            AND member.nickname = '가격검증소비자')
+       )) = 9
+    AND
+    (SELECT COUNT(*)
+     FROM dev_personas persona
+     JOIN members member ON member.id = persona.member_id
      WHERE member.status = 'ACTIVE'
        AND (
            (member.role = 'CONSUMER' AND persona.template = 'GENERAL_CONSUMER')
@@ -32,6 +44,24 @@ SELECT (
        AND approved_at IS NOT NULL
        AND level = 1
        AND experience = 0) = 4
+    AND
+    (SELECT COUNT(*)
+     FROM instructor_profiles profile
+     JOIN dev_personas persona ON persona.member_id = profile.member_id
+     JOIN members member ON member.id = profile.member_id
+     WHERE (
+         (persona.persona_key LIKE 'pm-instructor-approved-%'
+          AND member.nickname REGEXP '^목데이터강사[0-9]{2}$'
+          AND profile.real_name = member.nickname
+          AND profile.phone REGEXP '^010-0000-[0-9]{4}$'
+          AND profile.birth_date IN ('2000-01-01', '2000-01-02', '2000-01-03'))
+         OR
+         (persona.persona_key = 'instructor-approved-default'
+          AND member.nickname = '가격검증강사'
+          AND profile.real_name = '가격검증강사'
+          AND profile.phone = '010-0000-0000'
+          AND profile.birth_date = '1994-02-24')
+     )) = 4
     AND
     (SELECT COUNT(*) FROM instructor_profile_certificates) = 4
     AND
