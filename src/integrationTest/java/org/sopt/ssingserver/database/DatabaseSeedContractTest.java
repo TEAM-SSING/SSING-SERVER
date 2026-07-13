@@ -353,9 +353,19 @@ class DatabaseSeedContractTest {
 
     private void assertMandatoryAndSeedInvariants() {
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1",
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 0",
                 Integer.class
-        )).isEqualTo(2);
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'lesson_start_confirmations'
+                  AND column_name = 'status'
+                """,
+                Integer.class
+        )).isZero();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM platform_fee_policies WHERE is_active = 1 AND fee_rate_bps = 0",
                 Integer.class
