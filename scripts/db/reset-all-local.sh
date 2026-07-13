@@ -5,11 +5,11 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-confirmation="${1:-}"
-[[ "$confirmation" == "--confirm-local-reset" ]] || {
+[[ "$#" -eq 1 && "$1" == "--confirm-local-reset" ]] || {
   printf 'Usage: %s --confirm-local-reset\n' "$0" >&2
   exit 2
 }
+readonly confirmation="$1"
 
 scenario_found=false
 for scenario_directory in "$PROJECT_ROOT"/db/seed/scenarios/*; do

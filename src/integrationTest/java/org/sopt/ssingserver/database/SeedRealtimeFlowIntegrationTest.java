@@ -167,8 +167,12 @@ class SeedRealtimeFlowIntegrationTest {
                 .filter(StompSession::isConnected)
                 .forEach(StompSession::disconnect);
         sessions.clear();
-        stompClient.stop();
-        clientScheduler.shutdown();
+        if (stompClient != null) {
+            stompClient.stop();
+        }
+        if (clientScheduler != null) {
+            clientScheduler.shutdown();
+        }
         brokerChannel.removeInterceptor(subscriptionObserver);
     }
 

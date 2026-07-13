@@ -69,6 +69,16 @@ jobs:
           test "$exit_code" -eq 2
           grep -q -- "--confirm-local-reset" <<< "$output"
 
+      - name: 전체 reset 추가 인자 차단 검증
+        run: |
+          set +e
+          output=$(./scripts/db/reset-all-local.sh --confirm-local-reset unexpected-argument 2>&1)
+          exit_code=$?
+          set -e
+
+          test "$exit_code" -eq 2
+          grep -q -- "Usage:" <<< "$output"
+
       - name: 모든 seed scenario local reset 검증
         env:
           SSING_LOCAL_DB_ROOT_PASSWORD: 'local seed #42;"quoted"=value'
