@@ -29,7 +29,6 @@ import org.sopt.ssingserver.domain.lesson.entity.LessonParticipant;
 import org.sopt.ssingserver.domain.lesson.entity.LessonStartConfirmation;
 import org.sopt.ssingserver.domain.lesson.enums.LessonCancellationActor;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationActor;
-import org.sopt.ssingserver.domain.lesson.enums.LessonStartConfirmationStatus;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.error.LessonErrorCode;
 import org.sopt.ssingserver.domain.lesson.mapper.ConsumerLessonDetailResponseMapper;
@@ -321,7 +320,6 @@ class InstructorLessonDetailTest {
         ReflectionTestUtils.setField(confirmation, "member", member);
         ReflectionTestUtils.setField(confirmation, "matchingRequest", matchingRequest);
         ReflectionTestUtils.setField(confirmation, "actorType", actor);
-        ReflectionTestUtils.setField(confirmation, "status", LessonStartConfirmationStatus.CONFIRMED);
         ReflectionTestUtils.setField(confirmation, "confirmedAt", Instant.parse("2026-07-10T00:55:00Z"));
         return confirmation;
     }
