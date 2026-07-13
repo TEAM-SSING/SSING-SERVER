@@ -23,17 +23,21 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
+import org.sopt.ssingserver.domain.matching.config.MatchingSearchSchedulerConfig;
 import org.sopt.ssingserver.domain.matching.service.MatchingEventDispatcher;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchScheduler;
+import org.sopt.ssingserver.domain.matching.service.MatchingSearchTriggerService;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.scheduling.config.TaskManagementConfigUtils;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -49,8 +53,6 @@ import tools.jackson.databind.ObjectMapper;
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.open-in-view=false",
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC",
-        "spring.task.scheduling.enabled=false",
-        "ssing.matching.search-scheduler.enabled=true",
         "ssing.auth.jwt.issuer=ssing-integration-test",
         "ssing.auth.jwt.secret=integration-test-secret-key-for-hs256-signature",
         "ssing.auth.kakao.app-id=1234"
@@ -110,7 +112,10 @@ class DatabaseSeedContractTest {
     private AccessTokenProvider accessTokenProvider;
 
     @Autowired
-    private MatchingSearchScheduler matchingSearchScheduler;
+    private MatchingSearchTriggerService matchingSearchTriggerService;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     // 외부 실시간 전달만 후속 검증으로 분리하고, 요청부터 결제·강습 저장까지는 실제 빈으로 검증한다.
     @MockitoBean
@@ -132,7 +137,40 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void 단건_매칭은_scheduler_재실행_후에도_85000원으로_결제되고_강습까지_확정된다() throws Exception {
+    void integration_test에서는_시간에_따른_scheduler가_자동_실행되지_않는다() {
+        assertThat(applicationContext.containsBean(
+                TaskManagementConfigUtils.SCHEDULED_ANNOTATION_PROCESSOR_BEAN_NAME
+        )).isFalse();
+        assertThat(applicationContext.getBeansOfType(MatchingSearchScheduler.class)).isEmpty();
+        assertThat(applicationContext.containsBean(
+                MatchingSearchSchedulerConfig.MATCHING_SEARCH_TASK_SCHEDULER
+        )).isFalse();
+    }
+
+    @Test
+    void PM_snapshot은_원본_계약과_일치하고_명시적_재탐색에서만_GROUPED로_전이한다() throws Exception {
+        applyScenario("pm-full-requested-catalog");
+
+        PmSeedSnapshotContract.assertMatches(jdbcTemplate, objectMapper);
+        assertPmCatalogTransitionCounts(16, 0, 0);
+
+        matchingSearchTriggerService.triggerAllRequested();
+
+        assertPmCatalogTransitionCounts(14, 2, 2);
+        assertThat(groupedPmRequestKeys()).containsExactlyInAnyOrder(
+                "pm-consumer-001:HIGH1:SKI:BEGINNER",
+                "consumer-default:VIVALDI_PARK:SKI:FIRST_TIME"
+        );
+        List<String> firstTransitionRows = pmTransitionRows();
+
+        matchingSearchTriggerService.triggerAllRequested();
+
+        assertPmCatalogTransitionCounts(14, 2, 2);
+        assertThat(pmTransitionRows()).containsExactlyElementsOf(firstTransitionRows);
+    }
+
+    @Test
+    void 단건_매칭은_명시적_재탐색_후에도_85000원으로_결제되고_강습까지_확정된다() throws Exception {
         applyScenario("matching-price-vivaldi");
         assertMandatoryAndSeedInvariants();
 
@@ -152,17 +190,17 @@ class DatabaseSeedContractTest {
                 .andReturn();
 
         long matchingRequestId = responseJson(creation).at("/data/matchingRequestId").asLong();
-        JsonNode offerBeforeScheduler = readInstructorOffer(instructorToken);
+        JsonNode offerBeforeRetrigger = readInstructorOffer(instructorToken);
         assertConsumerReadback(consumerToken, matchingRequestId);
-        assertPriceReadback(offerBeforeScheduler);
+        assertPriceReadback(offerBeforeRetrigger);
 
-        matchingSearchScheduler.runScheduledSearch();
+        matchingSearchTriggerService.triggerAllRequested();
 
-        JsonNode offerAfterScheduler = readInstructorOffer(instructorToken);
+        JsonNode offerAfterRetrigger = readInstructorOffer(instructorToken);
         assertConsumerReadback(consumerToken, matchingRequestId);
-        assertPriceReadback(offerAfterScheduler);
-        long offerId = offerAfterScheduler.at("/data/items/0/offerId").asLong();
-        assertThat(offerId).isEqualTo(offerBeforeScheduler.at("/data/items/0/offerId").asLong());
+        assertPriceReadback(offerAfterRetrigger);
+        long offerId = offerAfterRetrigger.at("/data/items/0/offerId").asLong();
+        assertThat(offerId).isEqualTo(offerBeforeRetrigger.at("/data/items/0/offerId").asLong());
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM matching_offers", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
@@ -187,7 +225,7 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void 후보가_없는_요청은_scheduler_재실행_후에도_SEARCHING을_유지한다() throws Exception {
+    void 후보가_없는_요청은_명시적_재탐색_후에도_SEARCHING을_유지한다() throws Exception {
         applyScenario("matching-no-candidate-alpensia");
         String consumerToken = accessTokenProvider.createAccessToken(
                 personaMemberId("consumer-default"),
@@ -199,7 +237,7 @@ class DatabaseSeedContractTest {
                 "db/seed/scenarios/matching-no-candidate-alpensia/request.json"
         );
 
-        matchingSearchScheduler.runScheduledSearch();
+        matchingSearchTriggerService.triggerAllRequested();
 
         mockMvc.perform(get("/api/v1/consumer/matching-requests/{matchingRequestId}", matchingRequestId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
@@ -226,7 +264,7 @@ class DatabaseSeedContractTest {
             ));
         }
 
-        matchingSearchScheduler.runScheduledSearch();
+        matchingSearchTriggerService.triggerAllRequested();
 
         for (Long matchingRequestId : matchingRequestIds) {
             mockMvc.perform(get("/api/v1/consumer/matching-requests/{matchingRequestId}", matchingRequestId)
@@ -505,6 +543,54 @@ class DatabaseSeedContractTest {
                 """,
                 Integer.class
         )).isEqualTo(1);
+    }
+
+    private void assertPmCatalogTransitionCounts(int requested, int groups, int offers) {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_requests WHERE status = 'REQUESTED'",
+                Integer.class
+        )).isEqualTo(requested);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_request_groups",
+                Integer.class
+        )).isEqualTo(groups);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_offers",
+                Integer.class
+        )).isEqualTo(offers);
+    }
+
+    private List<String> groupedPmRequestKeys() {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT CONCAT(
+                    persona.persona_key, ':', resort.code, ':', request.sport, ':', request.lesson_level
+                )
+                FROM matching_requests request
+                JOIN dev_personas persona ON persona.member_id = request.member_id
+                JOIN resorts resort ON resort.id = request.resort_id
+                WHERE request.status = 'GROUPED'
+                ORDER BY request.id
+                """,
+                String.class
+        );
+    }
+
+    private List<String> pmTransitionRows() {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT CONCAT(
+                    group_table.id, ':', group_item.matching_request_id, ':', offer.id, ':', offer.status
+                )
+                FROM matching_request_groups group_table
+                JOIN matching_request_group_items group_item
+                  ON group_item.matching_request_group_id = group_table.id
+                JOIN matching_offers offer
+                  ON offer.matching_request_group_id = group_table.id
+                ORDER BY group_table.id, group_item.matching_request_id, offer.id
+                """,
+                String.class
+        );
     }
 
     private void runSql(String path) {

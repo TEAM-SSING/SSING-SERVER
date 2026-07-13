@@ -68,8 +68,6 @@ import tools.jackson.databind.ObjectMapper;
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.open-in-view=false",
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC",
-        "spring.task.scheduling.enabled=false",
-        "ssing.matching.search-scheduler.enabled=true",
         "ssing.auth.jwt.issuer=ssing-realtime-integration-test",
         "ssing.auth.jwt.secret=integration-test-secret-key-for-hs256-signature",
         "ssing.auth.kakao.app-id=1234",
