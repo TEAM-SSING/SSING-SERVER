@@ -157,16 +157,15 @@ class DatabaseSeedContractTest {
         matchingSearchTriggerService.triggerAllRequested();
 
         assertPmCatalogTransitionCounts(14, 2, 2);
-        assertThat(groupedPmRequestKeys()).containsExactlyInAnyOrder(
-                "pm-consumer-001:HIGH1:SKI:BEGINNER",
-                "consumer-default:VIVALDI_PARK:SKI:FIRST_TIME"
-        );
-        List<String> firstTransitionRows = pmTransitionRows();
+        List<PmTransitionRelation> firstTransitionRelations = pmTransitionRelations();
+        assertExpectedPmTransitionRelations(firstTransitionRelations);
 
         matchingSearchTriggerService.triggerAllRequested();
 
         assertPmCatalogTransitionCounts(14, 2, 2);
-        assertThat(pmTransitionRows()).containsExactlyElementsOf(firstTransitionRows);
+        List<PmTransitionRelation> secondTransitionRelations = pmTransitionRelations();
+        assertExpectedPmTransitionRelations(secondTransitionRelations);
+        assertThat(secondTransitionRelations).containsExactlyElementsOf(firstTransitionRelations);
     }
 
     @Test
@@ -560,37 +559,91 @@ class DatabaseSeedContractTest {
         )).isEqualTo(offers);
     }
 
-    private List<String> groupedPmRequestKeys() {
-        return jdbcTemplate.queryForList(
+    private void assertExpectedPmTransitionRelations(List<PmTransitionRelation> relations) {
+        assertThat(relations).hasSize(2);
+        assertThat(relations)
+                .extracting(PmTransitionRelation::requestKey)
+                .containsExactlyInAnyOrder(
+                        "pm-consumer-001:HIGH1:SKI:BEGINNER",
+                        "consumer-default:VIVALDI_PARK:SKI:FIRST_TIME"
+                );
+        assertThat(relations).allSatisfy(relation -> {
+            assertThat(relation.groupId()).isPositive();
+            assertThat(relation.groupStatus()).isEqualTo("EXPOSED");
+            assertThat(relation.groupItemCount()).isEqualTo(1);
+            assertThat(relation.groupItemId()).isPositive();
+            assertThat(relation.groupItemStatus()).isEqualTo("NOT_REQUESTED");
+            assertThat(relation.requestId()).isPositive();
+            assertThat(relation.requestStatus()).isEqualTo("GROUPED");
+            assertThat(relation.offerCount()).isEqualTo(1);
+            assertThat(relation.offerId()).isPositive();
+            assertThat(relation.offerStatus()).isEqualTo("OFFERED");
+        });
+        assertThat(relations).extracting(PmTransitionRelation::groupId).doesNotHaveDuplicates();
+        assertThat(relations).extracting(PmTransitionRelation::groupItemId).doesNotHaveDuplicates();
+        assertThat(relations).extracting(PmTransitionRelation::requestId).doesNotHaveDuplicates();
+        assertThat(relations).extracting(PmTransitionRelation::offerId).doesNotHaveDuplicates();
+    }
+
+    private List<PmTransitionRelation> pmTransitionRelations() {
+        return jdbcTemplate.query(
                 """
-                SELECT CONCAT(
-                    persona.persona_key, ':', resort.code, ':', request.sport, ':', request.lesson_level
-                )
-                FROM matching_requests request
-                JOIN dev_personas persona ON persona.member_id = request.member_id
-                JOIN resorts resort ON resort.id = request.resort_id
-                WHERE request.status = 'GROUPED'
-                ORDER BY request.id
+                SELECT group_table.id AS group_id,
+                       CAST(group_table.status AS CHAR) AS group_status,
+                       COUNT(DISTINCT group_item.id) AS group_item_count,
+                       MIN(group_item.id) AS group_item_id,
+                       MIN(CAST(group_item.status AS CHAR)) AS group_item_status,
+                       MIN(request.id) AS request_id,
+                       MIN(CONCAT(
+                           persona.persona_key, ':', resort.code, ':', request.sport, ':', request.lesson_level
+                       )) AS request_key,
+                       MIN(CAST(request.status AS CHAR)) AS request_status,
+                       COUNT(DISTINCT offer.id) AS offer_count,
+                       MIN(offer.id) AS offer_id,
+                       MIN(CAST(offer.status AS CHAR)) AS offer_status
+                FROM matching_request_groups group_table
+                LEFT JOIN matching_request_group_items group_item
+                  ON group_item.matching_request_group_id = group_table.id
+                LEFT JOIN matching_requests request
+                  ON request.id = group_item.matching_request_id
+                LEFT JOIN dev_personas persona
+                  ON persona.member_id = request.member_id
+                LEFT JOIN resorts resort
+                  ON resort.id = request.resort_id
+                LEFT JOIN matching_offers offer
+                  ON offer.matching_request_group_id = group_table.id
+                GROUP BY group_table.id, group_table.status
+                ORDER BY group_table.id
                 """,
-                String.class
+                (resultSet, rowNumber) -> new PmTransitionRelation(
+                        resultSet.getLong("group_id"),
+                        resultSet.getString("group_status"),
+                        resultSet.getInt("group_item_count"),
+                        resultSet.getObject("group_item_id", Long.class),
+                        resultSet.getString("group_item_status"),
+                        resultSet.getObject("request_id", Long.class),
+                        resultSet.getString("request_key"),
+                        resultSet.getString("request_status"),
+                        resultSet.getInt("offer_count"),
+                        resultSet.getObject("offer_id", Long.class),
+                        resultSet.getString("offer_status")
+                )
         );
     }
 
-    private List<String> pmTransitionRows() {
-        return jdbcTemplate.queryForList(
-                """
-                SELECT CONCAT(
-                    group_table.id, ':', group_item.matching_request_id, ':', offer.id, ':', offer.status
-                )
-                FROM matching_request_groups group_table
-                JOIN matching_request_group_items group_item
-                  ON group_item.matching_request_group_id = group_table.id
-                JOIN matching_offers offer
-                  ON offer.matching_request_group_id = group_table.id
-                ORDER BY group_table.id, group_item.matching_request_id, offer.id
-                """,
-                String.class
-        );
+    private record PmTransitionRelation(
+            Long groupId,
+            String groupStatus,
+            int groupItemCount,
+            Long groupItemId,
+            String groupItemStatus,
+            Long requestId,
+            String requestKey,
+            String requestStatus,
+            int offerCount,
+            Long offerId,
+            String offerStatus
+    ) {
     }
 
     private void runSql(String path) {

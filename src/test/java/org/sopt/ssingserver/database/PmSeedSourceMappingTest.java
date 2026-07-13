@@ -127,7 +127,7 @@ class PmSeedSourceMappingTest {
                 assertThat(json.path("nickname").asText()).isEqualTo("가격검증강사");
                 assertThat(profile.path("realName").asText()).isEqualTo("가격검증강사");
                 assertThat(profile.path("phone").asText()).isEqualTo("010-0000-0000");
-                assertThat(profile.path("birthDate").asText()).isEqualTo("1994-02-24");
+                assertThat(profile.path("birthDate").asText()).isEqualTo("2000-01-04");
                 assertThat(profile.path("intro").asText())
                         .isEqualTo("비발디파크 가격 흐름을 검증하는 로컬 전용 강사입니다.");
             }

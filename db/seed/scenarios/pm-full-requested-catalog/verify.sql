@@ -60,7 +60,7 @@ SELECT (
           AND member.nickname = '가격검증강사'
           AND profile.real_name = '가격검증강사'
           AND profile.phone = '010-0000-0000'
-          AND profile.birth_date = '1994-02-24')
+          AND profile.birth_date = '2000-01-04')
      )) = 4
     AND
     (SELECT COUNT(*) FROM instructor_profile_certificates) = 4
