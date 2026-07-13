@@ -28,15 +28,15 @@ matching_request	request_004_a	MAPPED	matching_requests(snapshot)	-
 matching_request	request_005_a	MAPPED	matching_requests(snapshot)	-
 matching_request	request_006_a	MAPPED	matching_requests(snapshot)	-
 matching_request	request_007_a	MAPPED	matching_requests(snapshot)	-
-matching_request	request_007_b	MAPPED	matching_requests(snapshot)	-
-matching_request	request_007_c	MAPPED	matching_requests(snapshot)	-
-matching_request	request_007_d	MAPPED	matching_requests(snapshot)	-
+matching_request	request_007_b	MAPPED	matching_requests(snapshot)	활성 협상 1건 정책에 따라 CANCELED 이력으로 정규화
+matching_request	request_007_c	MAPPED	matching_requests(snapshot)	활성 협상 1건 정책에 따라 CANCELED 이력으로 정규화
+matching_request	request_007_d	MAPPED	matching_requests(snapshot)	활성 협상 1건 정책에 따라 CANCELED 이력으로 정규화
 matching_request	request_008_a	MAPPED	matching_requests(snapshot)	-
-matching_request	request_008_b	MAPPED	matching_requests(snapshot)	-
-matching_request	request_008_c	MAPPED	matching_requests(snapshot)	-
-matching_request	request_008_d	MAPPED	matching_requests(snapshot)	-
+matching_request	request_008_b	MAPPED	matching_requests(snapshot)	활성 협상 1건 정책에 따라 CANCELED 이력으로 정규화
+matching_request	request_008_c	MAPPED	matching_requests(snapshot)	활성 협상 1건 정책에 따라 CANCELED 이력으로 정규화
+matching_request	request_008_d	MAPPED	matching_requests(snapshot)	활성 협상 1건 정책에 따라 CANCELED 이력으로 정규화
 matching_request	request_009_a	MAPPED	matching_requests(snapshot)	-
-matching_request	request_009_b	MAPPED	matching_requests(snapshot)	-
+matching_request	request_009_b	MAPPED	matching_requests(snapshot)	활성 협상 1건 정책에 따라 CANCELED 이력으로 정규화
 matching_request_participant	request_001_a_participant_1	MAPPED	matching_request_participants(snapshot)	-
 matching_request_participant	request_001_a_participant_2	MAPPED	matching_request_participants(snapshot)	-
 matching_request_participant	request_002_a_participant_1	MAPPED	matching_request_participants(snapshot)	-
