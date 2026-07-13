@@ -1,5 +1,6 @@
 package org.sopt.ssingserver.domain.notification.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -153,6 +154,55 @@ class FcmTokenControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors.fcmToken").value("FCM token은 필수입니다."))
+                .andExpect(jsonPath("$.requestId").value(REQUEST_ID));
+
+        verifyNoInteractions(fcmTokenService);
+    }
+
+    @Test
+    void registerOrUpdate는_clientApp이_지원하지_않는_enum이면_허용값과_400을_반환한다() throws Exception {
+        mockMvc.perform(put("/api/v1/fcm-tokens")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN)
+                        .header(RequestIdFilter.REQUEST_ID_HEADER, REQUEST_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientApp":"UNKNOWN",
+                                  "platform":"ANDROID",
+                                  "fcmToken":"fcm-token"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(RequestIdFilter.REQUEST_ID_HEADER, REQUEST_ID))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value("요청 값 검증에 실패했습니다."))
+                .andExpect(jsonPath("$.errors.clientApp").value(containsString("허용 값:")))
+                .andExpect(jsonPath("$.errors.clientApp").value(containsString("CONSUMER")))
+                .andExpect(jsonPath("$.errors.clientApp").value(containsString("INSTRUCTOR")))
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.requestId").value(REQUEST_ID));
+
+        verifyNoInteractions(fcmTokenService);
+    }
+
+    @Test
+    void registerOrUpdate는_JSON_문법이_깨지면_BAD_REQUEST이고_Service를_호출하지_않는다() throws Exception {
+        mockMvc.perform(put("/api/v1/fcm-tokens")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN)
+                        .header(RequestIdFilter.REQUEST_ID_HEADER, REQUEST_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientApp":"CONSUMER",
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(RequestIdFilter.REQUEST_ID_HEADER, REQUEST_ID))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+                .andExpect(jsonPath("$.message").value("잘못된 요청입니다."))
+                .andExpect(jsonPath("$.errors").doesNotExist())
+                .andExpect(jsonPath("$.data").doesNotExist())
                 .andExpect(jsonPath("$.requestId").value(REQUEST_ID));
 
         verifyNoInteractions(fcmTokenService);
