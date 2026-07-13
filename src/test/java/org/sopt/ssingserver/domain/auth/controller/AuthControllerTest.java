@@ -21,6 +21,7 @@ import org.sopt.ssingserver.global.security.SecurityConfig;
 import org.sopt.ssingserver.global.security.SecurityErrorResponseWriter;
 import org.sopt.ssingserver.global.security.SecurityFilterSkipMatcher;
 import org.sopt.ssingserver.global.security.access.AccessAuthorizationConfig;
+import org.sopt.ssingserver.global.security.access.AccessAuthorizationService;
 import org.sopt.ssingserver.global.security.access.CurrentMemberArgumentResolver;
 import org.sopt.ssingserver.global.security.access.RequireAccessInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,8 +29,6 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -37,17 +36,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @ActiveProfiles("test")
-@WebMvcTest(
-        controllers = AuthController.class,
-        excludeFilters = @ComponentScan.Filter(
-                type = FilterType.ASSIGNABLE_TYPE,
-                classes = {
-                        AccessAuthorizationConfig.class,
-                        CurrentMemberArgumentResolver.class,
-                        RequireAccessInterceptor.class
-                }
-        )
-)
+@WebMvcTest(controllers = AuthController.class)
 @ImportAutoConfiguration({
         ServletWebSecurityAutoConfiguration.class,
         SecurityFilterAutoConfiguration.class
@@ -60,7 +49,10 @@ import org.springframework.test.web.servlet.MockMvc;
         SecurityAccessDeniedHandler.class,
         SecurityErrorResponseWriter.class,
         ErrorResponseFactory.class,
-        RequestIdFilter.class
+        RequestIdFilter.class,
+        AccessAuthorizationConfig.class,
+        CurrentMemberArgumentResolver.class,
+        RequireAccessInterceptor.class
 })
 class AuthControllerTest {
 
@@ -72,6 +64,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private AccessAuthorizationService accessAuthorizationService;
 
     @Test
     void refresh는_인증헤더_없이_새_Access_Token을_반환한다() throws Exception {
@@ -91,9 +86,11 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.message").value("Access Token이 재발급되었습니다."))
                 .andExpect(jsonPath("$.data.accessToken").value("new-access-token"))
                 .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.data.expiresIn").value(3600));
+                .andExpect(jsonPath("$.data.expiresIn").value(3600))
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist());
 
         verify(authService).refreshAccessToken(REFRESH_TOKEN);
+        verifyNoInteractions(accessAuthorizationService);
     }
 
     @Test
@@ -127,6 +124,7 @@ class AuthControllerTest {
                 .andExpect(content().string(""));
 
         verify(authService).logout(REFRESH_TOKEN);
+        verifyNoInteractions(accessAuthorizationService);
     }
 
     @Test

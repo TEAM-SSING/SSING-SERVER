@@ -229,7 +229,10 @@ class AuthServiceTest {
         AuthRefreshResponse result = authService.refreshAccessToken(RAW_REFRESH_TOKEN);
 
         assertThat(result).isEqualTo(new AuthRefreshResponse("new-access-token", "Bearer", 3600));
+        assertThat(refreshToken.getRevokedAt()).isNull();
         verify(authTokenIssueService).issueAccessToken(member);
+        verify(authTokenIssueService, never()).issueTokens(any(Member.class));
+        verify(refreshTokenService, never()).issueRefreshToken(any(Member.class));
     }
 
     @ParameterizedTest

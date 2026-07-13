@@ -24,6 +24,7 @@ import org.sopt.ssingserver.global.security.SecurityConfig;
 import org.sopt.ssingserver.global.security.SecurityErrorResponseWriter;
 import org.sopt.ssingserver.global.security.SecurityFilterSkipMatcher;
 import org.sopt.ssingserver.global.security.access.AccessAuthorizationConfig;
+import org.sopt.ssingserver.global.security.access.AccessAuthorizationService;
 import org.sopt.ssingserver.global.security.access.CurrentMemberArgumentResolver;
 import org.sopt.ssingserver.global.security.access.RequireAccessInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,8 +32,6 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -44,15 +43,7 @@ import org.springframework.test.web.servlet.MockMvc;
         controllers = {
                 ConsumerAuthController.class,
                 InstructorAuthController.class
-        },
-        excludeFilters = @ComponentScan.Filter(
-                type = FilterType.ASSIGNABLE_TYPE,
-                classes = {
-                        AccessAuthorizationConfig.class,
-                        CurrentMemberArgumentResolver.class,
-                        RequireAccessInterceptor.class
-                }
-        )
+        }
 )
 @ImportAutoConfiguration({
         ServletWebSecurityAutoConfiguration.class,
@@ -66,7 +57,10 @@ import org.springframework.test.web.servlet.MockMvc;
         SecurityAccessDeniedHandler.class,
         SecurityErrorResponseWriter.class,
         ErrorResponseFactory.class,
-        RequestIdFilter.class
+        RequestIdFilter.class,
+        AccessAuthorizationConfig.class,
+        CurrentMemberArgumentResolver.class,
+        RequireAccessInterceptor.class
 })
 class KakaoAuthControllerTest {
 
@@ -78,6 +72,9 @@ class KakaoAuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private AccessAuthorizationService accessAuthorizationService;
 
     @Test
     void 소비자_카카오_로그인은_인증헤더_없이_200과_회원정보를_반환한다() throws Exception {
@@ -102,9 +99,11 @@ class KakaoAuthControllerTest {
                 .andExpect(jsonPath("$.data.member.id").value(1))
                 .andExpect(jsonPath("$.data.member.nickname").value("소비자"))
                 .andExpect(jsonPath("$.data.member.role").value("CONSUMER"))
-                .andExpect(jsonPath("$.data.member.memberStatus").value("ACTIVE"));
+                .andExpect(jsonPath("$.data.member.memberStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.member.instructorStatus").doesNotExist());
 
         verify(authService).loginConsumerWithKakao(KAKAO_ACCESS_TOKEN);
+        verifyNoInteractions(accessAuthorizationService);
     }
 
     @Test
@@ -156,6 +155,7 @@ class KakaoAuthControllerTest {
                 .andExpect(jsonPath("$.data.member.instructorStatus").value("APPROVED"));
 
         verify(authService).loginInstructorWithKakao(KAKAO_ACCESS_TOKEN);
+        verifyNoInteractions(accessAuthorizationService);
     }
 
     @Test
