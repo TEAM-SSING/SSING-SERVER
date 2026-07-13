@@ -65,6 +65,7 @@ public interface InstructorMatchingOfferApiDocs {
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {
+                    "BAD_REQUEST",
                     "UNAUTHENTICATED",
                     "FORBIDDEN",
                     "INTERNAL_ERROR"

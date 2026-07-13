@@ -417,6 +417,11 @@ class SsingServerApplicationTests {
 		);
 		JsonNode detailResponses = detailOperation.path("responses");
 		assertThat(detailResponses.has("200")).isTrue();
+		assertThat(detailResponses.path("400")
+				.path("content")
+				.path("application/json")
+				.path("examples")
+				.has("BAD_REQUEST")).isTrue();
 		assertThat(detailResponses.path("404")
 				.path("content")
 				.path("application/json")
