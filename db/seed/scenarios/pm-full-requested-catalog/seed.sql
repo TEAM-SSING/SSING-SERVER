@@ -275,19 +275,19 @@ SET @request_007_a_id = LAST_INSERT_ID();
 INSERT INTO matching_requests (
     headcount, is_equipment_ready, canceled_at, created_at, expires_at, matching_offer_id,
     member_id, resort_id, updated_at, lesson_level, sport, status, status_reason
-) VALUES (5, b'1', NULL, @seed_now, NULL, NULL, @member_consumer_007_id, @oak_resort_id, @seed_now, 'BEGINNER', 'SNOWBOARD', 'REQUESTED', NULL);
+) VALUES (5, b'1', @seed_now, @seed_now, NULL, NULL, @member_consumer_007_id, @oak_resort_id, @seed_now, 'BEGINNER', 'SNOWBOARD', 'CANCELED', 'CONSUMER_CANCELED');
 SET @request_007_b_id = LAST_INSERT_ID();
 
 INSERT INTO matching_requests (
     headcount, is_equipment_ready, canceled_at, created_at, expires_at, matching_offer_id,
     member_id, resort_id, updated_at, lesson_level, sport, status, status_reason
-) VALUES (3, b'1', NULL, @seed_now, NULL, NULL, @member_consumer_007_id, @oak_resort_id, @seed_now, 'INTERMEDIATE', 'SKI', 'REQUESTED', NULL);
+) VALUES (3, b'1', @seed_now, @seed_now, NULL, NULL, @member_consumer_007_id, @oak_resort_id, @seed_now, 'INTERMEDIATE', 'SKI', 'CANCELED', 'CONSUMER_CANCELED');
 SET @request_007_c_id = LAST_INSERT_ID();
 
 INSERT INTO matching_requests (
     headcount, is_equipment_ready, canceled_at, created_at, expires_at, matching_offer_id,
     member_id, resort_id, updated_at, lesson_level, sport, status, status_reason
-) VALUES (3, b'1', NULL, @seed_now, NULL, NULL, @member_consumer_007_id, @oak_resort_id, @seed_now, 'INTERMEDIATE', 'SNOWBOARD', 'REQUESTED', NULL);
+) VALUES (3, b'1', @seed_now, @seed_now, NULL, NULL, @member_consumer_007_id, @oak_resort_id, @seed_now, 'INTERMEDIATE', 'SNOWBOARD', 'CANCELED', 'CONSUMER_CANCELED');
 SET @request_007_d_id = LAST_INSERT_ID();
 
 INSERT INTO matching_requests (
@@ -299,19 +299,19 @@ SET @request_008_a_id = LAST_INSERT_ID();
 INSERT INTO matching_requests (
     headcount, is_equipment_ready, canceled_at, created_at, expires_at, matching_offer_id,
     member_id, resort_id, updated_at, lesson_level, sport, status, status_reason
-) VALUES (5, b'0', NULL, @seed_now, NULL, NULL, @member_consumer_008_id, @elysian_resort_id, @seed_now, 'FIRST_TIME', 'SKI', 'REQUESTED', NULL);
+) VALUES (5, b'0', @seed_now, @seed_now, NULL, NULL, @member_consumer_008_id, @elysian_resort_id, @seed_now, 'FIRST_TIME', 'SKI', 'CANCELED', 'CONSUMER_CANCELED');
 SET @request_008_b_id = LAST_INSERT_ID();
 
 INSERT INTO matching_requests (
     headcount, is_equipment_ready, canceled_at, created_at, expires_at, matching_offer_id,
     member_id, resort_id, updated_at, lesson_level, sport, status, status_reason
-) VALUES (4, b'1', NULL, @seed_now, NULL, NULL, @member_consumer_008_id, @elysian_resort_id, @seed_now, 'BEGINNER', 'SKI', 'REQUESTED', NULL);
+) VALUES (4, b'1', @seed_now, @seed_now, NULL, NULL, @member_consumer_008_id, @elysian_resort_id, @seed_now, 'BEGINNER', 'SKI', 'CANCELED', 'CONSUMER_CANCELED');
 SET @request_008_c_id = LAST_INSERT_ID();
 
 INSERT INTO matching_requests (
     headcount, is_equipment_ready, canceled_at, created_at, expires_at, matching_offer_id,
     member_id, resort_id, updated_at, lesson_level, sport, status, status_reason
-) VALUES (4, b'1', NULL, @seed_now, NULL, NULL, @member_consumer_008_id, @elysian_resort_id, @seed_now, 'BEGINNER', 'SKI', 'REQUESTED', NULL);
+) VALUES (4, b'1', @seed_now, @seed_now, NULL, NULL, @member_consumer_008_id, @elysian_resort_id, @seed_now, 'BEGINNER', 'SKI', 'CANCELED', 'CONSUMER_CANCELED');
 SET @request_008_d_id = LAST_INSERT_ID();
 
 INSERT INTO matching_requests (
@@ -323,7 +323,7 @@ SET @request_009_a_id = LAST_INSERT_ID();
 INSERT INTO matching_requests (
     headcount, is_equipment_ready, canceled_at, created_at, expires_at, matching_offer_id,
     member_id, resort_id, updated_at, lesson_level, sport, status, status_reason
-) VALUES (3, b'1', NULL, @seed_now, NULL, NULL, @member_consumer_009_id, @welli_hilli_resort_id, @seed_now, 'BEGINNER', 'SNOWBOARD', 'REQUESTED', NULL);
+) VALUES (3, b'1', @seed_now, @seed_now, NULL, NULL, @member_consumer_009_id, @welli_hilli_resort_id, @seed_now, 'BEGINNER', 'SNOWBOARD', 'CANCELED', 'CONSUMER_CANCELED');
 SET @request_009_b_id = LAST_INSERT_ID();
 
 INSERT INTO matching_requests_requested_duration_minutes (

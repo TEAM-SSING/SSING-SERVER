@@ -83,7 +83,22 @@ SELECT (
     AND
     (SELECT COUNT(*) FROM matching_requests) = 16
     AND
-    (SELECT COUNT(*) FROM matching_requests WHERE status = 'REQUESTED' AND status_reason IS NULL) = 16
+    (SELECT COUNT(*) FROM matching_requests WHERE status = 'REQUESTED' AND status_reason IS NULL) = 9
+    AND
+    (SELECT COUNT(*)
+     FROM matching_requests
+     WHERE status = 'CANCELED'
+       AND status_reason = 'CONSUMER_CANCELED'
+       AND canceled_at IS NOT NULL) = 7
+    AND
+    (SELECT COUNT(*)
+     FROM (
+         SELECT member_id
+         FROM matching_requests
+         WHERE status IN ('REQUESTED', 'GROUPED', 'MATCHED')
+         GROUP BY member_id
+         HAVING COUNT(*) > 1
+     ) duplicate_active_request) = 0
     AND
     (SELECT COUNT(*) FROM matching_requests WHERE expires_at IS NOT NULL OR matching_offer_id IS NOT NULL) = 0
     AND

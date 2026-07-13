@@ -79,6 +79,48 @@ class MatchingStatusQueryServiceTest {
     private MatchingStatusResolver matchingStatusResolver;
 
     @Test
+    void getActiveStatus는_활성_요청이_없으면_empty를_반환한다() {
+        MatchingStatusQueryService service = createService();
+        when(matchingRequestRepository.findByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        )).thenReturn(Optional.empty());
+
+        assertThat(service.getActiveStatus(1L)).isEmpty();
+
+        verifyNoInteractions(matchingRequestGroupItemRepository);
+        verifyNoInteractions(matchingOfferRepository);
+        verifyNoInteractions(matchingRequestPaymentRepository);
+        verifyNoInteractions(lessonRepository);
+        verifyNoInteractions(matchingStatusResolver);
+    }
+
+    @Test
+    void getActiveStatus는_본인의_활성_요청을_기존_상태_응답으로_복구한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        when(matchingRequestRepository.findByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        )).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.empty());
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+        )).thenReturn(MatchingStatus.SEARCHING);
+
+        MatchingStatusQueryResult result = service.getActiveStatus(1L).orElseThrow();
+
+        assertThat(result.matchingRequestId()).isEqualTo(10L);
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.SEARCHING);
+        assertThat(result.requestStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+    }
+
+    @Test
     void getStatus는_없는_요청이면_MATCHING_REQUEST_NOT_FOUND를_던진다() {
         MatchingStatusQueryService service = createService();
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.empty());
@@ -200,6 +242,8 @@ class MatchingStatusQueryServiceTest {
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(item));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(item));
         MatchingOfferPriceSnapshot offerPriceSnapshot = offerPriceSnapshot(offer, 80_000, 20_000);
         when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L))
                 .thenReturn(Optional.of(offerPriceSnapshot));
@@ -234,6 +278,87 @@ class MatchingStatusQueryServiceTest {
     }
 
     @Test
+    void getStatus는_최종확인_단계의_서버기준_절대_진행률을_반환한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest currentRequest = matchingRequest(10L, member(1L, "현재 요청자", MemberRole.CONSUMER));
+        MatchingRequest otherRequest = matchingRequest(11L, member(2L, "다른 요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        MatchingRequestGroupItem currentItem = matchingRequestGroupItem(30L, currentRequest, group);
+        MatchingRequestGroupItem acceptedItem = matchingRequestGroupItem(31L, otherRequest, group);
+        acceptedItem.accept(Instant.parse("2026-07-07T00:02:00Z"));
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile(40L), group);
+        currentRequest.markMatched(offer);
+
+        when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(currentRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(currentItem));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(currentItem, acceptedItem));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L))
+                .thenReturn(Optional.of(offerPriceSnapshot(offer, 80_000, 20_000)));
+        when(matchingStatusResolver.resolve(
+                currentRequest,
+                Optional.of(group),
+                Optional.of(currentItem),
+                Optional.of(offer),
+                Optional.empty()
+        )).thenReturn(MatchingStatus.WAITING_FOR_CONFIRMATION);
+
+        MatchingStatusQueryResult result = service.getStatus(1L, 10L);
+
+        assertThat(result.progressSummary().acceptedRequesterCount()).isEqualTo(1);
+        assertThat(result.progressSummary().totalRequesterCount()).isEqualTo(2);
+        assertThat(result.progressSummary().paidRequesterCount()).isNull();
+    }
+
+    @Test
+    void getStatus는_결제_단계의_서버기준_절대_진행률을_반환한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest currentRequest = matchingRequest(10L, member(1L, "현재 요청자", MemberRole.CONSUMER));
+        MatchingRequest otherRequest = matchingRequest(11L, member(2L, "다른 요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        group.markPaymentPending();
+        MatchingRequestGroupItem currentItem = matchingRequestGroupItem(30L, currentRequest, group);
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile(40L), group);
+        MatchingRequestPayment pendingPayment = matchingRequestPayment(
+                60L,
+                currentRequest,
+                offer,
+                MatchingRequestPaymentStatus.PENDING,
+                PAYMENT_EXPIRES_AT
+        );
+        MatchingRequestPayment completedPayment = matchingRequestPayment(
+                61L,
+                otherRequest,
+                offer,
+                MatchingRequestPaymentStatus.COMPLETED,
+                PAYMENT_EXPIRES_AT
+        );
+        currentRequest.markMatched(offer);
+
+        when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(currentRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(currentItem));
+        when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
+                .thenReturn(Optional.of(pendingPayment));
+        when(matchingRequestPaymentRepository.findByMatchingOfferIdOrderByMatchingRequestIdAsc(50L))
+                .thenReturn(List.of(pendingPayment, completedPayment));
+        when(matchingStatusResolver.resolve(
+                currentRequest,
+                Optional.of(group),
+                Optional.of(currentItem),
+                Optional.of(offer),
+                Optional.of(pendingPayment)
+        )).thenReturn(MatchingStatus.PAYMENT_PENDING);
+
+        MatchingStatusQueryResult result = service.getStatus(1L, 10L);
+
+        assertThat(result.progressSummary().acceptedRequesterCount()).isNull();
+        assertThat(result.progressSummary().totalRequesterCount()).isEqualTo(2);
+        assertThat(result.progressSummary().paidRequesterCount()).isEqualTo(1);
+    }
+
+    @Test
     void getStatus는_가격이_필요한_상태에서_제안스냅샷이_없으면_INTERNAL_ERROR를_던진다() {
         MatchingStatusQueryService service = createService();
         MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
@@ -245,6 +370,8 @@ class MatchingStatusQueryServiceTest {
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(item));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(item));
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),
@@ -274,6 +401,8 @@ class MatchingStatusQueryServiceTest {
         when(matchingRequestRepository.findById(10L)).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.of(item));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(item));
         when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L))
                 .thenReturn(Optional.of(offerPriceSnapshot));
         when(matchingStatusResolver.resolve(
@@ -312,6 +441,8 @@ class MatchingStatusQueryServiceTest {
                 .thenReturn(Optional.of(item));
         when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
                 .thenReturn(Optional.of(payment));
+        when(matchingRequestPaymentRepository.findByMatchingOfferIdOrderByMatchingRequestIdAsc(50L))
+                .thenReturn(List.of(payment));
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),
@@ -355,6 +486,8 @@ class MatchingStatusQueryServiceTest {
                 .thenReturn(Optional.of(item));
         when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
                 .thenReturn(Optional.of(payment));
+        when(matchingRequestPaymentRepository.findByMatchingOfferIdOrderByMatchingRequestIdAsc(50L))
+                .thenReturn(List.of(payment));
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.of(group),

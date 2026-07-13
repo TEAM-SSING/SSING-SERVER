@@ -7,6 +7,7 @@ import org.sopt.ssingserver.domain.matching.dto.command.MatchingParticipantComma
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingCreationResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestParticipant;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipantRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
@@ -33,8 +34,11 @@ public class MatchingOrchestrationService {
     // 요청 생성 API 호출 지점, DB REQUESTED 저장과 API SEARCHING 응답 고정
     @Transactional
     public MatchingCreationResult createImmediateMatchingRequest(MatchingCreationCommand command) {
-        // Controller의 DB 조회 책임 방지를 위한 Service 내부 회원/리조트 존재 검증
+        // 활성 요청이 0건인 순간의 동시 POST도 같은 회원 row에서 직렬화한다.
         Member member = getMember(command.memberId());
+        validateNoActiveMatchingRequest(command.memberId());
+
+        // Controller의 DB 조회 책임 방지를 위한 Service 내부 리조트 존재 검증
         Resort resort = getResort(command.resortCode());
 
         // 기본 무제한 탐색 정책 적용, DB SEARCHING 미저장과 REQUESTED 상태만 저장
@@ -70,8 +74,18 @@ public class MatchingOrchestrationService {
 
     // 매칭 요청 소유 회원 조회와 요청 저장 전 명시적 실패 처리
     private Member getMember(Long memberId) {
-        return memberRepository.findById(memberId)
+        return memberRepository.findByIdForUpdate(memberId)
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_MEMBER_NOT_FOUND));
+    }
+
+    private void validateNoActiveMatchingRequest(Long memberId) {
+        boolean hasActiveMatchingRequest = matchingRequestRepository.existsByMemberIdAndStatusIn(
+                memberId,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        );
+        if (hasActiveMatchingRequest) {
+            throw new BusinessException(MatchingErrorCode.MATCHING_REQUEST_ALREADY_EXISTS);
+        }
     }
 
     // 매칭 요청 대상 리조트 code 조회와 요청 저장 전 명시적 실패 처리

@@ -10,6 +10,7 @@ import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
+import org.sopt.ssingserver.domain.matching.dto.result.MatchingProgressSummaryResult;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
@@ -32,6 +33,7 @@ class ConsumerMatchingStatusResponseTest {
                 10L,
                 MatchingStatus.SEARCHING,
                 MatchingRequestStatus.REQUESTED,
+                null,
                 null,
                 null,
                 null,
@@ -69,6 +71,7 @@ class ConsumerMatchingStatusResponseTest {
                 MatchingRequestGroupItemStatus.PENDING,
                 MatchingOfferStatus.ACCEPTED,
                 null,
+                MatchingProgressSummaryResult.confirmation(1, 2),
                 Instant.parse("2026-07-07T00:10:00Z"),
                 new MatchingStatusQueryResult.InstructorProfileResult(
                         40L,
@@ -94,6 +97,9 @@ class ConsumerMatchingStatusResponseTest {
         assertThat(json).contains("\"profileImageUrl\":\"https://example.com/instructor.png\"");
         assertThat(json).contains("\"birthYear\":1998");
         assertThat(json).contains("\"level\":3");
+        assertThat(json).contains("\"acceptedRequesterCount\":1");
+        assertThat(json).contains("\"totalRequesterCount\":2");
+        assertThat(json).doesNotContain("paidRequesterCount");
         assertThat(json).contains("\"lessonPriceAmount\":80000");
         assertThat(json).contains("\"resortPassFeeAmount\":20000");
         assertThat(json).contains("\"totalPaymentAmount\":100000");
@@ -112,6 +118,7 @@ class ConsumerMatchingStatusResponseTest {
                 MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
                 MatchingRequestGroupItemStatus.PENDING,
                 MatchingOfferStatus.ACCEPTED,
+                null,
                 null,
                 Instant.parse("2026-07-07T00:10:00Z"),
                 instructorProfile,
@@ -143,6 +150,7 @@ class ConsumerMatchingStatusResponseTest {
                 MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
                 MatchingRequestGroupItemStatus.PENDING,
                 MatchingOfferStatus.ACCEPTED,
+                null,
                 null,
                 null,
                 new MatchingStatusQueryResult.InstructorProfileResult(

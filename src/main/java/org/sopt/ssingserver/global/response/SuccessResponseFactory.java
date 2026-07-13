@@ -16,7 +16,7 @@ public final class SuccessResponseFactory {
                 .body(BaseResponse.success(requiredSuccessCode, data));
     }
 
-    public static ResponseEntity<Void> noContent(SuccessCode successCode) {
+    public static <T> ResponseEntity<T> noContent(SuccessCode successCode) {
         SuccessCode requiredSuccessCode = Objects.requireNonNull(successCode, "successCode");
         // 204 응답은 body가 없어야 하므로 별도 메서드에서 상태값까지 함께 검증한다.
         if (requiredSuccessCode.getStatus() != HttpStatus.NO_CONTENT) {

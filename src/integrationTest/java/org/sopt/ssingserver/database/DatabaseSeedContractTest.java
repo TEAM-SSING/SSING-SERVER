@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,8 +11,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -22,6 +28,7 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.matching.config.MatchingSearchSchedulerConfig;
 import org.sopt.ssingserver.domain.matching.service.MatchingEventDispatcher;
@@ -32,6 +39,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -152,20 +160,63 @@ class DatabaseSeedContractTest {
         applyScenario("pm-full-requested-catalog");
 
         PmSeedSnapshotContract.assertMatches(jdbcTemplate, objectMapper);
-        assertPmCatalogTransitionCounts(16, 0, 0);
+        assertPmCatalogTransitionCounts(9, 0, 0);
 
         matchingSearchScheduler.runScheduledSearch();
 
-        assertPmCatalogTransitionCounts(14, 2, 2);
+        assertPmCatalogTransitionCounts(7, 2, 2);
         List<PmTransitionRelation> firstTransitionRelations = pmTransitionRelations();
         assertExpectedPmTransitionRelations(firstTransitionRelations);
 
         matchingSearchScheduler.runScheduledSearch();
 
-        assertPmCatalogTransitionCounts(14, 2, 2);
+        assertPmCatalogTransitionCounts(7, 2, 2);
         List<PmTransitionRelation> secondTransitionRelations = pmTransitionRelations();
         assertExpectedPmTransitionRelations(secondTransitionRelations);
         assertThat(secondTransitionRelations).containsExactlyElementsOf(firstTransitionRelations);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"REQUESTED", "GROUPED", "MATCHED"})
+    void V4는_활성_상태마다_같은_소비자의_두번째_활성_요청을_DB에서_차단한다(String activeStatus) {
+        Long memberId = personaMemberId("consumer-default");
+        insertMatchingRequest(memberId, activeStatus);
+
+        assertThatThrownBy(() -> insertMatchingRequest(memberId, "REQUESTED"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uk_matching_requests_active_negotiation_member");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT active_negotiation_member_id FROM matching_requests WHERE member_id = ?",
+                Long.class,
+                memberId
+        )).isEqualTo(memberId);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CONFIRMED", "COMPLETED", "CANCELED", "EXPIRED", "FAILED"})
+    void V4는_확정과_종료_이력을_여러건_허용하고_새_활성_요청도_허용한다(String historicalStatus) {
+        Long memberId = personaMemberId("consumer-default");
+        insertMatchingRequest(memberId, historicalStatus);
+        insertMatchingRequest(memberId, historicalStatus);
+        insertMatchingRequest(memberId, "REQUESTED");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_requests WHERE member_id = ?",
+                Integer.class,
+                memberId
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM matching_requests
+                WHERE member_id = ?
+                  AND active_negotiation_member_id = ?
+                """,
+                Integer.class,
+                memberId,
+                memberId
+        )).isEqualTo(1);
     }
 
     @Test
@@ -191,6 +242,12 @@ class DatabaseSeedContractTest {
         long matchingRequestId = responseJson(creation).at("/data/matchingRequestId").asLong();
         JsonNode offerBeforeScheduler = readInstructorOffer(instructorToken);
         assertConsumerReadback(consumerToken, matchingRequestId);
+        assertActiveMatchingReadback(
+                consumerToken,
+                matchingRequestId,
+                "WAITING_FOR_INSTRUCTOR",
+                "GROUPED"
+        );
         assertPriceReadback(offerBeforeScheduler);
 
         matchingSearchScheduler.runScheduledSearch();
@@ -216,10 +273,23 @@ class DatabaseSeedContractTest {
         )).isEqualTo(1);
 
         acceptInstructorOffer(instructorToken, offerId);
+        assertActiveConfirmationReadback(
+                consumerToken,
+                matchingRequestId,
+                0,
+                1
+        );
         acceptConsumerConfirmation(consumerToken, matchingRequestId);
+        assertActivePaymentReadback(
+                consumerToken,
+                matchingRequestId,
+                0,
+                1
+        );
         long lessonId = completeConsumerPayment(consumerToken, matchingRequestId);
 
         assertConsumerConfirmedReadback(consumerToken, matchingRequestId, lessonId);
+        assertNoActiveMatchingRequest(consumerToken);
         assertSingleRequestPaymentAndLesson(matchingRequestId, offerId, lessonId);
     }
 
@@ -250,27 +320,50 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void scheduler_실행_후에도_한_소비자의_오크밸리_네_요청과_열여섯_참가자를_유지한다() throws Exception {
+    void 한_소비자는_기존_활성_요청을_취소한_뒤에만_다음_요청을_생성한다() throws Exception {
         applyScenario("matching-multi-request-oak");
         Long memberId = personaMemberId("pm-consumer-007");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
-        List<Long> matchingRequestIds = new ArrayList<>();
+        List<String> requestNames = List.of("a", "b", "c", "d");
+        Long[] matchingRequestIds = new Long[requestNames.size()];
 
-        for (String requestName : List.of("a", "b", "c", "d")) {
-            matchingRequestIds.add(createSearchingRequest(
+        for (int index = 0; index < requestNames.size(); index++) {
+            String requestName = requestNames.get(index);
+            matchingRequestIds[index] = createSearchingRequest(
                     consumerToken,
                     "db/seed/scenarios/matching-multi-request-oak/request-007-" + requestName + ".json"
-            ));
+            );
+            assertActiveMatchingReadback(
+                    consumerToken,
+                    matchingRequestIds[index],
+                    "SEARCHING",
+                    "REQUESTED"
+            );
+            if (index < requestNames.size() - 1) {
+                String nextRequestName = requestNames.get(index + 1);
+                assertDuplicateMatchingRequestRejected(
+                        consumerToken,
+                        "db/seed/scenarios/matching-multi-request-oak/request-007-"
+                                + nextRequestName + ".json"
+                );
+                cancelMatchingRequest(consumerToken, matchingRequestIds[index]);
+                assertNoActiveMatchingRequest(consumerToken);
+            }
         }
 
         matchingSearchScheduler.runScheduledSearch();
 
-        for (Long matchingRequestId : matchingRequestIds) {
-            mockMvc.perform(get("/api/v1/consumer/matching-requests/{matchingRequestId}", matchingRequestId)
+        for (int index = 0; index < matchingRequestIds.length; index++) {
+            String expectedStatus = index == matchingRequestIds.length - 1 ? "REQUESTED" : "CANCELED";
+            String expectedMatchingStatus = index == matchingRequestIds.length - 1 ? "SEARCHING" : "CANCELED";
+            mockMvc.perform(get(
+                            "/api/v1/consumer/matching-requests/{matchingRequestId}",
+                            matchingRequestIds[index]
+                    )
                             .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.matchingStatus").value("SEARCHING"))
-                    .andExpect(jsonPath("$.data.requestStatus").value("REQUESTED"));
+                    .andExpect(jsonPath("$.data.matchingStatus").value(expectedMatchingStatus))
+                    .andExpect(jsonPath("$.data.requestStatus").value(expectedStatus));
         }
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM matching_requests WHERE member_id = ?",
@@ -288,6 +381,21 @@ class DatabaseSeedContractTest {
                 memberId
         )).isEqualTo(16);
         assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM matching_requests
+                WHERE member_id = ?
+                  AND status IN ('REQUESTED', 'GROUPED', 'MATCHED')
+                """,
+                Integer.class,
+                memberId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_requests WHERE member_id = ? AND status = 'CANCELED'",
+                Integer.class,
+                memberId
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM matching_request_groups",
                 Integer.class
         )).isZero();
@@ -295,6 +403,66 @@ class DatabaseSeedContractTest {
                 "SELECT COUNT(*) FROM matching_offers",
                 Integer.class
         )).isZero();
+    }
+
+    @Test
+    void 같은_소비자의_동시_생성_요청은_하나만_201이고_나머지는_409다() throws Exception {
+        applyScenario("matching-multi-request-oak");
+        Long memberId = personaMemberId("pm-consumer-007");
+        String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
+        String requestBody = requestJson(
+                "db/seed/scenarios/matching-multi-request-oak/request-007-a.json"
+        );
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+
+        Callable<Integer> createRequest = () -> {
+            ready.countDown();
+            start.await(5, TimeUnit.SECONDS);
+            return mockMvc.perform(post("/api/v1/consumer/matching-requests")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(requestBody))
+                    .andReturn()
+                    .getResponse()
+                    .getStatus();
+        };
+
+        try {
+            Future<Integer> first = executorService.submit(createRequest);
+            Future<Integer> second = executorService.submit(createRequest);
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(List.of(
+                    first.get(10, TimeUnit.SECONDS),
+                    second.get(10, TimeUnit.SECONDS)
+            )).containsExactlyInAnyOrder(201, 409);
+        } finally {
+            executorService.shutdownNow();
+        }
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM matching_requests
+                WHERE member_id = ?
+                  AND status IN ('REQUESTED', 'GROUPED', 'MATCHED')
+                """,
+                Integer.class,
+                memberId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM matching_request_participants participant
+                JOIN matching_requests request ON request.id = participant.matching_request_id
+                WHERE request.member_id = ?
+                """,
+                Integer.class,
+                memberId
+        )).isEqualTo(5);
     }
 
     private JsonNode readInstructorOffer(String instructorToken) throws Exception {
@@ -314,6 +482,65 @@ class DatabaseSeedContractTest {
                 .andExpect(jsonPath("$.data.matchingStatus").value("WAITING_FOR_INSTRUCTOR"))
                 .andExpect(jsonPath("$.data.requestStatus").value("GROUPED"))
                 .andExpect(jsonPath("$.data.offerStatus").value("OFFERED"));
+    }
+
+    private void assertActiveMatchingReadback(
+            String consumerToken,
+            long matchingRequestId,
+            String matchingStatus,
+            String requestStatus
+    ) throws Exception {
+        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
+                .andExpect(jsonPath("$.data.matchingStatus").value(matchingStatus))
+                .andExpect(jsonPath("$.data.requestStatus").value(requestStatus));
+    }
+
+    private void assertActiveConfirmationReadback(
+            String consumerToken,
+            long matchingRequestId,
+            int acceptedRequesterCount,
+            int totalRequesterCount
+    ) throws Exception {
+        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
+                .andExpect(jsonPath("$.data.matchingStatus").value("WAITING_FOR_CONFIRMATION"))
+                .andExpect(jsonPath("$.data.requestStatus").value("MATCHED"))
+                .andExpect(jsonPath("$.data.progressSummary.acceptedRequesterCount")
+                        .value(acceptedRequesterCount))
+                .andExpect(jsonPath("$.data.progressSummary.totalRequesterCount")
+                        .value(totalRequesterCount))
+                .andExpect(jsonPath("$.data.progressSummary.paidRequesterCount").doesNotExist());
+    }
+
+    private void assertActivePaymentReadback(
+            String consumerToken,
+            long matchingRequestId,
+            int paidRequesterCount,
+            int totalRequesterCount
+    ) throws Exception {
+        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
+                .andExpect(jsonPath("$.data.matchingStatus").value("PAYMENT_PENDING"))
+                .andExpect(jsonPath("$.data.requestStatus").value("MATCHED"))
+                .andExpect(jsonPath("$.data.progressSummary.acceptedRequesterCount").doesNotExist())
+                .andExpect(jsonPath("$.data.progressSummary.totalRequesterCount")
+                        .value(totalRequesterCount))
+                .andExpect(jsonPath("$.data.progressSummary.paidRequesterCount")
+                        .value(paidRequesterCount));
+    }
+
+    private void assertNoActiveMatchingRequest(String consumerToken) throws Exception {
+        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isNoContent())
+                .andExpect(result -> assertThat(result.getResponse().getContentAsByteArray()).isEmpty());
     }
 
     private void assertPriceReadback(JsonNode response) {
@@ -474,6 +701,68 @@ class DatabaseSeedContractTest {
                 .andExpect(jsonPath("$.data.requestStatus").value("REQUESTED"))
                 .andReturn();
         return responseJson(result).at("/data/matchingRequestId").asLong();
+    }
+
+    private void assertDuplicateMatchingRequestRejected(String consumerToken, String requestPath) throws Exception {
+        mockMvc.perform(post("/api/v1/consumer/matching-requests")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson(requestPath)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MATCHING_REQUEST_ALREADY_EXISTS"));
+    }
+
+    private void cancelMatchingRequest(String consumerToken, Long matchingRequestId) throws Exception {
+        mockMvc.perform(post(
+                        "/api/v1/consumer/matching-requests/{matchingRequestId}/cancellation",
+                        matchingRequestId
+                )
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.requestStatus").value("CANCELED"));
+    }
+
+    private void insertMatchingRequest(Long memberId, String status) {
+        Long resortId = jdbcTemplate.queryForObject(
+                "SELECT id FROM resorts WHERE code = 'HIGH1'",
+                Long.class
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO matching_requests (
+                    headcount,
+                    is_equipment_ready,
+                    canceled_at,
+                    created_at,
+                    expires_at,
+                    matching_offer_id,
+                    member_id,
+                    resort_id,
+                    updated_at,
+                    lesson_level,
+                    sport,
+                    status,
+                    status_reason
+                ) VALUES (
+                    1,
+                    b'1',
+                    NULL,
+                    UTC_TIMESTAMP(6),
+                    NULL,
+                    NULL,
+                    ?,
+                    ?,
+                    UTC_TIMESTAMP(6),
+                    'BEGINNER',
+                    'SKI',
+                    ?,
+                    NULL
+                )
+                """,
+                memberId,
+                resortId,
+                status
+        );
     }
 
     private static Stream<String> scenarioKeys() throws Exception {

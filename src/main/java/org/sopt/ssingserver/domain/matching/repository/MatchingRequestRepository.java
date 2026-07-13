@@ -17,6 +17,23 @@ import org.springframework.data.repository.query.Param;
 // 매칭 요청 재탐색 대상 조회와 동시 처리 방어 Repository
 public interface MatchingRequestRepository extends JpaRepository<MatchingRequest, Long> {
 
+    boolean existsByMemberIdAndStatusIn(
+            Long memberId,
+            Collection<MatchingRequestStatus> statuses
+    );
+
+    // 인증 회원의 활성 협상은 DB unique 제약을 전제로 정확히 0건 또는 1건만 반환한다.
+    @Query("""
+            select matchingRequest
+            from MatchingRequest matchingRequest
+            where matchingRequest.member.id = :memberId
+              and matchingRequest.status in :statuses
+            """)
+    Optional<MatchingRequest> findByMemberIdAndStatusIn(
+            @Param("memberId") Long memberId,
+            @Param("statuses") Collection<MatchingRequestStatus> statuses
+    );
+
     // 소비자 매칭 중지와 탐색/상태전이의 같은 요청 row 동시 변경 방지용 비관적 락 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))

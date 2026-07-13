@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.matching.controller.docs;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +18,30 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 @Tag(name = "Matching", description = "즉시 매칭 API")
 public interface MatchingApiDocs {
+
+    @Operation(
+            summary = "소비자 활성 매칭 복구 조회",
+            description = "앱 재진입 또는 WebSocket 이벤트 유실 시 인증된 소비자의 활성 매칭을 서버 기준으로 다시 찾습니다.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponse(responseCode = "200", description = "활성 매칭 현재 상태 조회 성공")
+    @ApiResponse(
+            responseCode = "204",
+            description = "활성 매칭 요청 없음",
+            content = @Content
+    )
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    ResponseEntity<BaseResponse<ConsumerMatchingStatusResponse>> getActiveStatus(
+            @Parameter(hidden = true)
+            CurrentMember currentMember
+    );
 
     @Operation(
             summary = "소비자 매칭 진행 상태 조회",
