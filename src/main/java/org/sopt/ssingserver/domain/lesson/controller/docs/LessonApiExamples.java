@@ -101,8 +101,8 @@ final class LessonApiExamples {
                             LessonStartConfirmationResponse.pending(
                                     30L,
                                     new LessonStartConfirmationResponse.StatusInfoResponse(
-                                            2,
-                                            3,
+                                            4,
+                                            6,
                                             true,
                                             true
                                     )
@@ -125,8 +125,8 @@ final class LessonApiExamples {
         return ConsumerLessonDetailResponse.confirmed(
                 LESSON_ID,
                 ConsumerLessonDetailResponse.ConfirmedStatusInfoResponse.of(
-                        2,
-                        3,
+                        4,
+                        6,
                         true,
                         true
                 ),
@@ -256,8 +256,8 @@ final class LessonApiExamples {
         return InstructorLessonDetailResponse.confirmed(
                 LESSON_ID,
                 InstructorLessonDetailResponse.ConfirmedStatusInfoResponse.of(
-                        2,
-                        3,
+                        4,
+                        6,
                         true,
                         true
                 ),

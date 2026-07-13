@@ -208,10 +208,10 @@ public sealed interface ConsumerLessonDetailResponse permits
     }
 
     record ConfirmedStatusInfoResponse(
-            @Schema(description = "강습 시작을 누른 강사와 팀 수", example = "2")
+            @Schema(description = "강습 준비가 완료된 사람 수", example = "4")
             int confirmedCount,
 
-            @Schema(description = "강습 시작을 눌러야 하는 강사와 팀 수", example = "3")
+            @Schema(description = "강습 준비를 눌러야 하는 전체 사람 수", example = "6")
             int requiredCount,
 
             @Schema(description = "현재 요청 주체의 강습 시작 준비 완료 여부", example = "true")

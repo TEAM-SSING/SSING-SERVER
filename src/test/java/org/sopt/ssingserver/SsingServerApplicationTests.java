@@ -312,6 +312,21 @@ class SsingServerApplicationTests {
 				.isEqualTo("CONFIRMED");
 		assertThat(consumerLessonExamples.path("COMPLETED").path("value").path("data").has("statusInfo"))
 				.isFalse();
+		assertThat(consumerLessonExamples.path("CONFIRMED").path("value").path("data")
+				.path("statusInfo").path("confirmedCount").asInt()).isEqualTo(4);
+		assertThat(consumerLessonExamples.path("CONFIRMED").path("value").path("data")
+				.path("statusInfo").path("requiredCount").asInt()).isEqualTo(6);
+
+		JsonNode instructorLessonExamples = findOperation(openApi, "GET /api/v1/instructor/lessons/{lessonId}")
+				.path("responses")
+				.path("200")
+				.path("content")
+				.path("application/json")
+				.path("examples");
+		assertThat(instructorLessonExamples.path("CONFIRMED").path("value").path("data")
+				.path("statusInfo").path("confirmedCount").asInt()).isEqualTo(4);
+		assertThat(instructorLessonExamples.path("CONFIRMED").path("value").path("data")
+				.path("statusInfo").path("requiredCount").asInt()).isEqualTo(6);
 
 		JsonNode startConfirmationContent = findOperation(openApi, "POST /api/v1/lessons/{lessonId}/start-confirmation")
 				.path("responses")
@@ -326,6 +341,10 @@ class SsingServerApplicationTests {
 				.path("data")
 				.path("startedAt")
 				.asString()).isNotBlank();
+		assertThat(startConfirmationExamples.path("CONFIRMED_PENDING").path("value").path("data")
+				.path("statusInfo").path("confirmedCount").asInt()).isEqualTo(4);
+		assertThat(startConfirmationExamples.path("CONFIRMED_PENDING").path("value").path("data")
+				.path("statusInfo").path("requiredCount").asInt()).isEqualTo(6);
 	}
 
 	@Test
