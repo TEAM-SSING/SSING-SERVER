@@ -64,6 +64,11 @@ class MatchingSearchServiceTest {
             Instant.parse("2026-07-07T00:00:00Z"),
             ZoneOffset.UTC
     );
+    private static final List<MatchingRequestGroupStatus> ACTIVE_ACCEPTED_GROUP_STATUSES = List.of(
+            MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
+            MatchingRequestGroupStatus.CONSUMER_ACCEPTED,
+            MatchingRequestGroupStatus.PAYMENT_PENDING
+    );
 
     @Mock
     private MatchingRequestRepository matchingRequestRepository;
@@ -260,21 +265,8 @@ class MatchingSearchServiceTest {
                 matchingRequest.getRequestedDurationMinutes(),
                 true
         )).thenReturn(List.of(setting));
-        when(instructorMatchingSettingRepository.findExposedCandidateByIdForUpdate(
-                11L,
-                matchingRequest.getResort(),
-                Sport.SNOWBOARD,
-                LessonLevel.FIRST_TIME,
-                2,
-                matchingRequest.getRequestedDurationMinutes(),
-                true
-        )).thenReturn(Optional.of(setting));
-        when(matchingOfferRepository.findByInstructorProfileIdAndStatusForUpdate(101L, MatchingOfferStatus.OFFERED))
-                .thenReturn(List.of(MatchingOffer.create(
-                        setting.getInstructorProfile(),
-                        MatchingRequestGroup.createCandidate(120),
-                        FIXED_CLOCK.instant()
-                )));
+        when(instructorMatchingSettingRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(setting));
+        whenActiveNegotiationExists(101L, true);
 
         MatchingSearchResult result = service.search(1L);
 
@@ -282,6 +274,39 @@ class MatchingSearchServiceTest {
         assertThat(result.requestStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         verify(matchingRequestGroupRepository, never()).save(any());
         verify(matchingRequestGroupItemRepository, never()).save(any());
+        verify(matchingOfferRepository, never()).save(any());
+        verify(matchingEventPublisher, never()).publish(any());
+    }
+
+    @Test
+    void search는_강사가_수락후_소비자확인또는결제대기_협상중이면_새_제안을_만들지_않는다() {
+        MatchingSearchService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
+        InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
+        when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
+                .thenReturn(Optional.of(matchingRequest));
+        when(instructorMatchingSettingRepository.findExposedCandidates(
+                matchingRequest.getResort(),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2,
+                matchingRequest.getRequestedDurationMinutes(),
+                true
+        )).thenReturn(List.of(setting));
+        givenLockedCandidate(setting);
+        whenActiveNegotiationExists(101L, true);
+
+        MatchingSearchResult result = service.search(1L);
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.SEARCHING);
+        assertThat(result.requestStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+        verify(matchingOfferRepository).existsActiveByInstructorProfileId(
+                101L,
+                MatchingOfferStatus.OFFERED,
+                MatchingOfferStatus.ACCEPTED,
+                ACTIVE_ACCEPTED_GROUP_STATUSES
+        );
+        verify(matchingRequestGroupRepository, never()).save(any());
         verify(matchingOfferRepository, never()).save(any());
         verify(matchingEventPublisher, never()).publish(any());
     }
@@ -302,15 +327,7 @@ class MatchingSearchServiceTest {
                 matchingRequest.getRequestedDurationMinutes(),
                 true
         )).thenReturn(List.of(staleSetting, availableSetting));
-        when(instructorMatchingSettingRepository.findExposedCandidateByIdForUpdate(
-                11L,
-                matchingRequest.getResort(),
-                Sport.SNOWBOARD,
-                LessonLevel.FIRST_TIME,
-                2,
-                matchingRequest.getRequestedDurationMinutes(),
-                true
-        )).thenReturn(Optional.empty());
+        when(instructorMatchingSettingRepository.findByIdForUpdate(11L)).thenReturn(Optional.empty());
         givenLockedAvailableCandidate(matchingRequest, availableSetting);
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
             MatchingRequestGroup group = invocation.getArgument(0);
@@ -326,8 +343,12 @@ class MatchingSearchServiceTest {
         MatchingSearchResult result = service.search(1L);
 
         assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_INSTRUCTOR);
-        verify(matchingOfferRepository, never())
-                .findByInstructorProfileIdAndStatusForUpdate(101L, MatchingOfferStatus.OFFERED);
+        verify(matchingOfferRepository, never()).existsActiveByInstructorProfileId(
+                101L,
+                MatchingOfferStatus.OFFERED,
+                MatchingOfferStatus.ACCEPTED,
+                ACTIVE_ACCEPTED_GROUP_STATUSES
+        );
         ArgumentCaptor<MatchingOffer> offerCaptor = ArgumentCaptor.forClass(MatchingOffer.class);
         verify(matchingOfferRepository).save(offerCaptor.capture());
         assertThat(offerCaptor.getValue().getInstructorProfile()).isSameAs(availableSetting.getInstructorProfile());
@@ -349,21 +370,8 @@ class MatchingSearchServiceTest {
                 matchingRequest.getRequestedDurationMinutes(),
                 true
         )).thenReturn(List.of(busySetting, availableSetting));
-        when(instructorMatchingSettingRepository.findExposedCandidateByIdForUpdate(
-                11L,
-                matchingRequest.getResort(),
-                Sport.SNOWBOARD,
-                LessonLevel.FIRST_TIME,
-                2,
-                matchingRequest.getRequestedDurationMinutes(),
-                true
-        )).thenReturn(Optional.of(busySetting));
-        when(matchingOfferRepository.findByInstructorProfileIdAndStatusForUpdate(101L, MatchingOfferStatus.OFFERED))
-                .thenReturn(List.of(MatchingOffer.create(
-                        busySetting.getInstructorProfile(),
-                        MatchingRequestGroup.createCandidate(120),
-                        FIXED_CLOCK.instant()
-                )));
+        when(instructorMatchingSettingRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(busySetting));
+        whenActiveNegotiationExists(101L, true);
         givenLockedAvailableCandidate(matchingRequest, availableSetting);
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
             MatchingRequestGroup group = invocation.getArgument(0);
@@ -403,17 +411,9 @@ class MatchingSearchServiceTest {
                 matchingRequest.getRequestedDurationMinutes(),
                 true
         )).thenReturn(List.of(previouslyOfferedSetting, availableSetting));
-        when(instructorMatchingSettingRepository.findExposedCandidateByIdForUpdate(
-                11L,
-                matchingRequest.getResort(),
-                Sport.SNOWBOARD,
-                LessonLevel.FIRST_TIME,
-                2,
-                matchingRequest.getRequestedDurationMinutes(),
-                true
-        )).thenReturn(Optional.of(previouslyOfferedSetting));
-        when(matchingOfferRepository.findByInstructorProfileIdAndStatusForUpdate(101L, MatchingOfferStatus.OFFERED))
-                .thenReturn(List.of());
+        when(instructorMatchingSettingRepository.findByIdForUpdate(11L))
+                .thenReturn(Optional.of(previouslyOfferedSetting));
+        whenActiveNegotiationExists(101L, false);
         when(matchingOfferRepository.existsByMatchingRequestIdAndInstructorProfileId(1L, 101L))
                 .thenReturn(true);
         givenLockedAvailableCandidate(matchingRequest, availableSetting);
@@ -547,6 +547,39 @@ class MatchingSearchServiceTest {
         verify(matchingEventPublisher).publish(isA(MatchingOfferCreatedEvent.class));
     }
 
+    @Test
+    void ensureNextOfferForGroup은_수락후_활성협상이_있는_후보를_건너뛴다() {
+        MatchingSearchService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
+        group.expose();
+        ReflectionTestUtils.setField(group, "id", 20L);
+        InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(120, 180));
+        when(matchingRequestGroupRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(group));
+        when(matchingOfferRepository.findByMatchingRequestGroupIdAndStatusForUpdate(20L, MatchingOfferStatus.OFFERED))
+                .thenReturn(List.of());
+        when(instructorMatchingSettingRepository.findExposedCandidates(
+                matchingRequest.getResort(),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2,
+                matchingRequest.getRequestedDurationMinutes(),
+                true
+        )).thenReturn(List.of(setting));
+        givenLockedCandidate(setting);
+        whenActiveNegotiationExists(101L, true);
+
+        NextMatchingOfferResult result = service.ensureNextOfferForGroup(
+                matchingRequest,
+                group,
+                FIXED_CLOCK.instant()
+        );
+
+        assertThat(result.status()).isSameAs(NextMatchingOfferResult.Status.NO_CANDIDATE);
+        verify(matchingOfferRepository, never()).save(any());
+        verify(matchingEventPublisher, never()).publish(any());
+    }
+
     private MatchingSearchService createService() {
         return new MatchingSearchService(
                 matchingRequestRepository,
@@ -586,19 +619,11 @@ class MatchingSearchServiceTest {
             MatchingRequest matchingRequest,
             InstructorMatchingSetting setting
     ) {
-        when(instructorMatchingSettingRepository.findExposedCandidateByIdForUpdate(
-                setting.getId(),
-                matchingRequest.getResort(),
-                Sport.SNOWBOARD,
-                LessonLevel.FIRST_TIME,
-                matchingRequest.getHeadcount(),
-                matchingRequest.getRequestedDurationMinutes(),
-                true
-        )).thenReturn(Optional.of(setting));
-        when(matchingOfferRepository.findByInstructorProfileIdAndStatusForUpdate(
+        givenLockedCandidate(setting);
+        whenActiveNegotiationExists(
                 setting.getInstructorProfile().getId(),
-                MatchingOfferStatus.OFFERED
-        )).thenReturn(List.of());
+                false
+        );
         when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(any()))
                 .thenAnswer(invocation -> List.of(MatchingRequestGroupItem.createNotRequested(
                         matchingRequest,
@@ -609,6 +634,11 @@ class MatchingSearchServiceTest {
         )).thenReturn(Optional.of(instructorPricePolicy(setting.getInstructorProfile())));
         when(platformFeePolicyRepository.findFirstByIsActiveTrueOrderByIdDesc())
                 .thenReturn(Optional.of(platformFeePolicy()));
+    }
+
+    private void givenLockedCandidate(InstructorMatchingSetting setting) {
+        when(instructorMatchingSettingRepository.findByIdForUpdate(setting.getId()))
+                .thenReturn(Optional.of(setting));
     }
 
     private InstructorMatchingSetting instructorMatchingSetting(
@@ -631,6 +661,18 @@ class MatchingSearchServiceTest {
         return setting;
     }
 
+    private void whenActiveNegotiationExists(
+            Long instructorProfileId,
+            boolean exists
+    ) {
+        when(matchingOfferRepository.existsActiveByInstructorProfileId(
+                instructorProfileId,
+                MatchingOfferStatus.OFFERED,
+                MatchingOfferStatus.ACCEPTED,
+                ACTIVE_ACCEPTED_GROUP_STATUSES
+        )).thenReturn(exists);
+    }
+
     private InstructorProfile instructorProfile(Long id) {
         Member member = Member.create("강사", null, MemberRole.INSTRUCTOR, MemberStatus.ACTIVE);
         InstructorProfile instructorProfile = InstructorProfile.create(
@@ -645,6 +687,7 @@ class MatchingSearchServiceTest {
                 FIXED_CLOCK.instant()
         );
         ReflectionTestUtils.setField(instructorProfile, "id", id);
+        ReflectionTestUtils.setField(instructorProfile, "resort", resort());
         return instructorProfile;
     }
 
@@ -668,6 +711,7 @@ class MatchingSearchServiceTest {
 
     private Resort resort() {
         Resort resort = construct(Resort.class);
+        ReflectionTestUtils.setField(resort, "id", 1L);
         ReflectionTestUtils.setField(resort, "code", "HIGH1");
         ReflectionTestUtils.setField(resort, "name", "하이원리조트");
         ReflectionTestUtils.setField(resort, "displayName", "하이원");

@@ -64,6 +64,7 @@ class SsingServerApplicationTests {
 			"PATCH /api/v1/consumer/matching-requests/{matchingRequestId}/confirmation",
 			"POST /api/v1/consumer/matching-requests/{matchingRequestId}/payment",
 			"GET /api/v1/instructor/matching-offers",
+			"GET /api/v1/instructor/matching-offers/{offerId}",
 			"PATCH /api/v1/instructor/matching-offers/{offerId}",
 			"GET /api/v1/consumer/lessons/{lessonId}",
 			"GET /api/v1/instructor/lessons/{lessonId}",
@@ -405,6 +406,34 @@ class SsingServerApplicationTests {
 				.path("statusInfo").path("confirmedCount").asInt()).isEqualTo(4);
 		assertThat(startConfirmationExamples.path("CONFIRMED_PENDING").path("value").path("data")
 				.path("statusInfo").path("requiredCount").asInt()).isEqualTo(6);
+	}
+
+	@Test
+	void generatedOpenApiDocumentsInstructorMatchingRecoveryContract() throws Exception {
+		JsonNode openApi = generatedOpenApi();
+		JsonNode detailOperation = findOperation(
+				openApi,
+				"GET /api/v1/instructor/matching-offers/{offerId}"
+		);
+		JsonNode detailResponses = detailOperation.path("responses");
+		assertThat(detailResponses.has("200")).isTrue();
+		assertThat(detailResponses.path("404")
+				.path("content")
+				.path("application/json")
+				.path("examples")
+				.has("MATCHING_OFFER_NOT_FOUND")).isTrue();
+
+		JsonNode detailProperties = openApi.path("components")
+				.path("schemas")
+				.path("InstructorMatchingOfferDetailResponse")
+				.path("properties");
+		assertThat(detailProperties.has("offerId")).isTrue();
+		assertThat(detailProperties.has("groupId")).isTrue();
+		assertThat(detailProperties.has("matchingStatus")).isTrue();
+		assertThat(detailProperties.has("requestSummary")).isTrue();
+		assertThat(detailProperties.has("lessonSummary")).isTrue();
+		assertThat(detailProperties.has("priceSummary")).isTrue();
+		assertThat(detailProperties.has("expiresAt")).isFalse();
 	}
 
 	@Test

@@ -26,6 +26,7 @@ import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
+import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
@@ -38,6 +39,7 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatusReason;
+import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.event.InstructorAcceptedEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
@@ -310,9 +312,16 @@ class InstructorMatchingOfferServiceTest {
         assertThat(firstItemResult.groupId()).isEqualTo(20L);
         assertThat(firstItemResult.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
         assertThat(firstItemResult.expiresAt()).isNull();
+        assertThat(firstItemResult.requestSummary().requesterName()).isEqualTo("테스트");
+        assertThat(firstItemResult.requestSummary().headcount()).isEqualTo(2);
+        assertThat(firstItemResult.requestSummary().matchingRequestCount()).isEqualTo(1);
         assertThat(firstItemResult.lessonSummary().resort().code()).isEqualTo("HIGH1");
         assertThat(firstItemResult.lessonSummary().resort().displayName()).isEqualTo("하이원");
         assertThat(firstItemResult.lessonSummary().sport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(firstItemResult.lessonSummary().level()).isSameAs(LessonLevel.FIRST_TIME);
+        assertThat(firstItemResult.lessonSummary().durationMinutes()).isEqualTo(120);
+        assertThat(firstItemResult.lessonSummary().totalHeadcount()).isEqualTo(2);
+        assertThat(firstItemResult.lessonSummary().startType()).isEqualTo("IMMEDIATE");
         assertThat(firstItemResult.priceSummary().lessonPriceAmount()).isEqualTo(80_000);
         assertThat(firstItemResult.priceSummary().resortPassFeeAmount()).isEqualTo(20_000);
         assertThat(firstItemResult.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
@@ -326,6 +335,112 @@ class InstructorMatchingOfferServiceTest {
                 List.of(20L, 21L)
         );
         verify(matchingOfferPriceSnapshotRepository).findByMatchingOfferIdIn(List.of(50L, 51L));
+    }
+
+    @Test
+    void getOfferDetail은_본인에게_노출된_OFFERED_제안으로_I07_화면을_복구한다() {
+        InstructorMatchingOfferService service = createService();
+        InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
+        MatchingRequestGroup group = exposedGroup(20L);
+        MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
+        MatchingRequestGroupItem groupItem = item(40L, matchingRequest, group);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
+        MatchingOfferPriceSnapshot priceSnapshot = offerPriceSnapshot(offer, 80_000, 20_000);
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(instructorProfile));
+        when(matchingOfferRepository.findDetailById(50L)).thenReturn(Optional.of(offer));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(groupItem));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L)).thenReturn(Optional.of(priceSnapshot));
+
+        InstructorMatchingOfferDetailResult result = service.getOfferDetail(1L, 50L);
+
+        assertThat(result.offerId()).isEqualTo(50L);
+        assertThat(result.groupId()).isEqualTo(20L);
+        assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.OFFERED);
+        assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.EXPOSED);
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_INSTRUCTOR);
+        assertThat(result.requestSummary().requesterName()).isEqualTo("테스트");
+        assertThat(result.lessonSummary().level()).isSameAs(LessonLevel.FIRST_TIME);
+        assertThat(result.lessonSummary().durationMinutes()).isEqualTo(120);
+        assertThat(result.lessonSummary().totalHeadcount()).isEqualTo(2);
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
+    }
+
+    @Test
+    void getOfferDetail은_수락후_소비자최종확인대기_협상으로_I08_화면을_복구한다() {
+        InstructorMatchingOfferService service = createService();
+        InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
+        MatchingRequestGroup group = exposedGroup(20L);
+        group.markInstructorAccepted();
+        MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
+        MatchingRequestGroupItem groupItem = item(40L, matchingRequest, group);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
+        offer.accept(FIXED_CLOCK.instant());
+        MatchingOfferPriceSnapshot priceSnapshot = offerPriceSnapshot(offer, 80_000, 20_000);
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(instructorProfile));
+        when(matchingOfferRepository.findDetailById(50L)).thenReturn(Optional.of(offer));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(groupItem));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L)).thenReturn(Optional.of(priceSnapshot));
+
+        InstructorMatchingOfferDetailResult result = service.getOfferDetail(1L, 50L);
+
+        assertThat(result.offerStatus()).isSameAs(MatchingOfferStatus.ACCEPTED);
+        assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED);
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_CONFIRMATION);
+    }
+
+    @Test
+    void getOfferDetail은_수락후_결제대기_협상도_복구한다() {
+        InstructorMatchingOfferService service = createService();
+        InstructorProfile instructorProfile = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
+        MatchingRequestGroup group = exposedGroup(20L);
+        group.markInstructorAccepted();
+        group.markPaymentPending();
+        MatchingRequest matchingRequest = matchingRequest(30L, member(2L, MemberRole.CONSUMER));
+        MatchingRequestGroupItem groupItem = item(40L, matchingRequest, group);
+        MatchingOffer offer = offeredOffer(50L, instructorProfile, group);
+        offer.accept(FIXED_CLOCK.instant());
+        MatchingOfferPriceSnapshot priceSnapshot = offerPriceSnapshot(offer, 80_000, 20_000);
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(instructorProfile));
+        when(matchingOfferRepository.findDetailById(50L)).thenReturn(Optional.of(offer));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(groupItem));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L)).thenReturn(Optional.of(priceSnapshot));
+
+        InstructorMatchingOfferDetailResult result = service.getOfferDetail(1L, 50L);
+
+        assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.PAYMENT_PENDING);
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.PAYMENT_PENDING);
+    }
+
+    @Test
+    void getOfferDetail은_다른강사_종료_확정된_제안을_MATCHING_OFFER_NOT_FOUND로_처리한다() {
+        InstructorMatchingOfferService service = createService();
+        InstructorProfile currentInstructor = instructorProfile(10L, member(1L, MemberRole.INSTRUCTOR));
+        InstructorProfile otherInstructor = instructorProfile(11L, member(3L, MemberRole.INSTRUCTOR));
+        MatchingOffer otherOffer = offeredOffer(50L, otherInstructor, exposedGroup(20L));
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(currentInstructor));
+        when(matchingOfferRepository.findDetailById(50L)).thenReturn(Optional.of(otherOffer));
+
+        assertThatExceptionOfType(BusinessException.class)
+                .isThrownBy(() -> service.getOfferDetail(1L, 50L))
+                .satisfies(exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND));
+
+        MatchingRequestGroup confirmedGroup = exposedGroup(21L);
+        confirmedGroup.markInstructorAccepted();
+        confirmedGroup.markPaymentPending();
+        confirmedGroup.confirm();
+        MatchingOffer confirmedOffer = offeredOffer(51L, currentInstructor, confirmedGroup);
+        confirmedOffer.accept(FIXED_CLOCK.instant());
+        when(matchingOfferRepository.findDetailById(51L)).thenReturn(Optional.of(confirmedOffer));
+
+        assertThatExceptionOfType(BusinessException.class)
+                .isThrownBy(() -> service.getOfferDetail(1L, 51L))
+                .satisfies(exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND));
+        verifyNoInteractions(matchingRequestGroupItemRepository);
     }
 
     private InstructorMatchingOfferService createService() {
