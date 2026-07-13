@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -219,9 +220,39 @@ class AuthServiceTest {
     }
 
     @Test
+    void loginConsumerWithKakao는_providerUser_unique가_아닌_무결성오류를_복구하지_않는다() {
+        Member existingMember = member(1L, MemberStatus.ACTIVE);
+        OAuthAccount existingAccount = OAuthAccount.create(
+                existingMember,
+                OAuthProvider.KAKAO,
+                PROVIDER_USER_ID
+        );
+        DataIntegrityViolationException originalException =
+                new DataIntegrityViolationException("uk_oauth_accounts_member_provider");
+        when(kakaoOAuthClient.validateAccessToken(KAKAO_ACCESS_TOKEN))
+                .thenReturn(new KakaoTokenInfo(PROVIDER_USER_ID));
+        when(oauthAccountRepository.findByProviderAndProviderUserId(OAuthProvider.KAKAO, PROVIDER_USER_ID))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existingAccount));
+        when(kakaoOAuthClient.getProfile(KAKAO_ACCESS_TOKEN))
+                .thenReturn(new KakaoProfile(PROVIDER_USER_ID, "동시 가입 회원", null));
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(oauthAccountRepository.save(any(OAuthAccount.class))).thenThrow(originalException);
+
+        Throwable thrown = catchThrowable(
+                () -> authService.loginConsumerWithKakao(KAKAO_ACCESS_TOKEN)
+        );
+
+        verifyNoInteractions(authTokenIssueService);
+        assertThat(thrown).isSameAs(originalException);
+    }
+
+    @Test
     void refreshAccessToken은_ACTIVE_회원에게_새_Access_Token을_반환한다() {
         Member member = member(MemberStatus.ACTIVE);
         RefreshToken refreshToken = refreshToken(member);
+        Instant expiresAtBeforeRefresh = refreshToken.getExpiresAt();
         IssuedAccessToken issuedAccessToken = IssuedAccessToken.of("new-access-token", "Bearer", 3600);
         when(refreshTokenService.findValidRefreshToken(RAW_REFRESH_TOKEN)).thenReturn(refreshToken);
         when(authTokenIssueService.issueAccessToken(member)).thenReturn(issuedAccessToken);
@@ -229,6 +260,7 @@ class AuthServiceTest {
         AuthRefreshResponse result = authService.refreshAccessToken(RAW_REFRESH_TOKEN);
 
         assertThat(result).isEqualTo(new AuthRefreshResponse("new-access-token", "Bearer", 3600));
+        assertThat(refreshToken.getExpiresAt()).isEqualTo(expiresAtBeforeRefresh);
         assertThat(refreshToken.getRevokedAt()).isNull();
         verify(authTokenIssueService).issueAccessToken(member);
         verify(authTokenIssueService, never()).issueTokens(any(Member.class));

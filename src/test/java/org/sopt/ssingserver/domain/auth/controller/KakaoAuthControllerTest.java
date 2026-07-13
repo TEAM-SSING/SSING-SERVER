@@ -100,6 +100,10 @@ class KakaoAuthControllerTest {
                 .andExpect(jsonPath("$.data.member.nickname").value("소비자"))
                 .andExpect(jsonPath("$.data.member.role").value("CONSUMER"))
                 .andExpect(jsonPath("$.data.member.memberStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$..devMeta").doesNotExist())
+                .andExpect(jsonPath("$..personaKey").doesNotExist())
+                .andExpect(jsonPath("$..personaOrigin").doesNotExist())
+                .andExpect(jsonPath("$..accountState").doesNotExist())
                 .andExpect(jsonPath("$.data.member.instructorStatus").doesNotExist());
 
         verify(authService).loginConsumerWithKakao(KAKAO_ACCESS_TOKEN);
@@ -152,6 +156,10 @@ class KakaoAuthControllerTest {
                 .andExpect(jsonPath("$.data.member.nickname").value("강사"))
                 .andExpect(jsonPath("$.data.member.role").value("INSTRUCTOR"))
                 .andExpect(jsonPath("$.data.member.memberStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$..devMeta").doesNotExist())
+                .andExpect(jsonPath("$..personaKey").doesNotExist())
+                .andExpect(jsonPath("$..personaOrigin").doesNotExist())
+                .andExpect(jsonPath("$..accountState").doesNotExist())
                 .andExpect(jsonPath("$.data.member.instructorStatus").value("APPROVED"));
 
         verify(authService).loginInstructorWithKakao(KAKAO_ACCESS_TOKEN);

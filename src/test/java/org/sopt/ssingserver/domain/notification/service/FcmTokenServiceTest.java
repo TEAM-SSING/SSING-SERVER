@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -130,6 +131,22 @@ class FcmTokenServiceTest {
         assertThat(concurrentToken.getToken()).isEqualTo(FCM_TOKEN);
         assertThat(concurrentToken.getLastRegisteredAt()).isEqualTo(NOW);
         verify(fcmTokenRepository, times(2)).findByToken(FCM_TOKEN);
+    }
+
+    @Test
+    void registerOrUpdate는_저장충돌후에도_Token이_없으면_원래예외를_전파한다() {
+        Member currentMember = activeMember("현재 회원", MemberRole.CONSUMER);
+        RegisterFcmTokenRequest request = registerRequest(ClientApp.CONSUMER, ClientPlatform.ANDROID);
+        DataIntegrityViolationException originalException =
+                new DataIntegrityViolationException("uk_fcm_tokens_token");
+        when(memberRepository.getReferenceById(MEMBER_ID)).thenReturn(currentMember);
+        when(fcmTokenRepository.findByToken(FCM_TOKEN))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty());
+        when(fcmTokenRepository.save(any(FcmToken.class))).thenThrow(originalException);
+
+        assertThatThrownBy(() -> fcmTokenService.registerOrUpdate(MEMBER_ID, request))
+                .isSameAs(originalException);
     }
 
     @Test
