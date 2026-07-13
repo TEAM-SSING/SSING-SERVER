@@ -2,8 +2,6 @@ package org.sopt.ssingserver.domain.instructor.controller.docs;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,16 +27,7 @@ public interface InstructorApiDocs {
             description = "활동 리조트와 자격증 기준 선택 가능 종목을 조회합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
-    @ApiResponse(
-            responseCode = "200",
-            description = "즉시노출 조건 화면 조회 성공",
-            content = @Content(
-                    mediaType = "application/json",
-                    schema = @Schema(
-                            implementation = InstructorMatchingExposureConditionsSuccessResponseDocs.class
-                    )
-            )
-    )
+    @ApiResponse(responseCode = "200", description = "즉시노출 조건 화면 조회 성공")
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
@@ -58,16 +47,7 @@ public interface InstructorApiDocs {
             description = "강사가 즉시 매칭에 노출될 조건을 저장하고 매칭을 시작합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
-    @ApiResponse(
-            responseCode = "200",
-            description = "즉시 매칭 조건 저장 및 매칭 시작 성공",
-            content = @Content(
-                    mediaType = "application/json",
-                    schema = @Schema(
-                            implementation = InstructorMatchingExposureStartSuccessResponseDocs.class
-                    )
-            )
-    )
+    @ApiResponse(responseCode = "200", description = "즉시 매칭 조건 저장 및 매칭 시작 성공")
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {

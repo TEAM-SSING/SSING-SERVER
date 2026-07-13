@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.lesson.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.DiscriminatorMapping;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -10,103 +11,200 @@ import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record InstructorLessonDetailResponse(
-        @Schema(description = "강습 ID", example = "9101")
-        Long lessonId,
+@Schema(
+        name = "InstructorLessonDetailResponse",
+        description = "강사 강습 상세 응답. lessonStatus에 따라 응답 구조가 달라집니다.",
+        discriminatorProperty = "lessonStatus",
+        discriminatorMapping = {
+                @DiscriminatorMapping(value = "CONFIRMED", schema = InstructorLessonDetailResponse.Confirmed.class),
+                @DiscriminatorMapping(value = "IN_PROGRESS", schema = InstructorLessonDetailResponse.InProgress.class),
+                @DiscriminatorMapping(value = "COMPLETED", schema = InstructorLessonDetailResponse.Completed.class),
+                @DiscriminatorMapping(value = "CANCELED", schema = InstructorLessonDetailResponse.Canceled.class)
+        },
+        oneOf = {
+                InstructorLessonDetailResponse.Confirmed.class,
+                InstructorLessonDetailResponse.InProgress.class,
+                InstructorLessonDetailResponse.Completed.class,
+                InstructorLessonDetailResponse.Canceled.class
+        }
+)
+public sealed interface InstructorLessonDetailResponse permits
+        InstructorLessonDetailResponse.Confirmed,
+        InstructorLessonDetailResponse.InProgress,
+        InstructorLessonDetailResponse.Completed,
+        InstructorLessonDetailResponse.Canceled {
 
-        @Schema(description = "강습 상태", example = "CONFIRMED")
-        LessonStatus lessonStatus,
+    @Schema(description = "강습 ID", example = "9101")
+    Long lessonId();
 
-        @Schema(description = "상태별 강습 진행 정보")
-        StatusInfo statusInfo,
+    @Schema(description = "강습 상태", example = "CONFIRMED")
+    LessonStatus lessonStatus();
 
-        @Schema(description = "취소 상태 정보. lessonStatus가 CANCELED일 때 사용")
-        CancelInfoResponse cancelInfo,
-
-        @Schema(description = "상태별 강습 정보")
-        LessonInfo lessonInfo,
-
-        @Schema(description = "강습에 포함된 팀 목록")
-        List<? extends MatchingRequest> matchingRequests
-) {
-
-    public sealed interface StatusInfo permits ConfirmedStatusInfoResponse, InProgressStatusInfoResponse {
+    default StatusInfo statusInfo() {
+        return null;
     }
 
-    public sealed interface LessonInfo permits LessonInfoResponse, CompletedLessonInfoResponse, CanceledLessonInfoResponse {
+    default CancelInfoResponse cancelInfo() {
+        return null;
     }
 
-    public sealed interface MatchingRequest permits ConfirmedMatchingRequestResponse, MatchingRequestResponse {
+    default LessonInfo lessonInfo() {
+        return null;
     }
 
-    public static InstructorLessonDetailResponse confirmed(
+    default List<? extends MatchingRequest> matchingRequests() {
+        return null;
+    }
+
+    static InstructorLessonDetailResponse confirmed(
             Long lessonId,
             ConfirmedStatusInfoResponse statusInfo,
             LessonInfoResponse lessonInfo,
             List<ConfirmedMatchingRequestResponse> matchingRequests
     ) {
-        return new InstructorLessonDetailResponse(
+        return new Confirmed(
                 lessonId,
                 LessonStatus.CONFIRMED,
                 statusInfo,
-                null,
                 lessonInfo,
                 matchingRequests
         );
     }
 
-    public static InstructorLessonDetailResponse inProgress(
+    static InstructorLessonDetailResponse inProgress(
             Long lessonId,
             InProgressStatusInfoResponse statusInfo,
             LessonInfoResponse lessonInfo,
             List<MatchingRequestResponse> matchingRequests
     ) {
-        return new InstructorLessonDetailResponse(
+        return new InProgress(
                 lessonId,
                 LessonStatus.IN_PROGRESS,
                 statusInfo,
-                null,
                 lessonInfo,
                 matchingRequests
         );
     }
 
-    public static InstructorLessonDetailResponse completed(
+    static InstructorLessonDetailResponse completed(
             Long lessonId,
             CompletedLessonInfoResponse lessonInfo,
             List<MatchingRequestResponse> matchingRequests
     ) {
-        return new InstructorLessonDetailResponse(
+        return new Completed(
                 lessonId,
                 LessonStatus.COMPLETED,
-                null,
-                null,
                 lessonInfo,
                 matchingRequests
         );
     }
 
-    public static InstructorLessonDetailResponse canceled(
+    static InstructorLessonDetailResponse canceled(
             Long lessonId,
             CancelInfoResponse cancelInfo,
             CanceledLessonInfoResponse lessonInfo,
             List<MatchingRequestResponse> matchingRequests
     ) {
-        return new InstructorLessonDetailResponse(
+        return new Canceled(
                 lessonId,
                 LessonStatus.CANCELED,
-                null,
                 cancelInfo,
                 lessonInfo,
                 matchingRequests
         );
     }
 
-    public record ConfirmedStatusInfoResponse(
-            @Schema(description = "강습 시작을 누른 강사와 팀 수", example = "2")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "InstructorLessonConfirmedDetail", description = "강사 강습 상세 - 시작 전")
+    record Confirmed(
+            @Schema(description = "강습 ID", example = "9101")
+            Long lessonId,
+
+            @Schema(description = "강습 상태", example = "CONFIRMED")
+            LessonStatus lessonStatus,
+
+            @Schema(description = "강습 시작 확인 현황")
+            ConfirmedStatusInfoResponse statusInfo,
+
+            @Schema(description = "강습 정보")
+            LessonInfoResponse lessonInfo,
+
+            @Schema(description = "강습에 포함된 팀 목록")
+            List<ConfirmedMatchingRequestResponse> matchingRequests
+    ) implements InstructorLessonDetailResponse {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "InstructorLessonInProgressDetail", description = "강사 강습 상세 - 진행 중")
+    record InProgress(
+            @Schema(description = "강습 ID", example = "9101")
+            Long lessonId,
+
+            @Schema(description = "강습 상태", example = "IN_PROGRESS")
+            LessonStatus lessonStatus,
+
+            @Schema(description = "진행 중 강습 시간 정보")
+            InProgressStatusInfoResponse statusInfo,
+
+            @Schema(description = "강습 정보")
+            LessonInfoResponse lessonInfo,
+
+            @Schema(description = "강습에 포함된 팀 목록")
+            List<MatchingRequestResponse> matchingRequests
+    ) implements InstructorLessonDetailResponse {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "InstructorLessonCompletedDetail", description = "강사 강습 상세 - 완료")
+    record Completed(
+            @Schema(description = "강습 ID", example = "9101")
+            Long lessonId,
+
+            @Schema(description = "강습 상태", example = "COMPLETED")
+            LessonStatus lessonStatus,
+
+            @Schema(description = "완료된 강습 정보")
+            CompletedLessonInfoResponse lessonInfo,
+
+            @Schema(description = "강습에 포함된 팀 목록")
+            List<MatchingRequestResponse> matchingRequests
+    ) implements InstructorLessonDetailResponse {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "InstructorLessonCanceledDetail", description = "강사 강습 상세 - 취소")
+    record Canceled(
+            @Schema(description = "강습 ID", example = "9101")
+            Long lessonId,
+
+            @Schema(description = "강습 상태", example = "CANCELED")
+            LessonStatus lessonStatus,
+
+            @Schema(description = "취소 상태 정보")
+            CancelInfoResponse cancelInfo,
+
+            @Schema(description = "취소된 강습 정보")
+            CanceledLessonInfoResponse lessonInfo,
+
+            @Schema(description = "강습에 포함된 팀 목록")
+            List<MatchingRequestResponse> matchingRequests
+    ) implements InstructorLessonDetailResponse {
+    }
+
+    sealed interface StatusInfo permits ConfirmedStatusInfoResponse, InProgressStatusInfoResponse {
+    }
+
+    sealed interface LessonInfo permits LessonInfoResponse, CompletedLessonInfoResponse, CanceledLessonInfoResponse {
+    }
+
+    sealed interface MatchingRequest permits ConfirmedMatchingRequestResponse, MatchingRequestResponse {
+    }
+
+    record ConfirmedStatusInfoResponse(
+            @Schema(description = "강습 준비가 완료된 사람 수", example = "4")
             int confirmedCount,
 
-            @Schema(description = "강습 시작을 눌러야 하는 강사와 팀 수", example = "3")
+            @Schema(description = "강습 준비를 눌러야 하는 전체 사람 수", example = "6")
             int requiredCount,
 
             @Schema(description = "현재 요청 주체의 강습 시작 준비 완료 여부", example = "true")
@@ -131,7 +229,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record InProgressStatusInfoResponse(
+    record InProgressStatusInfoResponse(
             @Schema(description = "서버 현재 시각", example = "2026-01-01T10:59:00+09:00")
             OffsetDateTime serverTime,
 
@@ -165,7 +263,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record CancelInfoResponse(
+    record CancelInfoResponse(
             @Schema(description = "취소 시각", example = "2026-01-01T10:20:00+09:00")
             OffsetDateTime canceledAt,
 
@@ -185,7 +283,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record CanceledByResponse(
+    record CanceledByResponse(
             @Schema(description = "취소한 회원 ID", example = "9001")
             Long memberId,
 
@@ -201,7 +299,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record LessonInfoResponse(
+    record LessonInfoResponse(
             @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
             List<String> representativeConsumerNames,
 
@@ -250,7 +348,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record CompletedLessonInfoResponse(
+    record CompletedLessonInfoResponse(
             @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
             List<String> representativeConsumerNames,
 
@@ -309,7 +407,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record CanceledLessonInfoResponse(
+    record CanceledLessonInfoResponse(
             @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
             List<String> representativeConsumerNames,
 
@@ -353,7 +451,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record ResortResponse(
+    record ResortResponse(
             @Schema(description = "리조트 코드", example = "HIGH1")
             String code,
 
@@ -369,7 +467,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record ConfirmedMatchingRequestResponse(
+    record ConfirmedMatchingRequestResponse(
             @Schema(description = "매칭 요청 ID", example = "91011")
             Long matchingRequestId,
 
@@ -413,7 +511,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record MatchingRequestResponse(
+    record MatchingRequestResponse(
             @Schema(description = "매칭 요청 ID", example = "91011")
             Long matchingRequestId,
 
@@ -452,7 +550,7 @@ public record InstructorLessonDetailResponse(
         }
     }
 
-    public record ParticipantResponse(
+    record ParticipantResponse(
             @Schema(description = "강습 참여자 ID", example = "910111")
             Long participantId,
 
