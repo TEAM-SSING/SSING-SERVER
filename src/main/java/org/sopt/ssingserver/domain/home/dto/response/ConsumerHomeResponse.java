@@ -31,6 +31,7 @@ public record ConsumerHomeResponse(
         );
     }
 
+    @Schema(name = "ConsumerHomeLessonCardResponse")
     public record LessonCardResponse(
             @Schema(description = "강습 ID", example = "1")
             Long lessonId,
