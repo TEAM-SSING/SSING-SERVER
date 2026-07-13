@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.lesson.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.DiscriminatorMapping;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -14,6 +15,12 @@ import org.sopt.ssingserver.domain.member.enums.Gender;
         name = "ConsumerLessonDetailResponse",
         description = "소비자 강습 상세 응답. lessonStatus에 따라 응답 구조가 달라집니다.",
         discriminatorProperty = "lessonStatus",
+        discriminatorMapping = {
+                @DiscriminatorMapping(value = "CONFIRMED", schema = ConsumerLessonDetailResponse.Confirmed.class),
+                @DiscriminatorMapping(value = "IN_PROGRESS", schema = ConsumerLessonDetailResponse.InProgress.class),
+                @DiscriminatorMapping(value = "COMPLETED", schema = ConsumerLessonDetailResponse.Completed.class),
+                @DiscriminatorMapping(value = "CANCELED", schema = ConsumerLessonDetailResponse.Canceled.class)
+        },
         oneOf = {
                 ConsumerLessonDetailResponse.Confirmed.class,
                 ConsumerLessonDetailResponse.InProgress.class,

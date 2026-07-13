@@ -285,6 +285,30 @@ class SsingServerApplicationTests {
 						"#/components/schemas/ConsumerLessonCompletedDetail",
 						"#/components/schemas/ConsumerLessonCanceledDetail"
 				);
+		assertDiscriminatorMapping(
+				schemas,
+				"ConsumerLessonDetailResponse",
+				"CONFIRMED",
+				"#/components/schemas/ConsumerLessonConfirmedDetail"
+		);
+		assertDiscriminatorMapping(
+				schemas,
+				"ConsumerLessonDetailResponse",
+				"IN_PROGRESS",
+				"#/components/schemas/ConsumerLessonInProgressDetail"
+		);
+		assertDiscriminatorMapping(
+				schemas,
+				"ConsumerLessonDetailResponse",
+				"COMPLETED",
+				"#/components/schemas/ConsumerLessonCompletedDetail"
+		);
+		assertDiscriminatorMapping(
+				schemas,
+				"ConsumerLessonDetailResponse",
+				"CANCELED",
+				"#/components/schemas/ConsumerLessonCanceledDetail"
+		);
 		assertThat(schemaReferences(schemas.path("InstructorLessonDetailResponse").path("oneOf")))
 				.contains(
 						"#/components/schemas/InstructorLessonConfirmedDetail",
@@ -292,11 +316,47 @@ class SsingServerApplicationTests {
 						"#/components/schemas/InstructorLessonCompletedDetail",
 						"#/components/schemas/InstructorLessonCanceledDetail"
 				);
+		assertDiscriminatorMapping(
+				schemas,
+				"InstructorLessonDetailResponse",
+				"CONFIRMED",
+				"#/components/schemas/InstructorLessonConfirmedDetail"
+		);
+		assertDiscriminatorMapping(
+				schemas,
+				"InstructorLessonDetailResponse",
+				"IN_PROGRESS",
+				"#/components/schemas/InstructorLessonInProgressDetail"
+		);
+		assertDiscriminatorMapping(
+				schemas,
+				"InstructorLessonDetailResponse",
+				"COMPLETED",
+				"#/components/schemas/InstructorLessonCompletedDetail"
+		);
+		assertDiscriminatorMapping(
+				schemas,
+				"InstructorLessonDetailResponse",
+				"CANCELED",
+				"#/components/schemas/InstructorLessonCanceledDetail"
+		);
 		assertThat(schemaReferences(schemas.path("LessonStartConfirmationResponse").path("oneOf")))
 				.contains(
 						"#/components/schemas/LessonStartConfirmationPending",
 						"#/components/schemas/LessonStartConfirmationStarted"
 				);
+		assertDiscriminatorMapping(
+				schemas,
+				"LessonStartConfirmationResponse",
+				"CONFIRMED",
+				"#/components/schemas/LessonStartConfirmationPending"
+		);
+		assertDiscriminatorMapping(
+				schemas,
+				"LessonStartConfirmationResponse",
+				"IN_PROGRESS",
+				"#/components/schemas/LessonStartConfirmationStarted"
+		);
 
 		JsonNode consumerLessonContent = findOperation(openApi, "GET /api/v1/consumer/lessons/{lessonId}")
 				.path("responses")
@@ -400,6 +460,18 @@ class SsingServerApplicationTests {
 		Set<String> references = new TreeSet<>();
 		schemas.forEach(schema -> references.add(schema.path("$ref").asString()));
 		return references;
+	}
+
+	private void assertDiscriminatorMapping(
+			JsonNode schemas,
+			String schemaName,
+			String lessonStatus,
+			String expectedSchemaReference
+	) {
+		assertThat(schemas.path(schemaName).path("discriminator").path("propertyName").asString())
+				.isEqualTo("lessonStatus");
+		assertThat(schemas.path(schemaName).path("discriminator").path("mapping").path(lessonStatus).asString())
+				.isEqualTo(expectedSchemaReference);
 	}
 
 	private JsonNode findOperation(JsonNode openApi, String operationKey) {
