@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Min;
 import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
 import org.sopt.ssingserver.domain.matching.dto.request.RespondInstructorMatchingOfferRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDecisionResponse;
+import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDetailResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffersResponse;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
@@ -52,6 +53,36 @@ public interface InstructorMatchingOfferApiDocs {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "페이지 크기")
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+    );
+
+    @Operation(
+            summary = "강사 활성 매칭 제안 상세 조회",
+            description = "강사 홈의 offerId로 현재 활성 제안 또는 수락 후 진행 중인 매칭 상태를 복구합니다. "
+                    + "제안이 이미 종료되거나 강습으로 확정된 경우에는 홈을 다시 조회합니다.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponse(responseCode = "200", description = "강사 활성 매칭 제안 상세 조회 성공")
+    @ApiErrorCodes(
+            type = CommonErrorCode.class,
+            names = {
+                    "UNAUTHENTICATED",
+                    "FORBIDDEN",
+                    "INTERNAL_ERROR"
+            }
+    )
+    @ApiErrorCodes(
+            type = AuthErrorCode.class,
+            names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
+    )
+    @ApiErrorCodes(
+            type = MatchingErrorCode.class,
+            names = {"MATCHING_OFFER_NOT_FOUND"}
+    )
+    ResponseEntity<BaseResponse<InstructorMatchingOfferDetailResponse>> getOfferDetail(
+            @Parameter(hidden = true)
+            CurrentMember currentMember,
+            @Parameter(description = "매칭 제안 ID")
+            @PathVariable Long offerId
     );
 
     @Operation(

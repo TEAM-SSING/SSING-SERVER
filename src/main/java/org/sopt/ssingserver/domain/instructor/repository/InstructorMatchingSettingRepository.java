@@ -47,30 +47,9 @@ public interface InstructorMatchingSettingRepository extends JpaRepository<Instr
             @Param("isEquipmentReady") boolean isEquipmentReady
     );
 
-    // 후보 선택 직전 강사 노출 조건 row 잠금 재조회, 동시 트리거의 같은 강사 중복 제안 방지
+    // 후보 선택 직전 setting 단일 row 잠금, 동시 트리거의 같은 강사 제안 생성을 직렬화
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
-    @Query("""
-            select distinct setting
-            from InstructorMatchingSetting setting
-            join setting.lessonLevels lessonLevel
-            join setting.availableDurationMinutes availableDurationMinutes
-            where setting.id = :id
-              and setting.instructorProfile.resort = :resort
-              and setting.sport = :sport
-              and lessonLevel = :lessonLevel
-              and availableDurationMinutes in :requestedDurationMinutes
-              and setting.maxHeadcount >= :headcount
-              and setting.isEquipmentReady = :isEquipmentReady
-              and setting.isExposed = true
-            """)
-    Optional<InstructorMatchingSetting> findExposedCandidateByIdForUpdate(
-            @Param("id") Long id,
-            @Param("resort") Resort resort,
-            @Param("sport") Sport sport,
-            @Param("lessonLevel") LessonLevel lessonLevel,
-            @Param("headcount") int headcount,
-            @Param("requestedDurationMinutes") Collection<Integer> requestedDurationMinutes,
-            @Param("isEquipmentReady") boolean isEquipmentReady
-    );
+    @Query("select setting from InstructorMatchingSetting setting where setting.id = :id")
+    Optional<InstructorMatchingSetting> findByIdForUpdate(@Param("id") Long id);
 }

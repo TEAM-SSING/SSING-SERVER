@@ -7,8 +7,10 @@ import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.matching.controller.docs.InstructorMatchingOfferApiDocs;
 import org.sopt.ssingserver.domain.matching.dto.request.RespondInstructorMatchingOfferRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDecisionResponse;
+import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDetailResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffersResponse;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
+import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
 import org.sopt.ssingserver.domain.matching.response.MatchingSuccessCode;
 import org.sopt.ssingserver.domain.matching.service.InstructorMatchingOfferService;
@@ -51,6 +53,23 @@ public class InstructorMatchingOfferController implements InstructorMatchingOffe
         );
 
         return SuccessResponseFactory.success(CommonSuccessCode.SUCCESS, InstructorMatchingOffersResponse.from(result));
+    }
+
+    @Override
+    @GetMapping("/{offerId}")
+    public ResponseEntity<BaseResponse<InstructorMatchingOfferDetailResponse>> getOfferDetail(
+            CurrentMember currentMember,
+            @PathVariable Long offerId
+    ) {
+        InstructorMatchingOfferDetailResult result = instructorMatchingOfferService.getOfferDetail(
+                currentMember.memberId(),
+                offerId
+        );
+
+        return SuccessResponseFactory.success(
+                CommonSuccessCode.SUCCESS,
+                InstructorMatchingOfferDetailResponse.from(result)
+        );
     }
 
     @Override

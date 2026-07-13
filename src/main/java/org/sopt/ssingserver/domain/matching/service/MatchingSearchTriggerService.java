@@ -8,6 +8,7 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +24,7 @@ public class MatchingSearchTriggerService {
     private final MatchingSearchService matchingSearchService;
 
     // 생성 커밋 이후 후속 DB 쓰기를 위한 새 트랜잭션 단건 재탐색
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void triggerSearch(Long matchingRequestId) {
         matchingSearchService.search(matchingRequestId);
     }

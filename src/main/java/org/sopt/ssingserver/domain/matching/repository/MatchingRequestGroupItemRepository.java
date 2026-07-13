@@ -32,7 +32,9 @@ public interface MatchingRequestGroupItemRepository extends JpaRepository<Matchi
     @Query("""
             select item
             from MatchingRequestGroupItem item
-            join fetch item.matchingRequest
+            join fetch item.matchingRequest matchingRequest
+            join fetch matchingRequest.member
+            join fetch matchingRequest.resort
             where item.matchingRequestGroup.id = :matchingRequestGroupId
             order by item.id asc
             """)
@@ -61,6 +63,7 @@ public interface MatchingRequestGroupItemRepository extends JpaRepository<Matchi
             from MatchingRequestGroupItem item
             join fetch item.matchingRequestGroup matchingRequestGroup
             join fetch item.matchingRequest matchingRequest
+            join fetch matchingRequest.member
             join fetch matchingRequest.resort
             where matchingRequestGroup.id in :matchingRequestGroupIds
             order by matchingRequestGroup.id asc, item.id asc

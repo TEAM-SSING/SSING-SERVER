@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
+import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
@@ -22,6 +23,7 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferDecision;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
+import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.event.InstructorAcceptedEvent;
 import org.sopt.ssingserver.domain.matching.event.MatchingOfferClosedEvent;
@@ -38,11 +40,18 @@ import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class InstructorMatchingOfferService {
+
+    private static final String IMMEDIATE_START_TYPE = "IMMEDIATE";
+    private static final List<MatchingRequestGroupStatus> RECOVERABLE_ACCEPTED_GROUP_STATUSES = List.of(
+            MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
+            MatchingRequestGroupStatus.PAYMENT_PENDING
+    );
 
     private final InstructorProfileRepository instructorProfileRepository;
     private final MatchingOfferRepository matchingOfferRepository;
@@ -89,8 +98,43 @@ public class InstructorMatchingOfferService {
         );
     }
 
+    // 홈의 offerId로 I07/I08 화면을 다시 열 때 현재 활성 협상 snapshot을 제공한다.
+    @Transactional(readOnly = true)
+    public InstructorMatchingOfferDetailResult getOfferDetail(
+            Long memberId,
+            Long offerId
+    ) {
+        InstructorProfile instructorProfile = findInstructorProfile(memberId);
+        MatchingOffer matchingOffer = matchingOfferRepository.findDetailById(offerId)
+                .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND));
+        validateOfferOwner(instructorProfile, matchingOffer);
+        validateRecoverableOffer(matchingOffer);
+
+        List<MatchingRequestGroupItem> groupItems = matchingRequestGroupItemRepository
+                .findByMatchingRequestGroupIdOrderByIdAsc(matchingOffer.getMatchingRequestGroup().getId());
+        MatchingOfferPriceSnapshot priceSnapshot = matchingOfferPriceSnapshotRepository
+                .findByMatchingOfferId(matchingOffer.getId())
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
+        InstructorMatchingOffersResult.ItemResult item = toItemResult(
+                matchingOffer,
+                groupItems,
+                priceSnapshot
+        );
+
+        return new InstructorMatchingOfferDetailResult(
+                item.offerId(),
+                item.groupId(),
+                item.offerStatus(),
+                matchingOffer.getMatchingRequestGroup().getStatus(),
+                resolveDetailMatchingStatus(matchingOffer),
+                item.requestSummary(),
+                item.lessonSummary(),
+                item.priceSummary()
+        );
+    }
+
     // 제안 row와 그룹 row를 함께 잠그고, 응답 가능 상태를 확인한 뒤 수락/거절 흐름으로 분기
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public InstructorMatchingOfferDecisionResult respond(
             Long memberId,
             Long offerId,
@@ -203,7 +247,7 @@ public class InstructorMatchingOfferService {
                     matchingRequestGroup.getId(),
                     matchingRequest.getStatus(),
                     matchingRequest.getStatusReason(),
-                    org.sopt.ssingserver.domain.matching.enums.MatchingStatus.REMATCHING
+                    MatchingStatus.REMATCHING
             ));
         }
     }
@@ -233,6 +277,17 @@ public class InstructorMatchingOfferService {
 
         MatchingRequest firstRequest = groupItems.getFirst().getMatchingRequest();
         Resort resort = firstRequest.getResort();
+        int totalHeadcount = groupItems.stream()
+                .map(MatchingRequestGroupItem::getMatchingRequest)
+                .mapToInt(MatchingRequest::getHeadcount)
+                .sum();
+
+        InstructorMatchingOffersResult.RequestSummaryResult requestSummary =
+                new InstructorMatchingOffersResult.RequestSummaryResult(
+                        firstRequest.getMember().getNickname(),
+                        firstRequest.getHeadcount(),
+                        groupItems.size()
+                );
 
         InstructorMatchingOffersResult.LessonSummaryResult lessonSummary =
                 new InstructorMatchingOffersResult.LessonSummaryResult(
@@ -240,7 +295,11 @@ public class InstructorMatchingOfferService {
                                 resort.getCode(),
                                 resort.getDisplayName()
                         ),
-                        firstRequest.getSport()
+                        firstRequest.getSport(),
+                        firstRequest.getLessonLevel(),
+                        matchingOffer.getMatchingRequestGroup().getDurationMinutes(),
+                        totalHeadcount,
+                        IMMEDIATE_START_TYPE
                 );
 
         return new InstructorMatchingOffersResult.ItemResult(
@@ -248,6 +307,7 @@ public class InstructorMatchingOfferService {
                 matchingOffer.getMatchingRequestGroup().getId(),
                 matchingOffer.getStatus(),
                 resolveOfferExpiresAt(matchingOffer),
+                requestSummary,
                 lessonSummary,
                 MatchingPriceSummaryResult.from(priceSnapshot)
         );
@@ -293,6 +353,29 @@ public class InstructorMatchingOfferService {
         if (!Objects.equals(matchingOffer.getInstructorProfile().getId(), instructorProfile.getId())) {
             throw new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND);
         }
+    }
+
+    private void validateRecoverableOffer(MatchingOffer matchingOffer) {
+        MatchingRequestGroupStatus groupStatus = matchingOffer.getMatchingRequestGroup().getStatus();
+        boolean recoverable = (matchingOffer.getStatus() == MatchingOfferStatus.OFFERED
+                && groupStatus == MatchingRequestGroupStatus.EXPOSED)
+                || (matchingOffer.getStatus() == MatchingOfferStatus.ACCEPTED
+                && RECOVERABLE_ACCEPTED_GROUP_STATUSES.contains(groupStatus));
+        if (!recoverable) {
+            // 홈 조회가 확정 강습의 lessonId 또는 종료 상태를 최종 기준으로 다시 결정한다.
+            throw new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND);
+        }
+    }
+
+    private MatchingStatus resolveDetailMatchingStatus(
+            MatchingOffer matchingOffer
+    ) {
+        return switch (matchingOffer.getMatchingRequestGroup().getStatus()) {
+            case EXPOSED -> MatchingStatus.WAITING_FOR_INSTRUCTOR;
+            case INSTRUCTOR_ACCEPTED -> MatchingStatus.WAITING_FOR_CONFIRMATION;
+            case PAYMENT_PENDING -> MatchingStatus.PAYMENT_PENDING;
+            default -> throw new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND);
+        };
     }
 
     private void validateRespondable(
