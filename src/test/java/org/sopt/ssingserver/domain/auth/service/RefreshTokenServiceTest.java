@@ -2,6 +2,8 @@ package org.sopt.ssingserver.domain.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -82,7 +84,9 @@ class RefreshTokenServiceTest {
         RefreshToken result = refreshTokenService.findValidRefreshToken(RAW_REFRESH_TOKEN);
 
         assertThat(result).isSameAs(refreshToken);
+        assertThat(result.getRevokedAt()).isNull();
         verify(refreshTokenRepository).findByTokenHash(sha256Hex(RAW_REFRESH_TOKEN));
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
     }
 
     @Test
