@@ -74,7 +74,7 @@ public interface InstructorApiDocs {
 
     @Operation(
             summary = "강사 즉시 매칭 노출 중단",
-            description = "강사의 즉시 매칭 노출을 중단합니다.",
+            description = "강사의 향후 즉시 매칭 노출만 중단합니다. 이미 수락한 매칭 협상은 취소하지 않습니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "즉시 매칭 노출 중단 성공")
