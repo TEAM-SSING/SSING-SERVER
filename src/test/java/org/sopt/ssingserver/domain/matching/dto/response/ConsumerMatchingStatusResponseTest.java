@@ -57,6 +57,7 @@ class ConsumerMatchingStatusResponseTest {
         assertThat(json).doesNotContain("instructorProfile");
         assertThat(json).doesNotContain("lessonId");
         assertThat(json).doesNotContain("priceSummary");
+        assertThat(json).doesNotContain("progressSummary");
     }
 
     @Test
