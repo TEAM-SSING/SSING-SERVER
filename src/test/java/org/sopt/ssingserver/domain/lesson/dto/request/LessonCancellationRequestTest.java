@@ -44,6 +44,18 @@ class LessonCancellationRequestTest {
     }
 
     @Test
+    void 강습생을_못_만난_요청은_검증을_통과한다() {
+        LessonCancellationRequest request = new LessonCancellationRequest(
+                LessonCancelReason.CONSUMER_NOT_MET,
+                null
+        );
+
+        Set<ConstraintViolation<LessonCancellationRequest>> violations = validator.validate(request);
+
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
     void 기타_요청은_상세_사유가_있으면_검증을_통과한다() {
         LessonCancellationRequest request = new LessonCancellationRequest(
                 LessonCancelReason.ETC,

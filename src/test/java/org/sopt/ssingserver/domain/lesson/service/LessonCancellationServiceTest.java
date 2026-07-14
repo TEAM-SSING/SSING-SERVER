@@ -49,6 +49,7 @@ import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.BusinessValidationException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -127,7 +128,7 @@ class LessonCancellationServiceTest {
         LessonCancellationResponse response = service.cancel(
                 currentInstructor(3L),
                 500L,
-                new LessonCancellationRequest(LessonCancelReason.INSTRUCTOR_NOT_MET, null)
+                new LessonCancellationRequest(LessonCancelReason.CONSUMER_NOT_MET, null)
         );
 
         assertThat(response.lessonStatus()).isSameAs(LessonStatus.CANCELED);
@@ -136,8 +137,62 @@ class LessonCancellationServiceTest {
         assertThat(cancellationCaptor.getValue().getMatchingRequest()).isNull();
         assertThat(cancellationCaptor.getValue().getMember().getId()).isEqualTo(3L);
         assertThat(cancellationCaptor.getValue().getCanceledBy()).isSameAs(LessonCancellationActor.INSTRUCTOR);
-        assertThat(cancellationCaptor.getValue().getCancelReason()).isEqualTo("강사님을 못 만났어요");
+        assertThat(cancellationCaptor.getValue().getCancelReason()).isEqualTo("강습생을 못 만났어요");
         verify(lessonRealtimeEventPublisher).publish(any());
+    }
+
+    @Test
+    void cancel은_대표소비자가_강사를_못_만난_사유로_CONFIRMED_강습을_취소한다() {
+        LessonCancellationService service = createService();
+        Fixture fixture = fixture(LessonStatus.CONFIRMED);
+        givenLesson(fixture);
+        ArgumentCaptor<LessonCancellation> cancellationCaptor = ArgumentCaptor.forClass(LessonCancellation.class);
+
+        service.cancel(
+                currentConsumer(1L),
+                500L,
+                new LessonCancellationRequest(LessonCancelReason.INSTRUCTOR_NOT_MET, null)
+        );
+
+        verify(lessonCancellationRepository).save(cancellationCaptor.capture());
+        assertThat(cancellationCaptor.getValue().getCanceledBy()).isSameAs(LessonCancellationActor.CONSUMER);
+        assertThat(cancellationCaptor.getValue().getCancelReason()).isEqualTo("강사님을 못 만났어요");
+    }
+
+    @Test
+    void cancel은_대표소비자가_강습생을_못_만난_사유를_선택하면_검증에_실패한다() {
+        LessonCancellationService service = createService();
+        Fixture fixture = fixture(LessonStatus.CONFIRMED);
+        givenLesson(fixture);
+
+        assertThatExceptionOfType(BusinessValidationException.class)
+                .isThrownBy(() -> service.cancel(
+                        currentConsumer(1L),
+                        500L,
+                        new LessonCancellationRequest(LessonCancelReason.CONSUMER_NOT_MET, null)
+                ))
+                .satisfies(exception -> assertThat(exception.getErrors())
+                        .containsEntry("cancelReason", "소비자는 '강습생을 못 만났어요' 사유를 선택할 수 없습니다."));
+        verify(lessonCancellationRepository, never()).save(any());
+        verify(lessonRealtimeEventPublisher, never()).publish(any());
+    }
+
+    @Test
+    void cancel은_담당강사가_강사를_못_만난_사유를_선택하면_검증에_실패한다() {
+        LessonCancellationService service = createService();
+        Fixture fixture = fixture(LessonStatus.CONFIRMED);
+        givenLesson(fixture);
+
+        assertThatExceptionOfType(BusinessValidationException.class)
+                .isThrownBy(() -> service.cancel(
+                        currentInstructor(3L),
+                        500L,
+                        new LessonCancellationRequest(LessonCancelReason.INSTRUCTOR_NOT_MET, null)
+                ))
+                .satisfies(exception -> assertThat(exception.getErrors())
+                        .containsEntry("cancelReason", "강사는 '강사를 못 만났어요' 사유를 선택할 수 없습니다."));
+        verify(lessonCancellationRepository, never()).save(any());
+        verify(lessonRealtimeEventPublisher, never()).publish(any());
     }
 
     @Test

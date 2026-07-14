@@ -9,6 +9,7 @@ import org.sopt.ssingserver.domain.lesson.dto.request.LessonCancellationRequest;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonCancellationResponse;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.entity.LessonCancellation;
+import org.sopt.ssingserver.domain.lesson.enums.LessonCancelReason;
 import org.sopt.ssingserver.domain.lesson.enums.LessonCancellationActor;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.error.LessonErrorCode;
@@ -22,6 +23,7 @@ import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.BusinessValidationException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.sopt.ssingserver.global.time.AppZoneId;
@@ -74,6 +76,7 @@ public class LessonCancellationService {
         if (!instructorRequester && !consumerRequester) {
             throw new BusinessException(CommonErrorCode.FORBIDDEN);
         }
+        validateCancelReasonByRequester(request.cancelReason(), instructorRequester);
 
         // 이미 같은 회원이 취소한 이력이 있으면 중복 취소를 거절
         if (lessonCancellationRepository.existsByLessonIdAndMemberId(lessonId, currentMember.memberId())) {
@@ -129,10 +132,29 @@ public class LessonCancellationService {
         );
     }
 
+    private void validateCancelReasonByRequester(
+            LessonCancelReason cancelReason,
+            boolean instructorRequester
+    ) {
+        if (instructorRequester && cancelReason == LessonCancelReason.INSTRUCTOR_NOT_MET) {
+            throw BusinessValidationException.of(
+                    "cancelReason",
+                    "강사는 '강사를 못 만났어요' 사유를 선택할 수 없습니다."
+            );
+        }
+        if (!instructorRequester && cancelReason == LessonCancelReason.CONSUMER_NOT_MET) {
+            throw BusinessValidationException.of(
+                    "cancelReason",
+                    "소비자는 '강습생을 못 만났어요' 사유를 선택할 수 없습니다."
+            );
+        }
+    }
+
     private String resolveCancelReason(LessonCancellationRequest request) {
         return switch (request.cancelReason()) {
             case SCHEDULE_CHANGED -> "일정 변경";
             case INSTRUCTOR_NOT_MET -> "강사님을 못 만났어요";
+            case CONSUMER_NOT_MET -> "강습생을 못 만났어요";
             case ETC -> request.cancelReasonDetail().strip();
         };
     }
