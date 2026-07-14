@@ -1,23 +1,28 @@
 package org.sopt.ssingserver.domain.matching.service;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
+import org.sopt.ssingserver.domain.matching.dto.result.MatchingProgressSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
+import org.sopt.ssingserver.domain.payment.enums.MatchingRequestPaymentStatus;
 import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -47,6 +52,23 @@ public class MatchingStatusQueryService {
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_REQUEST_NOT_FOUND));
 
         validateOwner(memberId, matchingRequest);
+        return getStatus(matchingRequest);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<MatchingStatusQueryResult> getActiveStatus(Long memberId) {
+        return matchingRequestRepository.findByMemberIdAndStatusIn(
+                        memberId,
+                        MatchingRequestStatus.activeNegotiationStatuses()
+                )
+                .map(matchingRequest -> {
+                    validateOwner(memberId, matchingRequest);
+                    return getStatus(matchingRequest);
+                });
+    }
+
+    private MatchingStatusQueryResult getStatus(MatchingRequest matchingRequest) {
+        Long matchingRequestId = matchingRequest.getId();
 
         // 조회 API는 상태를 바꾸지 않고 현재 요청 주변 row를 모아 Android 복구 응답을 만든다.
         Optional<MatchingRequestGroupItem> matchingRequestGroupItem =
@@ -101,6 +123,7 @@ public class MatchingStatusQueryService {
                 matchingRequestGroupItem.map(MatchingRequestGroupItem::getStatus).orElse(null),
                 matchingOffer.map(MatchingOffer::getStatus).orElse(null),
                 matchingRequestPayment.map(MatchingRequestPayment::getStatus).orElse(null),
+                resolveProgressSummary(matchingStatus, matchingRequestGroup, matchingOffer),
                 matchingTimeoutPolicy.matchingStatusExpiresAt(
                         matchingStatus,
                         matchingRequest,
@@ -111,6 +134,51 @@ public class MatchingStatusQueryService {
                 resolveLessonId(matchingStatus, lesson),
                 resolvePriceSummary(matchingStatus, matchingOffer, matchingRequestPayment)
         );
+    }
+
+    private MatchingProgressSummaryResult resolveProgressSummary(
+            MatchingStatus matchingStatus,
+            Optional<MatchingRequestGroup> matchingRequestGroup,
+            Optional<MatchingOffer> matchingOffer
+    ) {
+        return switch (matchingStatus) {
+            case WAITING_FOR_CONFIRMATION, WAITING_FOR_OTHER_CONFIRMATIONS ->
+                    resolveConfirmationProgress(matchingRequestGroup);
+            case PAYMENT_PENDING, WAITING_FOR_OTHER_PAYMENTS -> resolvePaymentProgress(matchingOffer);
+            default -> null;
+        };
+    }
+
+    private MatchingProgressSummaryResult resolveConfirmationProgress(
+            Optional<MatchingRequestGroup> matchingRequestGroup
+    ) {
+        Long groupId = matchingRequestGroup
+                .map(MatchingRequestGroup::getId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
+        List<MatchingRequestGroupItem> groupItems =
+                matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(groupId);
+        if (groupItems.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
+        }
+        int acceptedRequesterCount = (int) groupItems.stream()
+                .filter(item -> item.getStatus() == MatchingRequestGroupItemStatus.ACCEPTED)
+                .count();
+        return MatchingProgressSummaryResult.confirmation(acceptedRequesterCount, groupItems.size());
+    }
+
+    private MatchingProgressSummaryResult resolvePaymentProgress(Optional<MatchingOffer> matchingOffer) {
+        Long offerId = matchingOffer
+                .map(MatchingOffer::getId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
+        List<MatchingRequestPayment> payments =
+                matchingRequestPaymentRepository.findByMatchingOfferIdOrderByMatchingRequestIdAsc(offerId);
+        if (payments.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
+        }
+        int paidRequesterCount = (int) payments.stream()
+                .filter(payment -> payment.getStatus() == MatchingRequestPaymentStatus.COMPLETED)
+                .count();
+        return MatchingProgressSummaryResult.payment(paidRequesterCount, payments.size());
     }
 
     // 최종 확인 단계는 제안 가격, 결제 이후 단계는 요청 가격을 사용해 저장 시점 경계 유지

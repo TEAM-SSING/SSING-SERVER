@@ -59,6 +59,7 @@ class SsingServerApplicationTests {
 			"PUT /api/v1/instructor/matching-exposure",
 			"POST /api/v1/instructor/matching-exposure/cancellation",
 			"POST /api/v1/consumer/matching-requests",
+			"GET /api/v1/consumer/matching-requests/active",
 			"GET /api/v1/consumer/matching-requests/{matchingRequestId}",
 			"POST /api/v1/consumer/matching-requests/{matchingRequestId}/cancellation",
 			"PATCH /api/v1/consumer/matching-requests/{matchingRequestId}/confirmation",
@@ -477,8 +478,16 @@ class SsingServerApplicationTests {
 		assertNoContentResponse(openApi, "POST /api/v1/auth/logout");
 		assertNoContentResponse(openApi, "PUT /api/v1/fcm-tokens");
 		assertNoContentResponse(openApi, "POST /api/v1/fcm-tokens/unregister");
+		assertNoContentResponse(openApi, "GET /api/v1/consumer/matching-requests/active");
 		assertThat(findOperation(openApi, "POST /api/v1/consumer/matching-requests")
 				.path("responses").has("201")).isTrue();
+		assertThat(findOperation(openApi, "POST /api/v1/consumer/matching-requests")
+				.path("responses")
+				.path("409")
+				.path("content")
+				.path("application/json")
+				.path("examples")
+				.has("MATCHING_REQUEST_ALREADY_EXISTS")).isTrue();
 		assertAllLocalReferencesResolve(openApi, openApi);
 	}
 

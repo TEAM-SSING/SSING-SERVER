@@ -31,7 +31,7 @@
 | --- | --- | --- | --- |
 | `matching-price-vivaldi` | FLOW / STABLE | 매칭 요청부터 85,000원 결제와 강습 확정까지 검증 | 기본 골든 플로우 |
 | `matching-no-candidate-alpensia` | FLOW / STABLE | 후보가 없을 때 `SEARCHING` 유지 검증 | 즉시 `FAILED`가 되지 않음 |
-| `matching-multi-request-oak` | FLOW / STABLE | 한 소비자가 요청 4건과 참가자 16명을 독립 생성 | 다중 요청 묶음 결제는 MVP 제외 |
+| `matching-multi-request-oak` | FLOW / STABLE | 한 소비자가 활성 요청을 취소하며 요청 4건과 참가자 16명의 이력을 순차 생성 | 동시 활성 요청은 409로 거절 |
 | `pm-full-requested-catalog` | SNAPSHOT / TRANSITION | PM 스프레드시트 전체 입력 상태 조회 | 앱 실행 시 scheduler를 꺼야 함 |
 
 `FLOW`는 SQL로 시작 조건만 만들고 REST API로 상태를 바꾼다. `SNAPSHOT`은 PM이 준
@@ -117,9 +117,10 @@ curl -X POST http://localhost:8080/dev/auth/token \
 fixture로 치환했다. 구조화된 승인/자격 값과 PM 설명이 충돌하는 강사 1명은
 `MAPPED_REVIEW_REQUIRED`로 표시해 실제 페르소나 적합성 판단과 분리했다.
 
-전체 snapshot의 매칭 요청은 모두 `REQUESTED` 시작 상태다. 조건이 맞는 강사가 있어
-scheduler가 실행되면 일부 요청이 `GROUPED`로 바뀔 수 있다. 원본 상태를 조회하려면
-다음처럼 scheduler를 끄고 서버를 실행한다.
+전체 snapshot은 요청 16건을 보존하되, 소비자별 `_a` 요청 9건만 `REQUESTED`로 둔다.
+같은 소비자의 나머지 반복 입력 7건은 활성 협상 1건 정책에 맞춰 `CANCELED` 이력으로
+정규화했다. 조건이 맞는 강사가 있어 scheduler가 실행되면 활성 요청 일부가 `GROUPED`로
+바뀔 수 있다. 시작 상태를 조회하려면 다음처럼 scheduler를 끄고 서버를 실행한다.
 
 ```bash
 SSING_SCHEDULED_JOBS_ENABLED=false \
@@ -164,10 +165,10 @@ WebSocket 통합 테스트만 실행한다.
 ./gradlew integrationTest
 ```
 
-이 테스트는 실제 handshake·인증·개인 큐 구독·메시지 직렬화를 확인하지만, 재접속과
-이벤트 유실 복구는 확인하지 않는다. 재접속은 [#79](https://github.com/TEAM-SSING/SSING-SERVER/issues/79),
-[#86](https://github.com/TEAM-SSING/SSING-SERVER/issues/86),
-[#109](https://github.com/TEAM-SSING/SSING-SERVER/issues/109)의 후속 범위다. 이벤트는 화면
+이 테스트는 실제 handshake·인증·개인 큐 구독·메시지 직렬화를 확인하지만, 재접속
+자체는 확인하지 않는다. 소비자는 [#79](https://github.com/TEAM-SSING/SSING-SERVER/issues/79)의
+활성 매칭 조회 API로 이벤트 유실 뒤 현재 상태를 복구하고, 강사 복구는
+[#86](https://github.com/TEAM-SSING/SSING-SERVER/issues/86)에서 별도로 다룬다. 이벤트는 화면
 갱신 신호이고 최종 상태의 기준은 REST/DB라는 원칙은 그대로 유지한다.
 
 ## 자동 검증과 CI
@@ -192,7 +193,7 @@ WebSocket 통합 테스트는 통과하므로 STOMP heartbeat와 업무 `@Schedu
 ## 현재 범위 밖의 후속 작업
 
 - 공유 dev DB migration/seed 적용: [#122](https://github.com/TEAM-SSING/SSING-SERVER/issues/122)
-- WebSocket 재접속과 이벤트 유실 복구: [#109](https://github.com/TEAM-SSING/SSING-SERVER/issues/109)
+- 강사 메인 재진입 복구: [#86](https://github.com/TEAM-SSING/SSING-SERVER/issues/86)
 - 100건을 넘는 재탐색 공정성: [#123](https://github.com/TEAM-SSING/SSING-SERVER/issues/123)
 - 다중 요청 그룹 결제와 강습비 분담/반올림 정책: 현재 MVP 범위 밖
 

@@ -1,5 +1,5 @@
 scenario_key: matching-multi-request-oak
-purpose: 한 소비자가 종목·레벨이 다른 네 요청을 독립 생성하는 FLOW
+purpose: 한 소비자가 활성 요청을 하나씩 취소하며 네 입력을 순차 생성하는 FLOW
 schema_version: 2
 scenario_type: FLOW
 scheduler_type: STABLE
@@ -24,8 +24,9 @@ start_state:
   exposed_instructor_count: 0
   active_matching_request_count: 0
 actions:
-  method: POST
-  path: /api/v1/consumer/matching-requests
+  flow: create -> duplicate 409 -> cancel -> next create
+  create_path: /api/v1/consumer/matching-requests
+  cancel_path: /api/v1/consumer/matching-requests/{matchingRequestId}/cancellation
   payloads:
     - request-007-a.json
     - request-007-b.json
@@ -34,10 +35,12 @@ actions:
 expectation:
   request_count: 4
   participant_count: 16
+  active_matching_request_count: 1
+  canceled_matching_request_count: 3
   matching_status: SEARCHING
   request_status: REQUESTED
   matching_group_count: 0
   matching_offer_count: 0
 out_of_scope:
   - key: multi-request-group-payment
-    reason: 네 요청은 독립 입력 FLOW만 검증하며 동시 시작·그룹 결제는 현재 MVP 범위가 아니다.
+    reason: 네 요청은 단일 활성 협상 lifecycle만 검증하며 동시 시작·그룹 결제는 현재 정책 범위가 아니다.

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
@@ -61,7 +62,7 @@ class MatchingOrchestrationServiceTest {
         MatchingOrchestrationService service = createService();
         Member member = member();
         Resort resort = resort();
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(member));
         when(resortRepository.findByCode("HIGH1")).thenReturn(Optional.of(resort));
         when(matchingRequestRepository.save(any(MatchingRequest.class))).thenAnswer(invocation -> {
             MatchingRequest matchingRequest = invocation.getArgument(0);
@@ -99,7 +100,7 @@ class MatchingOrchestrationServiceTest {
     @Test
     void createImmediateMatchingRequest는_트랜잭션_동기화가_있으면_커밋후_즉시탐색을_트리거한다() {
         MatchingOrchestrationService service = createService();
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member()));
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(member()));
         when(resortRepository.findByCode("HIGH1")).thenReturn(Optional.of(resort()));
         when(matchingRequestRepository.save(any(MatchingRequest.class))).thenAnswer(invocation -> {
             MatchingRequest matchingRequest = invocation.getArgument(0);
@@ -125,7 +126,7 @@ class MatchingOrchestrationServiceTest {
     @Test
     void createImmediateMatchingRequest는_회원을_찾지_못하면_요청을_저장하지_않는다() {
         MatchingOrchestrationService service = createService();
-        when(memberRepository.findById(1L)).thenReturn(Optional.empty());
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createImmediateMatchingRequest(command()))
                 .isInstanceOf(BusinessException.class)
@@ -141,7 +142,7 @@ class MatchingOrchestrationServiceTest {
     @Test
     void createImmediateMatchingRequest는_리조트를_찾지_못하면_요청을_저장하지_않는다() {
         MatchingOrchestrationService service = createService();
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member()));
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(member()));
         when(resortRepository.findByCode("HIGH1")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createImmediateMatchingRequest(command()))
@@ -149,7 +150,35 @@ class MatchingOrchestrationServiceTest {
                 .extracting("errorCode")
                 .isSameAs(MatchingErrorCode.MATCHING_RESORT_NOT_FOUND);
 
-        verifyNoInteractions(matchingRequestRepository);
+        verify(matchingRequestRepository).existsByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        );
+        verifyNoMoreInteractions(matchingRequestRepository);
+        verifyNoInteractions(matchingRequestParticipantRepository);
+        verifyNoInteractions(matchingSearchTriggerService);
+    }
+
+    @Test
+    void createImmediateMatchingRequest는_활성_요청이_있으면_409_예외로_거절하고_부작용을_남기지_않는다() {
+        MatchingOrchestrationService service = createService();
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(member()));
+        when(matchingRequestRepository.existsByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        )).thenReturn(true);
+
+        assertThatThrownBy(() -> service.createImmediateMatchingRequest(command()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isSameAs(MatchingErrorCode.MATCHING_REQUEST_ALREADY_EXISTS);
+
+        verifyNoInteractions(resortRepository);
+        verify(matchingRequestRepository).existsByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        );
+        verifyNoMoreInteractions(matchingRequestRepository);
         verifyNoInteractions(matchingRequestParticipantRepository);
         verifyNoInteractions(matchingSearchTriggerService);
     }

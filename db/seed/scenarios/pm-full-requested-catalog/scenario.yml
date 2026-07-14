@@ -1,5 +1,5 @@
 scenario_key: pm-full-requested-catalog
-purpose: PM spreadsheet 전체 입력을 REQUESTED 시작 상태로 조회하는 local/CI catalog
+purpose: PM spreadsheet 전체 입력을 단일 활성 협상 정책에 맞춰 조회하는 local/CI catalog
 schema_version: 2
 scenario_type: SNAPSHOT
 scheduler_type: TRANSITION
@@ -35,7 +35,8 @@ expected_rows:
   matching_requests: 16
   matching_request_participants: 49
 start_state:
-  matching_request_status: REQUESTED
+  active_matching_request_status: REQUESTED
+  historical_matching_request_status: CANCELED
   matching_request_group_count: 0
   matching_offer_count: 0
   payment_count: 0
@@ -67,17 +68,16 @@ excluded_sources:
     reason: ATHLETE_CAREER는 현재 certificate enum으로 표현할 수 없다.
 notes:
   - 이 SNAPSHOT은 앱 정상 FLOW로 도달했다는 뜻이 아니라 PM 입력 catalog를 보존한다.
+  - 같은 소비자의 반복 입력은 각 `_a` 요청만 REQUESTED로 두고 나머지는 CANCELED 이력으로 정규화해 활성 협상 1건 정책을 지킨다.
   - scheduler를 켜면 조건이 맞는 REQUESTED 요청이 GROUPED로 전이될 수 있다.
   - 통합 테스트는 @Scheduled 자동 등록을 끄고 실제 MatchingSearchScheduler.runScheduledSearch()를 수동 호출해 전이를 검증한다.
   - 공용 dev 기본 scenario로 사용하지 않고 local/CI에서만 선택 실행한다.
   - WebSocket event와 계산 상태는 seed하지 않는다.
 deferred_checks:
-  - key: realtime-reconnect-recovery
+  - key: instructor-realtime-reconnect-recovery
     status: DEFERRED
     tracking:
-      - https://github.com/TEAM-SSING/SSING-SERVER/issues/79
       - https://github.com/TEAM-SSING/SSING-SERVER/issues/86
-      - https://github.com/TEAM-SSING/SSING-SERVER/issues/109
   - key: scheduler-batch-fairness
     status: DEFERRED
     tracking:

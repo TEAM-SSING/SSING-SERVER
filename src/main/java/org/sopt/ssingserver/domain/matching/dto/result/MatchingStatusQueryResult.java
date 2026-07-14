@@ -24,6 +24,7 @@ public record MatchingStatusQueryResult(
         MatchingRequestGroupItemStatus itemStatus,
         MatchingOfferStatus offerStatus,
         MatchingRequestPaymentStatus paymentStatus,
+        MatchingProgressSummaryResult progressSummary,
         Instant expiresAt,
         InstructorProfileResult instructorProfile,
         Long lessonId,

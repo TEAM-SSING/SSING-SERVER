@@ -47,7 +47,11 @@ public interface ConsumerMatchingApiDocs {
     )
     @ApiErrorCodes(
             type = MatchingErrorCode.class,
-            names = {"MATCHING_MEMBER_NOT_FOUND", "MATCHING_RESORT_NOT_FOUND"}
+            names = {
+                    "MATCHING_MEMBER_NOT_FOUND",
+                    "MATCHING_RESORT_NOT_FOUND",
+                    "MATCHING_REQUEST_ALREADY_EXISTS"
+            }
     )
     ResponseEntity<BaseResponse<ConsumerMatchingRequestCreateResponse>> createMatchingRequest(
             @Parameter(hidden = true)

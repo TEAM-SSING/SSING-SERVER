@@ -42,6 +42,9 @@ public record ConsumerMatchingStatusResponse(
         @Schema(description = "현재 요청자의 결제 상태. 결제 요청이 생성된 경우에만 포함", example = "PENDING")
         MatchingRequestPaymentStatus paymentStatus,
 
+        @Schema(description = "최종 확인 또는 결제 단계의 서버 기준 절대 진행률. 해당 단계에서만 포함")
+        MatchingProgressSummaryResponse progressSummary,
+
         @Schema(description = "현재 상태의 만료 또는 다음 전환 기준 시각. 무기한 정책에서는 생략", example = "2026-06-28T15:35:00+09:00")
         Instant expiresAt,
 
@@ -66,6 +69,7 @@ public record ConsumerMatchingStatusResponse(
                 result.itemStatus(),
                 result.offerStatus(),
                 result.paymentStatus(),
+                MatchingProgressSummaryResponse.from(result.progressSummary()),
                 result.expiresAt(),
                 InstructorProfileResponse.from(result.instructorProfile()),
                 result.lessonId(),
