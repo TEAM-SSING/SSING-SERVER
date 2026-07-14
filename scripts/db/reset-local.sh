@@ -17,12 +17,14 @@ export SSING_SEED_TARGET_ENV="local"
 export SSING_LOCAL_DB_CONTAINER="${SSING_LOCAL_DB_CONTAINER:-ssing-local-mysql}"
 export SSING_LOCAL_DB_NAME="${SSING_LOCAL_DB_NAME:-ssing_local}"
 export SSING_LOCAL_DB_ROOT_PASSWORD="${SSING_LOCAL_DB_ROOT_PASSWORD:-ssing_root}"
+export SSING_LOCAL_COMPOSE_PROJECT="${SSING_LOCAL_COMPOSE_PROJECT:-ssing}"
 
 assert_local_target
 assert_scenario_key "$scenario_key"
 require_command docker
 
 docker compose \
+  --project-name "$SSING_LOCAL_COMPOSE_PROJECT" \
   --file "$PROJECT_ROOT/docker-compose.local.yml" \
   up --detach --wait mysql
 
