@@ -12,6 +12,8 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.sopt.ssingserver.global.error.ErrorCode;
+import org.sopt.ssingserver.global.monitoring.ErrorTracker;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.HandlerMapping;
@@ -134,15 +136,17 @@ class HttpRequestLoggingFilterTest {
         appender.start();
         logger.setLevel(Level.INFO);
         logger.addAppender(appender);
+        RecordingErrorTracker errorTracker = new RecordingErrorTracker();
 
         try {
             MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-filter-500");
             MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/test/42");
+            request.setAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE, "req-filter-500");
             request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/test/{testId}");
             MockHttpServletResponse response = new MockHttpServletResponse();
 
             assertThatExceptionOfType(IllegalStateException.class)
-                    .isThrownBy(() -> new HttpRequestLoggingFilter().doFilter(
+                    .isThrownBy(() -> new HttpRequestLoggingFilter(errorTracker).doFilter(
                             request,
                             response,
                             (servletRequest, servletResponse) -> {
@@ -173,6 +177,10 @@ class HttpRequestLoggingFilterTest {
                     .orElseThrow();
             assertThat(completionEvent.getMDCPropertyMap()).containsEntry("request_id", "req-filter-500");
             assertThat(keyValueMap(completionEvent)).containsEntry("status", 500);
+            assertThat(errorTracker.capturedException).isInstanceOf(IllegalStateException.class);
+            assertThat(errorTracker.capturedEventName).isEqualTo("http.request.unhandled_exception");
+            assertThat(errorTracker.capturedErrorCode.getCode()).isEqualTo("INTERNAL_ERROR");
+            assertThat(errorTracker.capturedRequest).isSameAs(request);
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);
@@ -183,5 +191,26 @@ class HttpRequestLoggingFilterTest {
     private Map<String, Object> keyValueMap(ILoggingEvent event) {
         return event.getKeyValuePairs().stream()
                 .collect(Collectors.toMap(keyValuePair -> keyValuePair.key, keyValuePair -> keyValuePair.value));
+    }
+
+    private static class RecordingErrorTracker implements ErrorTracker {
+
+        private String capturedEventName;
+        private ErrorCode capturedErrorCode;
+        private Throwable capturedException;
+        private jakarta.servlet.http.HttpServletRequest capturedRequest;
+
+        @Override
+        public void capture(
+                String eventName,
+                ErrorCode errorCode,
+                Throwable exception,
+                jakarta.servlet.http.HttpServletRequest request
+        ) {
+            this.capturedEventName = eventName;
+            this.capturedErrorCode = errorCode;
+            this.capturedException = exception;
+            this.capturedRequest = request;
+        }
     }
 }

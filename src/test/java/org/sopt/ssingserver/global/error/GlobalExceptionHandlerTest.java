@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.sopt.ssingserver.global.logging.RequestIdFilter;
+import org.sopt.ssingserver.global.monitoring.ErrorTracker;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,14 +46,16 @@ class GlobalExceptionHandlerTest {
     void 예상된_4xx_비즈니스_예외는_ERROR를_남기지_않는다() {
         Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
         ListAppender<ILoggingEvent> appender = attachAppender(logger);
+        RecordingErrorTracker errorTracker = new RecordingErrorTracker();
 
         try {
-            GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory());
+            GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory(), errorTracker);
             MockHttpServletRequest request = requestWithRequestId("req-400");
 
             handler.handleBusinessException(new BusinessException(CommonErrorCode.BAD_REQUEST), request);
 
             assertThat(appender.list).isEmpty();
+            assertThat(errorTracker.capturedEventName).isNull();
         } finally {
             logger.detachAppender(appender);
         }
@@ -64,11 +67,13 @@ class GlobalExceptionHandlerTest {
         ListAppender<ILoggingEvent> appender = attachAppender(logger);
 
         try {
-            GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory());
+            RecordingErrorTracker errorTracker = new RecordingErrorTracker();
+            GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory(), errorTracker);
             MockHttpServletRequest request = requestWithRequestId("req-500");
             MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-500");
 
-            handler.handleException(new IllegalStateException("secret-detail"), request);
+            IllegalStateException exception = new IllegalStateException("secret-detail");
+            handler.handleException(exception, request);
 
             assertThat(appender.list).hasSize(1);
             ILoggingEvent event = appender.list.getFirst();
@@ -82,6 +87,10 @@ class GlobalExceptionHandlerTest {
                     .containsEntry("error_code", "INTERNAL_ERROR")
                     .containsEntry("status", 500)
                     .containsEntry("exception_type", IllegalStateException.class.getName());
+            assertThat(errorTracker.capturedException).isSameAs(exception);
+            assertThat(errorTracker.capturedEventName).isEqualTo("http.request.unhandled_exception");
+            assertThat(errorTracker.capturedErrorCode).isSameAs(CommonErrorCode.INTERNAL_ERROR);
+            assertThat(errorTracker.capturedRequest).isSameAs(request);
         } finally {
             MDC.remove(RequestIdFilter.REQUEST_ID_MDC_KEY);
             logger.detachAppender(appender);
@@ -92,13 +101,15 @@ class GlobalExceptionHandlerTest {
     void 내부_5xx_비즈니스_예외는_구조화_ERROR를_한_번_남긴다() {
         Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
         ListAppender<ILoggingEvent> appender = attachAppender(logger);
+        RecordingErrorTracker errorTracker = new RecordingErrorTracker();
 
         try {
-            GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory());
+            GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory(), errorTracker);
             MDC.put(RequestIdFilter.REQUEST_ID_MDC_KEY, "req-business-500");
+            BusinessException exception = new BusinessException(CommonErrorCode.INTERNAL_ERROR);
 
             handler.handleBusinessException(
-                    new BusinessException(CommonErrorCode.INTERNAL_ERROR),
+                    exception,
                     requestWithRequestId("req-business-500")
             );
 
@@ -111,6 +122,9 @@ class GlobalExceptionHandlerTest {
                     .containsEntry("error_code", "INTERNAL_ERROR")
                     .containsEntry("status", 500)
                     .containsEntry("exception_type", BusinessException.class.getName());
+            assertThat(errorTracker.capturedException).isSameAs(exception);
+            assertThat(errorTracker.capturedEventName).isEqualTo("http.request.unhandled_exception");
+            assertThat(errorTracker.capturedErrorCode).isSameAs(CommonErrorCode.INTERNAL_ERROR);
         } finally {
             MDC.remove(RequestIdFilter.REQUEST_ID_MDC_KEY);
             logger.detachAppender(appender);
@@ -121,9 +135,10 @@ class GlobalExceptionHandlerTest {
     void 외부서비스_503은_전역처리기에서_중복_ERROR를_남기지_않는다() {
         Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
         ListAppender<ILoggingEvent> appender = attachAppender(logger);
+        RecordingErrorTracker errorTracker = new RecordingErrorTracker();
 
         try {
-            GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory());
+            GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory(), errorTracker);
 
             handler.handleBusinessException(
                     new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE),
@@ -131,6 +146,7 @@ class GlobalExceptionHandlerTest {
             );
 
             assertThat(appender.list).isEmpty();
+            assertThat(errorTracker.capturedEventName).isNull();
         } finally {
             logger.detachAppender(appender);
         }
@@ -152,5 +168,26 @@ class GlobalExceptionHandlerTest {
     private Map<String, Object> keyValueMap(ILoggingEvent event) {
         return event.getKeyValuePairs().stream()
                 .collect(Collectors.toMap(keyValuePair -> keyValuePair.key, keyValuePair -> keyValuePair.value));
+    }
+
+    private static class RecordingErrorTracker implements ErrorTracker {
+
+        private String capturedEventName;
+        private ErrorCode capturedErrorCode;
+        private Throwable capturedException;
+        private jakarta.servlet.http.HttpServletRequest capturedRequest;
+
+        @Override
+        public void capture(
+                String eventName,
+                ErrorCode errorCode,
+                Throwable exception,
+                jakarta.servlet.http.HttpServletRequest request
+        ) {
+            this.capturedEventName = eventName;
+            this.capturedErrorCode = errorCode;
+            this.capturedException = exception;
+            this.capturedRequest = request;
+        }
     }
 }

@@ -3,7 +3,10 @@ package org.sopt.ssingserver.global.error;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sopt.ssingserver.global.monitoring.ErrorTracker;
 import org.sopt.ssingserver.global.response.BaseResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -19,11 +22,23 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String UNHANDLED_EXCEPTION_EVENT = "http.request.unhandled_exception";
 
     private final ErrorResponseFactory errorResponseFactory;
+    private final ErrorTracker errorTracker;
 
     public GlobalExceptionHandler(ErrorResponseFactory errorResponseFactory) {
+        this(errorResponseFactory, ErrorTracker.NO_OP);
+    }
+
+    public GlobalExceptionHandler(ErrorResponseFactory errorResponseFactory, ErrorTracker errorTracker) {
         this.errorResponseFactory = errorResponseFactory;
+        this.errorTracker = errorTracker;
+    }
+
+    @Autowired
+    public GlobalExceptionHandler(ErrorResponseFactory errorResponseFactory, ObjectProvider<ErrorTracker> errorTracker) {
+        this(errorResponseFactory, errorTracker.getIfAvailable(() -> ErrorTracker.NO_OP));
     }
 
     // DB 상태가 필요한 비즈니스 검증 실패를 field errors 형태로 변환
@@ -46,11 +61,17 @@ public class GlobalExceptionHandler {
         if (errorCode.getStatus().is5xxServerError()
                 && errorCode != CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE) {
             log.atError()
-                    .addKeyValue("event", "http.request.unhandled_exception")
+                    .addKeyValue("event", UNHANDLED_EXCEPTION_EVENT)
                     .addKeyValue("error_code", errorCode.getCode())
                     .addKeyValue("status", errorCode.getStatus().value())
                     .addKeyValue("exception_type", exception.getClass().getName())
                     .log("Server business exception");
+            errorTracker.capture(
+                    UNHANDLED_EXCEPTION_EVENT,
+                    errorCode,
+                    exception,
+                    request
+            );
         }
         return errorResponseFactory.error(errorCode, request);
     }
@@ -128,11 +149,17 @@ public class GlobalExceptionHandler {
     ) {
         // 예외 원문 대신 안전한 분류 정보만 남겨 토큰·응답 본문·개인정보 노출을 막는다.
         log.atError()
-                .addKeyValue("event", "http.request.unhandled_exception")
+                .addKeyValue("event", UNHANDLED_EXCEPTION_EVENT)
                 .addKeyValue("error_code", CommonErrorCode.INTERNAL_ERROR.getCode())
                 .addKeyValue("status", CommonErrorCode.INTERNAL_ERROR.getStatus().value())
                 .addKeyValue("exception_type", exception.getClass().getName())
                 .log("Unhandled server exception");
+        errorTracker.capture(
+                UNHANDLED_EXCEPTION_EVENT,
+                CommonErrorCode.INTERNAL_ERROR,
+                exception,
+                request
+        );
         return errorResponseFactory.error(CommonErrorCode.INTERNAL_ERROR, request);
     }
 }

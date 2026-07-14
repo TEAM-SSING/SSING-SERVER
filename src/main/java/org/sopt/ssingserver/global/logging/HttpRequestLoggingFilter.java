@@ -7,8 +7,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
+import org.sopt.ssingserver.global.monitoring.ErrorTracker;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,22 @@ import org.springframework.web.servlet.HandlerMapping;
 public class HttpRequestLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
+    private static final String UNHANDLED_EXCEPTION_EVENT = "http.request.unhandled_exception";
+
+    private final ErrorTracker errorTracker;
+
+    public HttpRequestLoggingFilter() {
+        this(ErrorTracker.NO_OP);
+    }
+
+    public HttpRequestLoggingFilter(ErrorTracker errorTracker) {
+        this.errorTracker = errorTracker;
+    }
+
+    @Autowired
+    public HttpRequestLoggingFilter(ObjectProvider<ErrorTracker> errorTracker) {
+        this(errorTracker.getIfAvailable(() -> ErrorTracker.NO_OP));
+    }
 
     @Override
     protected void doFilterInternal(
@@ -33,7 +51,7 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (ServletException | RuntimeException exception) {
             // MVC 예외 처리기에 닿지 못한 필터 예외는 이 경계가 안전한 ERROR 한 번을 소유한다.
-            logUnhandledFilterException(response, exception);
+            logUnhandledFilterException(request, response, exception);
             throw exception;
         } finally {
             if (!isSuccessfulHealthCheck(request, response)) {
@@ -49,17 +67,27 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
         }
     }
 
-    private void logUnhandledFilterException(HttpServletResponse response, Exception exception) {
+    private void logUnhandledFilterException(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Exception exception
+    ) {
         if (!response.isCommitted() && response.getStatus() < 500) {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
 
         log.atError()
-                .addKeyValue("event", "http.request.unhandled_exception")
+                .addKeyValue("event", UNHANDLED_EXCEPTION_EVENT)
                 .addKeyValue("error_code", CommonErrorCode.INTERNAL_ERROR.getCode())
                 .addKeyValue("status", response.getStatus())
                 .addKeyValue("exception_type", exception.getClass().getName())
                 .log("Unhandled servlet filter exception");
+        errorTracker.capture(
+                UNHANDLED_EXCEPTION_EVENT,
+                CommonErrorCode.INTERNAL_ERROR,
+                exception,
+                request
+        );
     }
 
     private boolean isSuccessfulHealthCheck(HttpServletRequest request, HttpServletResponse response) {
