@@ -290,6 +290,7 @@ class DatabaseSeedContractTest {
 
         assertConsumerConfirmedReadback(consumerToken, matchingRequestId, lessonId);
         assertNoActiveMatchingRequest(consumerToken);
+        assertConsumerHomeLessonReadback(consumerToken, lessonId);
         assertSingleRequestPaymentAndLesson(matchingRequestId, offerId, lessonId);
     }
 
@@ -541,6 +542,15 @@ class DatabaseSeedContractTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isNoContent())
                 .andExpect(result -> assertThat(result.getResponse().getContentAsByteArray()).isEmpty());
+    }
+
+    private void assertConsumerHomeLessonReadback(String consumerToken, long lessonId) throws Exception {
+        mockMvc.perform(get("/api/v1/consumer/home")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lessonCards.length()").value(1))
+                .andExpect(jsonPath("$.data.lessonCards[0].lessonId").value(lessonId))
+                .andExpect(jsonPath("$.data.lessonCards[0].displayStatus").value("CONFIRMED"));
     }
 
     private void assertPriceReadback(JsonNode response) {
