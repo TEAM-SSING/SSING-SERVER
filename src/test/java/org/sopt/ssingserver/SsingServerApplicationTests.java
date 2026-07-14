@@ -454,6 +454,27 @@ class SsingServerApplicationTests {
 	}
 
 	@Test
+	void generatedOpenApiDocumentsInstructorHomeFlowIdentifiers() throws Exception {
+		JsonNode openApi = generatedOpenApi();
+		JsonNode homeOperation = findOperation(openApi, "GET /api/v1/instructor/home");
+		assertThat(homeOperation.path("description").asString())
+				.contains("CONFIRMED/IN_PROGRESS", "offerId", "lessonId");
+
+		JsonNode cardSchema = openApi.path("components")
+				.path("schemas")
+				.path("InstructorHomeLessonCardResponse");
+		JsonNode cardProperties = cardSchema.path("properties");
+		assertThat(cardProperties.has("offerId")).isTrue();
+		assertThat(cardProperties.path("offerId").path("description").asString())
+				.contains("동일 매칭 흐름", "CONFIRMED/IN_PROGRESS");
+		assertThat(cardProperties.has("lessonId")).isTrue();
+		assertThat(cardProperties.path("lessonId").path("description").asString())
+				.contains("강습 상세 조회", "CONFIRMED/IN_PROGRESS");
+		assertThat(cardSchema.path("required").toString())
+				.doesNotContain("\"offerId\"", "\"lessonId\"");
+	}
+
+	@Test
 	void generatedOpenApiMatchesWholeProjectContract() throws Exception {
 		JsonNode openApi = generatedOpenApi();
 		Set<String> actualOperations = collectOperations(openApi.path("paths"));

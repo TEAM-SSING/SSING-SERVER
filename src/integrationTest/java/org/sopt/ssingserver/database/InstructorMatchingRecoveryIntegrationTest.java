@@ -296,11 +296,12 @@ class InstructorMatchingRecoveryIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
                 .andExpect(status().isOk())
                 .andReturn();
-        JsonNode confirmedLessonCard = findLessonCardByLessonId(
+        JsonNode confirmedLessonCard = findLessonCardByOfferId(
                 objectMapper.readTree(homeResult.getResponse().getContentAsByteArray()),
-                lessonId
+                offerId
         );
-        assertThat(confirmedLessonCard.has("offerId")).isFalse();
+        assertThat(confirmedLessonCard.path("offerId").asLong()).isEqualTo(offerId);
+        assertThat(confirmedLessonCard.path("lessonId").asLong()).isEqualTo(lessonId);
         assertThat(confirmedLessonCard.path("displayStatus").asText()).isEqualTo("CONFIRMED");
     }
 
@@ -512,13 +513,13 @@ class InstructorMatchingRecoveryIntegrationTest {
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
-    private JsonNode findLessonCardByLessonId(JsonNode homeResponse, long lessonId) {
+    private JsonNode findLessonCardByOfferId(JsonNode homeResponse, long offerId) {
         for (JsonNode lessonCard : homeResponse.at("/data/lessonCards")) {
-            if (lessonCard.has("lessonId") && lessonCard.path("lessonId").asLong() == lessonId) {
+            if (lessonCard.has("offerId") && lessonCard.path("offerId").asLong() == offerId) {
                 return lessonCard;
             }
         }
-        throw new AssertionError("Instructor home did not contain lesson card: " + lessonId);
+        throw new AssertionError("Instructor home did not contain lesson card for offer: " + offerId);
     }
 
     private Long personaMemberId(String personaKey) {

@@ -329,6 +329,73 @@ class InstructorHomeServiceTest {
     }
 
     @Test
+    void getInstructorHome은_여러_강습을_offerId로_구분하고_진행중_강습에도_두_ID를_반환한다() {
+        InstructorHomeService service = createService();
+        Resort resort = highOneResort();
+        MatchingRequestGroup confirmedGroup = matchingRequestGroupWithId(20L);
+        MatchingRequestGroup inProgressGroup = matchingRequestGroupWithId(21L);
+        MatchingOffer confirmedOffer = matchingOffer(
+                30L,
+                confirmedGroup,
+                Instant.parse("2026-07-09T00:00:00Z")
+        );
+        MatchingOffer inProgressOffer = matchingOffer(
+                31L,
+                inProgressGroup,
+                Instant.parse("2026-07-09T00:10:00Z")
+        );
+        Lesson confirmedLesson = confirmedLesson(
+                40L,
+                Instant.parse("2026-07-12T01:00:00Z"),
+                2,
+                resort,
+                confirmedOffer
+        );
+        Lesson inProgressLesson = confirmedLesson(
+                41L,
+                Instant.parse("2026-07-09T00:30:00Z"),
+                3,
+                resort,
+                inProgressOffer
+        );
+        inProgressLesson.start(FIXED_CLOCK.instant());
+
+        when(instructorProfileRepository.findByMemberId(1L))
+                .thenReturn(Optional.of(instructorProfile()));
+        stubReviewSummary(null);
+        when(matchingOfferRepository.findInstructorHomeOffers(
+                1L,
+                MatchingOfferStatus.OFFERED,
+                MatchingOfferStatus.ACCEPTED,
+                List.of(
+                        MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
+                        MatchingRequestGroupStatus.PAYMENT_PENDING
+                )
+        ))
+                .thenReturn(List.of());
+        when(lessonRepository.findByInstructorProfileIdAndStatusInOrderByScheduledAtAscIdAsc(
+                1L,
+                UPCOMING_LESSON_STATUSES
+        )).thenReturn(List.of(confirmedLesson, inProgressLesson));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdInOrderByMatchingRequestGroupIdAscIdAsc(
+                List.of(20L, 21L)
+        )).thenReturn(List.of(
+                groupItem(matchingRequest(resort, 2, "김철수"), confirmedGroup),
+                groupItem(matchingRequest(resort, 3, "이민수"), inProgressGroup)
+        ));
+
+        InstructorHomeResponse response = service.getInstructorHome(1L);
+
+        assertThat(response.lessonCards()).hasSize(2);
+        assertThat(response.lessonCards().get(0).offerId()).isEqualTo(30L);
+        assertThat(response.lessonCards().get(0).lessonId()).isEqualTo(40L);
+        assertThat(response.lessonCards().get(0).displayStatus()).isEqualTo(LessonStatus.CONFIRMED.name());
+        assertThat(response.lessonCards().get(1).offerId()).isEqualTo(31L);
+        assertThat(response.lessonCards().get(1).lessonId()).isEqualTo(41L);
+        assertThat(response.lessonCards().get(1).displayStatus()).isEqualTo(LessonStatus.IN_PROGRESS.name());
+    }
+
+    @Test
     void getInstructorHome은_그룹_item이_없으면_명확한_홈_예외를_던진다() {
         InstructorHomeService service = createService();
         MatchingRequestGroup matchingRequestGroup = matchingRequestGroupWithId(20L);
