@@ -168,7 +168,7 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
     @ParameterizedTest(name = "{0} 활성 협상이 있으면 새 제안을 차단한다")
     @EnumSource(
             value = MatchingRequestGroupStatus.class,
-            names = {"INSTRUCTOR_ACCEPTED", "PAYMENT_PENDING"}
+            names = {"INSTRUCTOR_ACCEPTED", "CONSUMER_ACCEPTED", "PAYMENT_PENDING"}
     )
     void accepted_활성협상이_있는강사는_새제안을_받지않는다(
             MatchingRequestGroupStatus activeGroupStatus
