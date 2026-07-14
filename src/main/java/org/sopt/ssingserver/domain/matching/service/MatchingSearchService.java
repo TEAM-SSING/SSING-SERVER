@@ -11,6 +11,7 @@ import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorPricePolicy;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
+import org.sopt.ssingserver.domain.instructor.repository.projection.InstructorMatchingCandidateIdProjection;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingSearchResult;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
@@ -96,14 +97,15 @@ public class MatchingSearchService {
 
         // TODO: 운영 부하나 다중 서버 경쟁이 커지면 active OFFERED 중복 방지를 DB 제약 또는 상태 조건 update로 보강한다.
         // 현재 MVP는 그룹 row lock과 활성 제안 잠금 조회로 같은 그룹의 동시 노출을 방어한다.
-        List<InstructorMatchingSetting> candidates = instructorMatchingSettingRepository.findExposedCandidates(
-                matchingRequest.getResort(),
-                matchingRequest.getSport(),
-                matchingRequest.getLessonLevel(),
-                matchingRequest.getHeadcount(),
-                matchingRequest.getRequestedDurationMinutes(),
-                matchingRequest.isEquipmentReady()
-        );
+        List<InstructorMatchingCandidateIdProjection> candidates = instructorMatchingSettingRepository
+                .findExposedCandidateIds(
+                        matchingRequest.getResort(),
+                        matchingRequest.getSport(),
+                        matchingRequest.getLessonLevel(),
+                        matchingRequest.getHeadcount(),
+                        matchingRequest.getRequestedDurationMinutes(),
+                        matchingRequest.isEquipmentReady()
+                );
 
         return selectOfferableCandidate(matchingRequest, candidates)
                 .map(candidate -> NextMatchingOfferResult.created(createOffer(matchingRequest, lockedGroup, candidate, now)))
@@ -115,14 +117,15 @@ public class MatchingSearchService {
         Instant now = clock.instant();
 
         // 소비자 요청 조건과 강사 노출 조건을 모두 만족하는 후보의 Repository 쿼리 필터링
-        List<InstructorMatchingSetting> candidates = instructorMatchingSettingRepository.findExposedCandidates(
-                matchingRequest.getResort(),
-                matchingRequest.getSport(),
-                matchingRequest.getLessonLevel(),
-                matchingRequest.getHeadcount(),
-                matchingRequest.getRequestedDurationMinutes(),
-                matchingRequest.isEquipmentReady()
-        );
+        List<InstructorMatchingCandidateIdProjection> candidates = instructorMatchingSettingRepository
+                .findExposedCandidateIds(
+                        matchingRequest.getResort(),
+                        matchingRequest.getSport(),
+                        matchingRequest.getLessonLevel(),
+                        matchingRequest.getHeadcount(),
+                        matchingRequest.getRequestedDurationMinutes(),
+                        matchingRequest.isEquipmentReady()
+                );
 
         // 후보 없음 상태의 즉시 실패 방지, REQUESTED 유지와 다음 트리거/스케줄러 재탐색
         if (candidates.isEmpty()) {
@@ -169,9 +172,9 @@ public class MatchingSearchService {
     // 후보 목록의 repository 정렬 결과를 유지하되 강사 row 잠금과 활성 제안 방어를 통과한 후보 선택
     private Optional<OfferableCandidate> selectOfferableCandidate(
             MatchingRequest matchingRequest,
-            List<InstructorMatchingSetting> candidates
+            List<InstructorMatchingCandidateIdProjection> candidates
     ) {
-        for (InstructorMatchingSetting candidate : candidates) {
+        for (InstructorMatchingCandidateIdProjection candidate : candidates) {
             Optional<InstructorMatchingSetting> lockedCandidate = lockStillAvailableCandidate(
                     matchingRequest,
                     candidate
@@ -202,9 +205,9 @@ public class MatchingSearchService {
     // 후보 선정 직전 동일 조건 재조회와 row lock 확보
     private Optional<InstructorMatchingSetting> lockStillAvailableCandidate(
             MatchingRequest matchingRequest,
-            InstructorMatchingSetting candidate
+            InstructorMatchingCandidateIdProjection candidate
     ) {
-        return instructorMatchingSettingRepository.findByIdForUpdate(candidate.getId())
+        return instructorMatchingSettingRepository.findByIdForUpdate(candidate.getSettingId())
                 .filter(setting -> isStillAvailableCandidate(matchingRequest, setting));
     }
 

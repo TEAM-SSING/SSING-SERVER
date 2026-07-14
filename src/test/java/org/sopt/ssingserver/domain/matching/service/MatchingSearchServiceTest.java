@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
+import org.sopt.ssingserver.domain.instructor.repository.projection.InstructorMatchingCandidateIdProjection;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingSearchResult;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
@@ -103,7 +105,7 @@ class MatchingSearchServiceTest {
         MatchingRequest matchingRequest = matchingRequest(1L, 2, List.of(120, 180));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
@@ -151,14 +153,14 @@ class MatchingSearchServiceTest {
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 3, List.of(180, 240));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(setting));
+        )).thenReturn(candidateIds(setting));
         givenLockedAvailableCandidate(matchingRequest, setting);
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
             MatchingRequestGroup group = invocation.getArgument(0);
@@ -219,14 +221,14 @@ class MatchingSearchServiceTest {
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(setting));
+        )).thenReturn(candidateIds(setting));
         givenLockedAvailableCandidate(matchingRequest, setting);
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
             MatchingRequestGroup group = invocation.getArgument(0);
@@ -257,14 +259,14 @@ class MatchingSearchServiceTest {
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(setting));
+        )).thenReturn(candidateIds(setting));
         when(instructorMatchingSettingRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(setting));
         whenActiveNegotiationExists(101L, true);
 
@@ -285,14 +287,14 @@ class MatchingSearchServiceTest {
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(setting));
+        )).thenReturn(candidateIds(setting));
         givenLockedCandidate(setting);
         whenActiveNegotiationExists(101L, true);
 
@@ -319,14 +321,14 @@ class MatchingSearchServiceTest {
         InstructorMatchingSetting availableSetting = instructorMatchingSetting(12L, 102L, 2, List.of(180, 240));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(staleSetting, availableSetting));
+        )).thenReturn(candidateIds(staleSetting, availableSetting));
         when(instructorMatchingSettingRepository.findByIdForUpdate(11L)).thenReturn(Optional.empty());
         givenLockedAvailableCandidate(matchingRequest, availableSetting);
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
@@ -362,14 +364,14 @@ class MatchingSearchServiceTest {
         InstructorMatchingSetting availableSetting = instructorMatchingSetting(12L, 102L, 2, List.of(180, 240));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(busySetting, availableSetting));
+        )).thenReturn(candidateIds(busySetting, availableSetting));
         when(instructorMatchingSettingRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(busySetting));
         whenActiveNegotiationExists(101L, true);
         givenLockedAvailableCandidate(matchingRequest, availableSetting);
@@ -403,14 +405,14 @@ class MatchingSearchServiceTest {
         InstructorMatchingSetting availableSetting = instructorMatchingSetting(12L, 102L, 2, List.of(180, 240));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(previouslyOfferedSetting, availableSetting));
+        )).thenReturn(candidateIds(previouslyOfferedSetting, availableSetting));
         when(instructorMatchingSettingRepository.findByIdForUpdate(11L))
                 .thenReturn(Optional.of(previouslyOfferedSetting));
         whenActiveNegotiationExists(101L, false);
@@ -443,14 +445,14 @@ class MatchingSearchServiceTest {
         InstructorMatchingSetting setting = instructorMatchingSetting(11L, 101L, 2, List.of(60, 120));
         when(matchingRequestRepository.findByIdAndStatusForUpdate(1L, MatchingRequestStatus.REQUESTED))
                 .thenReturn(Optional.of(matchingRequest));
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(setting));
+        )).thenReturn(candidateIds(setting));
         givenLockedAvailableCandidate(matchingRequest, setting);
         when(matchingRequestGroupRepository.save(any(MatchingRequestGroup.class))).thenAnswer(invocation -> {
             MatchingRequestGroup group = invocation.getArgument(0);
@@ -519,14 +521,14 @@ class MatchingSearchServiceTest {
         when(matchingRequestGroupRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(group));
         when(matchingOfferRepository.findByMatchingRequestGroupIdAndStatusForUpdate(20L, MatchingOfferStatus.OFFERED))
                 .thenReturn(List.of());
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(currentPrioritySetting));
+        )).thenReturn(candidateIds(currentPrioritySetting));
         givenLockedAvailableCandidate(matchingRequest, currentPrioritySetting);
         when(matchingOfferRepository.save(any(MatchingOffer.class))).thenAnswer(invocation -> {
             MatchingOffer offer = invocation.getArgument(0);
@@ -558,14 +560,14 @@ class MatchingSearchServiceTest {
         when(matchingRequestGroupRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(group));
         when(matchingOfferRepository.findByMatchingRequestGroupIdAndStatusForUpdate(20L, MatchingOfferStatus.OFFERED))
                 .thenReturn(List.of());
-        when(instructorMatchingSettingRepository.findExposedCandidates(
+        when(instructorMatchingSettingRepository.findExposedCandidateIds(
                 matchingRequest.getResort(),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
                 2,
                 matchingRequest.getRequestedDurationMinutes(),
                 true
-        )).thenReturn(List.of(setting));
+        )).thenReturn(candidateIds(setting));
         givenLockedCandidate(setting);
         whenActiveNegotiationExists(101L, true);
 
@@ -595,6 +597,17 @@ class MatchingSearchServiceTest {
                 new MatchingEventDispatcher(matchingEventPublisher, new MatchingAfterCommitExecutor()),
                 FIXED_CLOCK
         );
+    }
+
+    private List<InstructorMatchingCandidateIdProjection> candidateIds(
+            InstructorMatchingSetting... settings
+    ) {
+        return Arrays.stream(settings)
+                .map(setting -> (InstructorMatchingCandidateIdProjection) new CandidateIdProjection(
+                        setting.getId(),
+                        setting.getInstructorProfile().getId()
+                ))
+                .toList();
     }
 
     private MatchingRequest matchingRequest(
@@ -671,6 +684,22 @@ class MatchingSearchServiceTest {
                 MatchingOfferStatus.ACCEPTED,
                 ACTIVE_ACCEPTED_GROUP_STATUSES
         )).thenReturn(exists);
+    }
+
+    private record CandidateIdProjection(
+            Long settingId,
+            Long instructorProfileId
+    ) implements InstructorMatchingCandidateIdProjection {
+
+        @Override
+        public Long getSettingId() {
+            return settingId;
+        }
+
+        @Override
+        public Long getInstructorProfileId() {
+            return instructorProfileId;
+        }
     }
 
     private InstructorProfile instructorProfile(Long id) {

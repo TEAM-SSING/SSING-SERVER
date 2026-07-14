@@ -1,14 +1,18 @@
 package org.sopt.ssingserver.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
@@ -18,10 +22,16 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
+import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
+import org.sopt.ssingserver.domain.instructor.repository.projection.InstructorMatchingCandidateIdProjection;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingSearchResult;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchService;
+import org.sopt.ssingserver.domain.resort.repository.ResortRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.FileSystemResource;
@@ -32,6 +42,9 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -49,6 +62,7 @@ import org.testcontainers.utility.DockerImageName;
 class InstructorActiveNegotiationConcurrencyIntegrationTest {
 
     private static final long CONCURRENCY_TIMEOUT_SECONDS = 10L;
+    private static final long LOCK_BLOCK_ASSERTION_MILLIS = 500L;
     private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
             .withDatabaseName("ssing_instructor_negotiation_concurrency")
             .withUsername("ssing")
@@ -90,6 +104,15 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
 
     @Autowired
     private MatchingSearchService matchingSearchService;
+
+    @Autowired
+    private InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+
+    @Autowired
+    private ResortRepository resortRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @BeforeEach
     void resetDatabase() {
@@ -173,6 +196,88 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
         assertThat(countLiveNegotiations()).isEqualTo(1);
     }
 
+    // 조건 변경 writer의 root lock이 후보 선정을 막고, 커밋 뒤 root/자식 컬렉션 최신값을 전달한다.
+    @Test
+    void 조건변경writer가_setting을_잠그면_후보잠금은_커밋뒤_최신조건을_읽는다() throws Exception {
+        long instructorProfileId = findDefaultInstructorProfileId();
+        CountDownLatch writerLocked = new CountDownLatch(1);
+        CountDownLatch allowWriterCommit = new CountDownLatch(1);
+        CountDownLatch candidateLockStarted = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            Future<?> settingUpdate = executor.submit(() -> {
+                TransactionTemplate updateTransaction = new TransactionTemplate(transactionManager);
+                updateTransaction.executeWithoutResult(status -> {
+                    InstructorMatchingSetting setting = instructorMatchingSettingRepository
+                            .findByInstructorProfileIdForUpdate(instructorProfileId)
+                            .orElseThrow();
+                    writerLocked.countDown();
+                    await(allowWriterCommit, "Instructor matching setting commit timed out.");
+
+                    setting.updateConditions(
+                            Sport.SNOWBOARD,
+                            List.of(LessonLevel.CERTIFIED),
+                            List.of(180),
+                            3,
+                            true
+                    );
+                    instructorMatchingSettingRepository.saveAndFlush(setting);
+                });
+            });
+
+            assertThat(writerLocked.await(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+            Future<MatchingSettingSnapshot> lockedSnapshot = executor.submit(() -> {
+                TransactionTemplate searchTransaction = new TransactionTemplate(transactionManager);
+                searchTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+
+                return Objects.requireNonNull(searchTransaction.execute(status -> {
+                    List<InstructorMatchingCandidateIdProjection> candidates = instructorMatchingSettingRepository
+                            .findExposedCandidateIds(
+                                    resortRepository.findByCode("VIVALDI_PARK").orElseThrow(),
+                                    Sport.SKI,
+                                    LessonLevel.FIRST_TIME,
+                                    1,
+                                    List.of(120),
+                                    true
+                            );
+                    assertThat(candidates).hasSize(1);
+                    candidateLockStarted.countDown();
+                    InstructorMatchingSetting lockedSetting = instructorMatchingSettingRepository
+                            .findByIdForUpdate(candidates.getFirst().getSettingId())
+                            .orElseThrow();
+                    return MatchingSettingSnapshot.from(lockedSetting);
+                }));
+            });
+
+            assertThat(candidateLockStarted.await(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> lockedSnapshot.get(
+                    LOCK_BLOCK_ASSERTION_MILLIS,
+                    TimeUnit.MILLISECONDS
+            )).isInstanceOf(TimeoutException.class);
+
+            allowWriterCommit.countDown();
+            settingUpdate.get(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+            MatchingSettingSnapshot snapshot = lockedSnapshot.get(
+                    CONCURRENCY_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS
+            );
+            assertThat(snapshot.sport()).isSameAs(Sport.SNOWBOARD);
+            assertThat(snapshot.lessonLevels()).containsExactly(LessonLevel.CERTIFIED);
+            assertThat(snapshot.availableDurationMinutes()).containsExactly(180);
+            assertThat(snapshot.isExposed()).isTrue();
+            assertThat(loadStoredSport()).isEqualTo("SNOWBOARD");
+            assertThat(loadStoredLessonLevels()).containsExactly("CERTIFIED");
+            assertThat(loadStoredDurationMinutes()).containsExactly(180);
+        } finally {
+            allowWriterCommit.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }
+    }
+
     private MatchingSearchResult searchAfterBarrier(
             long matchingRequestId,
             CountDownLatch ready,
@@ -183,6 +288,58 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
             throw new IllegalStateException("Concurrent matching search start timed out.");
         }
         return matchingSearchService.search(matchingRequestId);
+    }
+
+    private long findDefaultInstructorProfileId() {
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT profile.id
+                FROM instructor_profiles profile
+                JOIN dev_personas persona ON persona.member_id = profile.member_id
+                WHERE persona.persona_key = 'instructor-approved-default'
+                """,
+                Long.class
+        );
+    }
+
+    private String loadStoredSport() {
+        return jdbcTemplate.queryForObject(
+                "SELECT sport FROM instructor_matching_settings",
+                String.class
+        );
+    }
+
+    private List<String> loadStoredLessonLevels() {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT lesson_level
+                FROM instructor_matching_settings_lesson_levels
+                ORDER BY lesson_level
+                """,
+                String.class
+        );
+    }
+
+    private List<Integer> loadStoredDurationMinutes() {
+        return jdbcTemplate.queryForList(
+                """
+                SELECT available_duration_minutes
+                FROM instructor_matching_settings_available_durations
+                ORDER BY available_duration_minutes
+                """,
+                Integer.class
+        );
+    }
+
+    private void await(CountDownLatch latch, String timeoutMessage) {
+        try {
+            if (!latch.await(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                throw new IllegalStateException(timeoutMessage);
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(timeoutMessage, exception);
+        }
     }
 
     private long createRequestedMatchingRequest(String nickname) {
@@ -264,5 +421,22 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
         populator.setSqlScriptEncoding(StandardCharsets.UTF_8.name());
         populator.setContinueOnError(false);
         populator.execute(dataSource);
+    }
+
+    private record MatchingSettingSnapshot(
+            Sport sport,
+            Set<LessonLevel> lessonLevels,
+            Set<Integer> availableDurationMinutes,
+            boolean isExposed
+    ) {
+
+        private static MatchingSettingSnapshot from(InstructorMatchingSetting setting) {
+            return new MatchingSettingSnapshot(
+                    setting.getSport(),
+                    Set.copyOf(setting.getLessonLevels()),
+                    Set.copyOf(setting.getAvailableDurationMinutes()),
+                    setting.isExposed()
+            );
+        }
     }
 }
