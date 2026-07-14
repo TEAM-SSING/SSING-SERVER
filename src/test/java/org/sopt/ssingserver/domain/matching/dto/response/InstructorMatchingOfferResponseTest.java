@@ -14,6 +14,7 @@ import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResul
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
+import org.sopt.ssingserver.domain.member.enums.Gender;
 import tools.jackson.databind.ObjectMapper;
 
 class InstructorMatchingOfferResponseTest {
@@ -54,6 +55,7 @@ class InstructorMatchingOfferResponseTest {
         assertThat(json).contains("\"durationMinutes\":120");
         assertThat(json).contains("\"totalHeadcount\":2");
         assertThat(json).contains("\"startType\":\"IMMEDIATE\"");
+        assertThat(json).doesNotContain("participants");
         assertThat(json).doesNotContain("expiresAt");
     }
 
@@ -91,7 +93,11 @@ class InstructorMatchingOfferResponseTest {
                 MatchingStatus.WAITING_FOR_CONFIRMATION,
                 requestSummary(),
                 lessonSummary(),
-                priceSummary()
+                priceSummary(),
+                List.of(
+                        new InstructorMatchingOfferDetailResult.ParticipantResult(10, Gender.MALE),
+                        new InstructorMatchingOfferDetailResult.ParticipantResult(12, Gender.FEMALE)
+                )
         );
 
         String json = objectMapper.writeValueAsString(InstructorMatchingOfferDetailResponse.from(result));
@@ -100,6 +106,8 @@ class InstructorMatchingOfferResponseTest {
         assertThat(json).contains("\"groupStatus\":\"INSTRUCTOR_ACCEPTED\"");
         assertThat(json).contains("\"matchingStatus\":\"WAITING_FOR_CONFIRMATION\"");
         assertThat(json).contains("\"requesterName\":\"홍길동\"");
+        assertThat(json).contains("\"participants\":[{\"age\":10,\"gender\":\"MALE\"},{\"age\":12,\"gender\":\"FEMALE\"}]");
+        assertThat(json).doesNotContain("participantId");
         assertThat(json).doesNotContain("expiresAt");
     }
 

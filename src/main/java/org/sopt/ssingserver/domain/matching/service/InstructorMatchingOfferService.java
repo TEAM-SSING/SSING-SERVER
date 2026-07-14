@@ -20,6 +20,7 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
+import org.sopt.ssingserver.domain.matching.entity.MatchingRequestParticipant;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferDecision;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
@@ -32,6 +33,7 @@ import org.sopt.ssingserver.domain.matching.event.MatchingRequestStatusChangedEv
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepository;
+import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipantRepository;
 import org.sopt.ssingserver.domain.payment.entity.MatchingOfferPriceSnapshot;
 import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
@@ -57,6 +59,7 @@ public class InstructorMatchingOfferService {
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
+    private final MatchingRequestParticipantRepository matchingRequestParticipantRepository;
     private final MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
     private final MatchingSearchService matchingSearchService;
     private final MatchingTimeoutPolicy matchingTimeoutPolicy;
@@ -120,6 +123,7 @@ public class InstructorMatchingOfferService {
                 groupItems,
                 priceSnapshot
         );
+        List<InstructorMatchingOfferDetailResult.ParticipantResult> participants = findParticipants(groupItems);
 
         return new InstructorMatchingOfferDetailResult(
                 item.offerId(),
@@ -129,7 +133,8 @@ public class InstructorMatchingOfferService {
                 resolveDetailMatchingStatus(matchingOffer),
                 item.requestSummary(),
                 item.lessonSummary(),
-                item.priceSummary()
+                item.priceSummary(),
+                participants
         );
     }
 
@@ -310,6 +315,32 @@ public class InstructorMatchingOfferService {
                 requestSummary,
                 lessonSummary,
                 MatchingPriceSummaryResult.from(priceSnapshot)
+        );
+    }
+
+    // 그룹 전체 참여자를 한 번에 읽고 I07 상세 복구에 필요한 나이/성별만 남긴다.
+    private List<InstructorMatchingOfferDetailResult.ParticipantResult> findParticipants(
+            List<MatchingRequestGroupItem> groupItems
+    ) {
+        List<Long> matchingRequestIds = groupItems.stream()
+                .map(MatchingRequestGroupItem::getMatchingRequest)
+                .map(MatchingRequest::getId)
+                .distinct()
+                .toList();
+
+        return matchingRequestParticipantRepository
+                .findByMatchingRequestIdInOrderByMatchingRequestIdAscIdAsc(matchingRequestIds)
+                .stream()
+                .map(InstructorMatchingOfferService::toParticipantResult)
+                .toList();
+    }
+
+    private static InstructorMatchingOfferDetailResult.ParticipantResult toParticipantResult(
+            MatchingRequestParticipant participant
+    ) {
+        return new InstructorMatchingOfferDetailResult.ParticipantResult(
+                participant.getAge(),
+                participant.getGender()
         );
     }
 

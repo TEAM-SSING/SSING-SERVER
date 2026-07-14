@@ -438,6 +438,17 @@ class SsingServerApplicationTests {
 		assertThat(detailProperties.has("requestSummary")).isTrue();
 		assertThat(detailProperties.has("lessonSummary")).isTrue();
 		assertThat(detailProperties.has("priceSummary")).isTrue();
+		assertThat(detailProperties.has("participants")).isTrue();
+		JsonNode participantItems = detailProperties.path("participants").path("items");
+		assertThat(participantItems.path("$ref").asString())
+				.isEqualTo("#/components/schemas/InstructorMatchingOfferParticipant");
+		JsonNode participantProperties = openApi.path("components")
+				.path("schemas")
+				.path("InstructorMatchingOfferParticipant")
+				.path("properties");
+		assertThat(participantProperties.has("age")).isTrue();
+		assertThat(participantProperties.has("gender")).isTrue();
+		assertThat(participantProperties.size()).isEqualTo(2);
 		assertThat(detailProperties.has("expiresAt")).isFalse();
 	}
 

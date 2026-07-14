@@ -190,11 +190,24 @@ class InstructorMatchingRecoveryIntegrationTest {
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
         EventSubscription initialSubscription = subscribe(instructorToken, "/user/queue/matching");
-        long matchingRequestId = createMatchingRequest(consumerToken);
+        long matchingRequestId = createMatchingRequest(consumerToken, """
+                {
+                  "resort": "VIVALDI_PARK",
+                  "sport": "SKI",
+                  "lessonLevel": "FIRST_TIME",
+                  "requestedDurationMinutes": [120],
+                  "participants": [
+                    {"age": 10, "gender": "MALE"},
+                    {"age": 12, "gender": "FEMALE"}
+                  ],
+                  "equipmentReady": true
+                }
+                """);
         JsonNode matchingEvent = awaitEvent(initialSubscription.events(), "MATCHING_OFFER_RECEIVED");
         long offerId = matchingEvent.path("offerId").asLong();
         long groupId = matchingEvent.path("groupId").asLong();
         assertThat(matchingEvent.path("recipientRole").asText()).isEqualTo("INSTRUCTOR");
+        assertThat(matchingEvent.toString()).doesNotContain("\"participants\"");
 
         initialSubscription.session().disconnect();
         acceptInstructorOffer(instructorToken, offerId);
@@ -220,7 +233,13 @@ class InstructorMatchingRecoveryIntegrationTest {
                 .andExpect(jsonPath("$.data.matchingStatus").value("PAYMENT_PENDING"))
                 .andExpect(jsonPath("$.data.requestSummary.requesterName").isNotEmpty())
                 .andExpect(jsonPath("$.data.lessonSummary.startType").value("IMMEDIATE"))
-                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000))
+                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(105_000))
+                .andExpect(jsonPath("$.data.participants.length()").value(2))
+                .andExpect(jsonPath("$.data.participants[0].age").value(10))
+                .andExpect(jsonPath("$.data.participants[0].gender").value("MALE"))
+                .andExpect(jsonPath("$.data.participants[1].age").value(12))
+                .andExpect(jsonPath("$.data.participants[1].gender").value("FEMALE"))
+                .andExpect(jsonPath("$.data.participants[0].participantId").doesNotExist())
                 .andExpect(jsonPath("$.data.expiresAt").doesNotExist());
     }
 
@@ -352,11 +371,18 @@ class InstructorMatchingRecoveryIntegrationTest {
     }
 
     private long createMatchingRequest(String consumerToken) throws Exception {
+        return createMatchingRequest(
+                consumerToken,
+                new FileSystemResource("db/seed/scenarios/matching-price-vivaldi/request.json")
+                        .getContentAsString(StandardCharsets.UTF_8)
+        );
+    }
+
+    private long createMatchingRequest(String consumerToken, String requestBody) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/consumer/matching-requests")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(new FileSystemResource("db/seed/scenarios/matching-price-vivaldi/request.json")
-                                .getContentAsString(StandardCharsets.UTF_8)))
+                        .content(requestBody))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsByteArray())
