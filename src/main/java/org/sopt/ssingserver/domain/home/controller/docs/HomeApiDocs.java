@@ -39,7 +39,8 @@ public interface HomeApiDocs {
 
     @Operation(
             summary = "강사 홈 화면 조회",
-            description = "강사 앱 홈화면에 표시할 매칭/강습 정보를 조회합니다.",
+            description = "강사 앱 홈화면에 표시할 매칭/강습 정보를 조회합니다. "
+                    + "CONFIRMED/IN_PROGRESS 강습 카드는 원본 offerId와 lessonId를 함께 반환합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "강사 홈화면 조회 성공")

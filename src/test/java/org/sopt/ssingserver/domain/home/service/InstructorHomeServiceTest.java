@@ -278,7 +278,11 @@ class InstructorHomeServiceTest {
         Resort resort = highOneResort();
         MatchingRequest matchingRequest = matchingRequest(resort, 1, "김철수");
         MatchingRequestGroup matchingRequestGroup = matchingRequestGroupWithId(20L);
-        MatchingOffer matchingOffer = matchingOfferWithGroup(matchingRequestGroup);
+        MatchingOffer matchingOffer = matchingOffer(
+                30L,
+                matchingRequestGroup,
+                Instant.parse("2026-07-09T00:00:00Z")
+        );
         MatchingRequestGroupItem groupItem = groupItem(matchingRequest, matchingRequestGroup);
         Lesson lesson = confirmedLesson(
                 40L,
@@ -313,7 +317,7 @@ class InstructorHomeServiceTest {
 
         InstructorHomeResponse.LessonCardResponse lessonCard = response.lessonCards().get(0);
         assertThat(lessonCard.lessonId()).isEqualTo(40L);
-        assertThat(lessonCard.offerId()).isNull();
+        assertThat(lessonCard.offerId()).isEqualTo(30L);
         assertThat(lessonCard.displayStatus()).isEqualTo(LessonStatus.CONFIRMED.name());
         assertThat(lessonCard.remainingDays()).isEqualTo(3);
         assertThat(lessonCard.title()).isEqualTo("김철수님 팀 4명");

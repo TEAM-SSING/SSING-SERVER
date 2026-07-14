@@ -64,10 +64,13 @@ public record InstructorHomeResponse(
     @Schema(name = "InstructorHomeLessonCardResponse")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record LessonCardResponse(
-            @Schema(description = "매칭 제안 ID", example = "21")
+            @Schema(
+                    description = "동일 매칭 흐름을 식별하는 제안 ID. 제안 단계와 CONFIRMED/IN_PROGRESS 강습 카드에서 제공",
+                    example = "21"
+            )
             Long offerId,
 
-            @Schema(description = "강습 ID", example = "2")
+            @Schema(description = "강습 상세 조회에 사용하는 ID. CONFIRMED/IN_PROGRESS 카드에서 제공", example = "2")
             Long lessonId,
 
             @Schema(description = "강습 예정일까지 남은 날짜", example = "7")

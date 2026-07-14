@@ -250,7 +250,7 @@ public class InstructorHomeService {
         String title = resolveTitle(representativeItem, lesson.getTotalHeadcount());
 
         return InstructorHomeResponse.LessonCardResponse.from(
-                null,
+                lesson.getMatchingOffer().getId(),
                 lesson.getId(),
                 resolveRemainingDays(lesson.getStatus(), lesson.getScheduledAt(), now),
                 lesson.getStatus().name(),
