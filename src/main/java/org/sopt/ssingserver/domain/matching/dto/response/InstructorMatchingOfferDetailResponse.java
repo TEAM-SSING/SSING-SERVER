@@ -35,7 +35,8 @@ public record InstructorMatchingOfferDetailResponse(
         @Schema(description = "제안 생성 시점에 고정된 예상 가격")
         MatchingPriceSummaryResponse priceSummary,
 
-        @Schema(description = "그룹 전체 강습생의 나이와 성별 목록")
+        @Schema(description = "그룹 전체 강습생 목록(최소 1명). 각 항목은 age와 gender만 반환하며, "
+                + "매칭 요청 ID와 참여자 ID 오름차순으로 정렬합니다. 같은 나이와 성별도 서로 다른 참여자면 유지합니다.")
         List<ParticipantResponse> participants
 ) {
 
