@@ -18,6 +18,7 @@ import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.sopt.ssingserver.global.swagger.error.ApiErrorCodes;
+import org.sopt.ssingserver.global.swagger.success.ApiSuccessExamples;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -56,13 +57,14 @@ public interface InstructorMatchingOfferApiDocs {
     );
 
     @Operation(
-            summary = "강사 활성 매칭 제안 상세 조회",
-            description = "강사 홈의 offerId로 현재 활성 제안 또는 수락 후 진행 중인 매칭 상태를 복구합니다. "
-                    + "I07 구성에 필요한 그룹 전체 강습생의 나이와 성별을 함께 반환합니다. "
-                    + "제안이 이미 종료되거나 강습으로 확정된 경우에는 홈을 다시 조회합니다.",
+            summary = "강사 매칭 제안 상세 복구 조회",
+            description = "강사 홈의 offerId로 제안 상세를 복구합니다. 복구 가능하면 AVAILABLE과 상세를, "
+                    + "본인 소유지만 이미 종료된 제안이면 STALE과 offerId만 반환합니다. "
+                    + "제안이 없거나 다른 강사 소유이면 404를 반환합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
-    @ApiResponse(responseCode = "200", description = "강사 활성 매칭 제안 상세 조회 성공")
+    @ApiResponse(responseCode = "200", description = "강사 매칭 제안 상세 복구 조회 성공(AVAILABLE 또는 STALE)")
+    @ApiSuccessExamples(MatchingApiExamples.InstructorOfferDetail.class)
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {

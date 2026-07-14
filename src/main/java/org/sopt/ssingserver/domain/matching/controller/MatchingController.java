@@ -1,12 +1,11 @@
 package org.sopt.ssingserver.domain.matching.controller;
 
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.matching.controller.docs.MatchingApiDocs;
+import org.sopt.ssingserver.domain.matching.dto.response.ConsumerActiveMatchingResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerMatchingStatusResponse;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
 import org.sopt.ssingserver.domain.matching.service.MatchingStatusQueryService;
-import org.sopt.ssingserver.domain.matching.response.MatchingSuccessCode;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.response.CommonSuccessCode;
 import org.sopt.ssingserver.global.response.SuccessResponseFactory;
@@ -26,21 +25,21 @@ public class MatchingController implements MatchingApiDocs {
 
     private final MatchingStatusQueryService matchingStatusQueryService;
 
+    // 앱 복구 조회에서는 활성 요청 없음도 정상 상태로 보고 ACTIVE/NONE 응답으로 통일한다.
     @Override
     @RequireAccess(AccessPolicy.CONSUMER)
     @GetMapping("/active")
-    public ResponseEntity<BaseResponse<ConsumerMatchingStatusResponse>> getActiveStatus(
+    public ResponseEntity<BaseResponse<ConsumerActiveMatchingResponse>> getActiveStatus(
             CurrentMember currentMember
     ) {
-        Optional<MatchingStatusQueryResult> activeStatus =
-                matchingStatusQueryService.getActiveStatus(currentMember.memberId());
-        if (activeStatus.isEmpty()) {
-            return SuccessResponseFactory.noContent(MatchingSuccessCode.NO_ACTIVE_MATCHING_REQUEST);
-        }
+        ConsumerActiveMatchingResponse response = matchingStatusQueryService
+                .getActiveStatus(currentMember.memberId())
+                .map(ConsumerActiveMatchingResponse::active)
+                .orElseGet(ConsumerActiveMatchingResponse::none);
 
         return SuccessResponseFactory.success(
                 CommonSuccessCode.SUCCESS,
-                ConsumerMatchingStatusResponse.from(activeStatus.get())
+                response
         );
     }
 

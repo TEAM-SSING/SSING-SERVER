@@ -6,18 +6,56 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 
-// 강사 홈의 offerId로 I07/I08 매칭 화면을 REST 기준으로 다시 구성하는 상세 조회 결과
-public record InstructorMatchingOfferDetailResult(
-        Long offerId,
-        Long groupId,
-        MatchingOfferStatus offerStatus,
-        MatchingRequestGroupStatus groupStatus,
-        MatchingStatus matchingStatus,
-        InstructorMatchingOffersResult.RequestSummaryResult requestSummary,
-        InstructorMatchingOffersResult.LessonSummaryResult lessonSummary,
-        MatchingPriceSummaryResult priceSummary,
-        List<ParticipantResult> participants
-) {
+// 강사 홈의 offerId로 매칭 화면을 복구할 수 있는지까지 판정한 상세 조회 결과
+public sealed interface InstructorMatchingOfferDetailResult permits
+        InstructorMatchingOfferDetailResult.Available,
+        InstructorMatchingOfferDetailResult.Stale {
+
+    static InstructorMatchingOfferDetailResult available(
+            Long offerId,
+            Long groupId,
+            MatchingOfferStatus offerStatus,
+            MatchingRequestGroupStatus groupStatus,
+            MatchingStatus matchingStatus,
+            InstructorMatchingOffersResult.RequestSummaryResult requestSummary,
+            InstructorMatchingOffersResult.LessonSummaryResult lessonSummary,
+            MatchingPriceSummaryResult priceSummary,
+            List<ParticipantResult> participants
+    ) {
+        return new Available(
+                offerId,
+                groupId,
+                offerStatus,
+                groupStatus,
+                matchingStatus,
+                requestSummary,
+                lessonSummary,
+                priceSummary,
+                participants
+        );
+    }
+
+    static InstructorMatchingOfferDetailResult stale(Long offerId) {
+        return new Stale(offerId);
+    }
+
+    record Available(
+            Long offerId,
+            Long groupId,
+            MatchingOfferStatus offerStatus,
+            MatchingRequestGroupStatus groupStatus,
+            MatchingStatus matchingStatus,
+            InstructorMatchingOffersResult.RequestSummaryResult requestSummary,
+            InstructorMatchingOffersResult.LessonSummaryResult lessonSummary,
+            MatchingPriceSummaryResult priceSummary,
+            List<ParticipantResult> participants
+    ) implements InstructorMatchingOfferDetailResult {
+    }
+
+    record Stale(
+            Long offerId
+    ) implements InstructorMatchingOfferDetailResult {
+    }
 
     public record ParticipantResult(
             int age,

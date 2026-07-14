@@ -102,7 +102,7 @@ public record ConsumerMatchingStatusResponse(
             Integer level
     ) {
 
-        private static InstructorProfileResponse from(MatchingStatusQueryResult.InstructorProfileResult result) {
+        static InstructorProfileResponse from(MatchingStatusQueryResult.InstructorProfileResult result) {
             if (result == null) {
                 return null;
             }

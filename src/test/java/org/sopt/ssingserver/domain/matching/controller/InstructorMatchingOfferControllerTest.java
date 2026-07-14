@@ -8,15 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenClaims;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
-import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
-import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
-import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
-import org.sopt.ssingserver.domain.matching.service.MatchingStatusQueryService;
+import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
+import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
+import org.sopt.ssingserver.domain.matching.service.InstructorMatchingOfferService;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.global.error.ErrorResponseFactory;
@@ -46,7 +44,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @ActiveProfiles("test")
-@WebMvcTest(controllers = MatchingController.class)
+@WebMvcTest(controllers = InstructorMatchingOfferController.class)
 @ImportAutoConfiguration({
         ServletWebSecurityAutoConfiguration.class,
         SecurityFilterAutoConfiguration.class
@@ -64,7 +62,7 @@ import org.springframework.test.web.servlet.MockMvc;
         CurrentMemberArgumentResolver.class,
         RequireAccessInterceptor.class
 })
-class MatchingControllerTest {
+class InstructorMatchingOfferControllerTest {
 
     private static final Long MEMBER_ID = 1L;
     private static final String ACCESS_TOKEN = "access-token";
@@ -75,7 +73,7 @@ class MatchingControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private MatchingStatusQueryService matchingStatusQueryService;
+    private InstructorMatchingOfferService instructorMatchingOfferService;
 
     @MockitoBean
     private AccessTokenProvider accessTokenProvider;
@@ -85,100 +83,48 @@ class MatchingControllerTest {
 
     @BeforeEach
     void setUp() {
-        AuthenticatedMember authenticatedMember = new AuthenticatedMember(MEMBER_ID, MemberRole.CONSUMER);
+        AuthenticatedMember authenticatedMember = new AuthenticatedMember(MEMBER_ID, MemberRole.INSTRUCTOR);
         CurrentMember currentMember = new CurrentMember(
                 MEMBER_ID,
-                MemberRole.CONSUMER,
+                MemberRole.INSTRUCTOR,
                 MemberStatus.ACTIVE,
-                null
+                InstructorApprovalStatus.APPROVED
         );
         when(accessTokenProvider.parseAccessToken(ACCESS_TOKEN)).thenReturn(new AccessTokenClaims(
                 MEMBER_ID,
-                MemberRole.CONSUMER,
+                MemberRole.INSTRUCTOR,
                 ISSUED_AT,
                 EXPIRES_AT
         ));
-        when(accessAuthorizationService.authorize(authenticatedMember, AccessPolicy.CONSUMER))
+        when(accessAuthorizationService.authorize(authenticatedMember, AccessPolicy.APPROVED_INSTRUCTOR))
                 .thenReturn(currentMember);
     }
 
     @Test
-    void getActiveStatus는_활성_요청이_있으면_ACTIVE와_기존_flat_필드를_200으로_반환한다() throws Exception {
-        when(matchingStatusQueryService.getActiveStatus(MEMBER_ID))
-                .thenReturn(Optional.of(searchingResult()));
+    void getOfferDetail은_본인_종료_제안을_STALE_body로_200_반환한다() throws Exception {
+        when(instructorMatchingOfferService.getOfferDetail(MEMBER_ID, 21L))
+                .thenReturn(InstructorMatchingOfferDetailResult.stale(21L));
 
-        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", 21L)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.recoveryState").value("ACTIVE"))
-                .andExpect(jsonPath("$.data.matchingRequestId").value(10L))
-                .andExpect(jsonPath("$.data.matchingStatus").value("SEARCHING"))
-                .andExpect(jsonPath("$.data.requestStatus").value("REQUESTED"))
-                .andExpect(jsonPath("$.data.payload").doesNotExist())
-                .andExpect(jsonPath("$.data.expiresAt").doesNotExist())
-                .andExpect(jsonPath("$.data.lessonId").doesNotExist());
-
-        verify(matchingStatusQueryService).getActiveStatus(MEMBER_ID);
-    }
-
-    @Test
-    void getActiveStatus는_활성_요청이_없으면_NONE만_담아_200으로_반환한다() throws Exception {
-        when(matchingStatusQueryService.getActiveStatus(MEMBER_ID)).thenReturn(Optional.empty());
-
-        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
-                .andExpect(jsonPath("$.data.recoveryState").value("NONE"))
-                .andExpect(jsonPath("$.data.matchingRequestId").doesNotExist())
+                .andExpect(jsonPath("$.data.recoveryState").value("STALE"))
+                .andExpect(jsonPath("$.data.offerId").value(21L))
+                .andExpect(jsonPath("$.data.groupId").doesNotExist())
                 .andExpect(jsonPath("$.data.matchingStatus").doesNotExist())
+                .andExpect(jsonPath("$.data.participants").doesNotExist())
                 .andExpect(jsonPath("$.data.payload").doesNotExist());
 
-        verify(matchingStatusQueryService).getActiveStatus(MEMBER_ID);
+        verify(instructorMatchingOfferService).getOfferDetail(MEMBER_ID, 21L);
     }
 
     @Test
-    void getActiveStatus는_인증이_없으면_401이고_Service를_호출하지_않는다() throws Exception {
-        mockMvc.perform(get("/api/v1/consumer/matching-requests/active"))
+    void getOfferDetail은_인증이_없으면_401이고_Service를_호출하지_않는다() throws Exception {
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", 21L))
                 .andExpect(status().isUnauthorized());
 
-        verifyNoInteractions(matchingStatusQueryService);
-    }
-
-    @Test
-    void getStatus는_ID조회_기존응답에_recoveryState를_추가하지_않는다() throws Exception {
-        when(matchingStatusQueryService.getStatus(MEMBER_ID, 10L)).thenReturn(searchingResult());
-
-        mockMvc.perform(get("/api/v1/consumer/matching-requests/{matchingRequestId}", 10L)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.matchingRequestId").value(10L))
-                .andExpect(jsonPath("$.data.matchingStatus").value("SEARCHING"))
-                .andExpect(jsonPath("$.data.recoveryState").doesNotExist());
-
-        verify(matchingStatusQueryService).getStatus(MEMBER_ID, 10L);
-    }
-
-    private MatchingStatusQueryResult searchingResult() {
-        return new MatchingStatusQueryResult(
-                10L,
-                MatchingStatus.SEARCHING,
-                MatchingRequestStatus.REQUESTED,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-        );
+        verifyNoInteractions(instructorMatchingOfferService);
     }
 }
