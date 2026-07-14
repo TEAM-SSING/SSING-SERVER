@@ -24,6 +24,7 @@ import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipan
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
+import org.sopt.ssingserver.domain.notification.repository.NotificationRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPriceSnapshotRepository;
@@ -53,6 +54,7 @@ class SsingServerApplicationTests {
 			"POST /api/v1/auth/logout",
 			"PUT /api/v1/fcm-tokens",
 			"POST /api/v1/fcm-tokens/unregister",
+			"GET /api/v1/notifications",
 			"GET /api/v1/consumer/home",
 			"GET /api/v1/instructor/home",
 			"GET /api/v1/instructor/matching-exposure",
@@ -155,6 +157,9 @@ class SsingServerApplicationTests {
 
 	@MockitoBean
 	private FcmTokenRepository fcmTokenRepository;
+
+	@MockitoBean
+	private NotificationRepository notificationRepository;
 
 	@MockitoBean
 	private ReviewRepository reviewRepository;
