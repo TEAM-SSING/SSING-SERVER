@@ -28,9 +28,8 @@ public class SentryErrorTracker implements ErrorTracker {
 
     @Override
     public void capture(String eventName, ErrorCode errorCode, Throwable exception, HttpServletRequest request) {
-        EventData event = EventData.from(eventName, errorCode, exception, request);
-
         try {
+            EventData event = EventData.from(eventName, errorCode, exception, request);
             Sentry.withScope(scope -> {
                 setTag(scope::setTag, REQUEST_ID_TAG, event.requestId());
                 setTag(scope::setTag, EVENT_TAG, event.eventName());
