@@ -8,7 +8,11 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.sopt.ssingserver.domain.lesson.enums.LessonCancelReason;
 
 public record LessonCancellationRequest(
-        @Schema(description = "선택한 취소 사유", example = "SCHEDULE_CHANGED")
+        @Schema(
+                description = "선택한 취소 사유",
+                example = "SCHEDULE_CHANGED",
+                allowableValues = {"SCHEDULE_CHANGED", "INSTRUCTOR_NOT_MET", "CONSUMER_NOT_MET", "ETC"}
+        )
         @NotNull(message = "취소 사유는 필수입니다.")
         LessonCancelReason cancelReason,
 
