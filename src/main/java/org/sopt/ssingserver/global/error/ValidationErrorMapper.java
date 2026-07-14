@@ -1,5 +1,7 @@
 package org.sopt.ssingserver.global.error;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -62,6 +64,16 @@ final class ValidationErrorMapper {
             for (MessageSourceResolvable error : result.getResolvableErrors()) {
                 errors.putIfAbsent(parameterName, resolveMessage(error));
             }
+        }
+
+        return errors;
+    }
+
+    static Map<String, String> from(ConstraintViolationException exception) {
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        for (ConstraintViolation<?> violation : exception.getConstraintViolations()) {
+            errors.putIfAbsent(resolvePropertyPath(violation), violation.getMessage());
         }
 
         return errors;
@@ -139,6 +151,19 @@ final class ValidationErrorMapper {
 
         String parameterName = methodParameter.getParameterName();
         return parameterName != null ? parameterName : "parameter";
+    }
+
+    private static String resolvePropertyPath(ConstraintViolation<?> violation) {
+        String propertyPath = violation.getPropertyPath().toString();
+        if (propertyPath.isBlank()) {
+            return DEFAULT_FIELD;
+        }
+
+        int lastDotIndex = propertyPath.lastIndexOf('.');
+        if (lastDotIndex < 0 || lastDotIndex == propertyPath.length() - 1) {
+            return propertyPath;
+        }
+        return propertyPath.substring(lastDotIndex + 1);
     }
 
     private static String resolveMessage(MessageSourceResolvable error) {
