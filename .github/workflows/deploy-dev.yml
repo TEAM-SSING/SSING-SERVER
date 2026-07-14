@@ -49,6 +49,7 @@ jobs:
           SSING_DEV_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
           SSING_DEV_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           set -euo pipefail
 
@@ -68,6 +69,7 @@ jobs:
             SSING_DEV_JWT_SECRET
             SSING_DEV_KAKAO_APP_ID
             SSING_DEV_DOMAIN
+            SENTRY_DSN
           )
 
           missing=0
@@ -272,6 +274,11 @@ jobs:
           SSING_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
           JAVA_OPTS: ${{ vars.SSING_DEV_JAVA_OPTS }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ENVIRONMENT: dev
+          SENTRY_RELEASE: ssing-server@dev-${{ github.sha }}
+          SENTRY_SAMPLE_RATE: "1.0"
+          SENTRY_TRACES_SAMPLE_RATE: "0.0"
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
         run: |
@@ -288,6 +295,7 @@ jobs:
             SSING_JWT_SECRET
             SSING_KAKAO_APP_ID
             SSING_DEV_DOMAIN
+            SENTRY_DSN
             EC2_HOST
             EC2_USERNAME
           )
@@ -336,6 +344,11 @@ jobs:
             printf 'SSING_KAKAO_APP_ID=%s\n' "$SSING_KAKAO_APP_ID"
             printf 'SSING_DEV_DOMAIN=%s\n' "$SSING_DEV_DOMAIN"
             printf 'JAVA_OPTS=%s\n' "$JAVA_OPTS"
+            printf 'SENTRY_DSN=%s\n' "$SENTRY_DSN"
+            printf 'SENTRY_ENVIRONMENT=%s\n' "$SENTRY_ENVIRONMENT"
+            printf 'SENTRY_RELEASE=%s\n' "$SENTRY_RELEASE"
+            printf 'SENTRY_SAMPLE_RATE=%s\n' "$SENTRY_SAMPLE_RATE"
+            printf 'SENTRY_TRACES_SAMPLE_RATE=%s\n' "$SENTRY_TRACES_SAMPLE_RATE"
           } > .deploy.env
 
           SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
