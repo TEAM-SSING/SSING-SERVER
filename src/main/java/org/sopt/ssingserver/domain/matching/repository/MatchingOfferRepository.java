@@ -40,6 +40,16 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
             """)
     Optional<MatchingOffer> findRealtimeContextById(@Param("id") Long id);
 
+    // 강사 제안 상세 복구에서 소유자 확인과 그룹 상태를 추가 lazy loading 없이 읽기 위한 조회
+    @Query("""
+            select matchingOffer
+            from MatchingOffer matchingOffer
+            join fetch matchingOffer.instructorProfile
+            join fetch matchingOffer.matchingRequestGroup
+            where matchingOffer.id = :id
+            """)
+    Optional<MatchingOffer> findDetailById(@Param("id") Long id);
+
     // 제안 목록 응답에서 그룹 id와 확정 강습 시간을 추가 lazy loading 없이 사용하기 위한 조회
     @Query(
             value = """
@@ -63,18 +73,26 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
             Pageable pageable
     );
 
-    // 강사별 활성 제안 현재값 확인과 같은 강사 중복 제안 생성을 막기 위한 제안 row 잠금 조회
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
+    // 강사별 live 협상 존재 여부 확인. 후보 선택은 matching setting row lock과 READ_COMMITTED 트랜잭션을 함께 쓴다.
+    // offer row까지 잠그면 강사 응답 경로의 offer -> setting 순서와 충돌할 수 있어 존재 확인은 잠그지 않는다.
     @Query("""
-            select matchingOffer
+            select case when count(matchingOffer) > 0 then true else false end
             from MatchingOffer matchingOffer
+            join matchingOffer.matchingRequestGroup matchingRequestGroup
             where matchingOffer.instructorProfile.id = :instructorProfileId
-              and matchingOffer.status = :status
+              and (
+                  matchingOffer.status = :offeredStatus
+                  or (
+                      matchingOffer.status = :acceptedStatus
+                      and matchingRequestGroup.status in :acceptedGroupStatuses
+                  )
+              )
             """)
-    List<MatchingOffer> findByInstructorProfileIdAndStatusForUpdate(
+    boolean existsActiveByInstructorProfileId(
             @Param("instructorProfileId") Long instructorProfileId,
-            @Param("status") MatchingOfferStatus status
+            @Param("offeredStatus") MatchingOfferStatus offeredStatus,
+            @Param("acceptedStatus") MatchingOfferStatus acceptedStatus,
+            @Param("acceptedGroupStatuses") Collection<MatchingRequestGroupStatus> acceptedGroupStatuses
     );
 
     // 그룹 단위 순차 노출에서 이미 대기 중인 활성 제안이 있는지 확인하기 위한 잠금 조회

@@ -148,22 +148,13 @@ class InstructorHomeServiceTest {
     }
 
     @Test
-    void getInstructorHome은_강사_제안_상태를_홈_displayStatus로_변환한다() {
+    void getInstructorHome은_결제대기_활성협상_1건을_홈_displayStatus로_반환한다() {
         InstructorHomeService service = createService();
         Resort resort = highOneResort();
-        MatchingRequest offeredRequest = matchingRequest(resort, 3, "김철수");
-        offeredRequest.markGrouped();
-        MatchingRequest acceptedRequest = matchingRequest(resort, 2, "박영희");
         MatchingRequest paymentPendingRequest = matchingRequest(resort, 4, "이민수");
-        MatchingRequestGroup offeredGroup = matchingRequestGroup(20L, MatchingRequestGroupStatus.EXPOSED);
-        MatchingRequestGroup acceptedGroup = matchingRequestGroup(21L, MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED);
         MatchingRequestGroup paymentPendingGroup = matchingRequestGroup(22L, MatchingRequestGroupStatus.PAYMENT_PENDING);
-        MatchingOffer offeredOffer = matchingOffer(31L, offeredGroup, Instant.parse("2026-07-09T01:00:00Z"));
-        MatchingOffer acceptedOffer = matchingOffer(32L, acceptedGroup, Instant.parse("2026-07-09T02:00:00Z"));
         MatchingOffer paymentPendingOffer = matchingOffer(33L, paymentPendingGroup, Instant.parse("2026-07-09T03:00:00Z"));
-        acceptedRequest.markMatched(acceptedOffer);
-        MatchingRequestGroupItem offeredItem = groupItem(offeredRequest, offeredGroup);
-        MatchingRequestGroupItem acceptedItem = groupItem(acceptedRequest, acceptedGroup);
+        paymentPendingOffer.accept(FIXED_CLOCK.instant());
         MatchingRequestGroupItem paymentPendingItem = groupItem(paymentPendingRequest, paymentPendingGroup);
         when(instructorProfileRepository.findByMemberId(1L))
                 .thenReturn(Optional.of(instructorProfile()));
@@ -177,11 +168,11 @@ class InstructorHomeServiceTest {
                         MatchingRequestGroupStatus.PAYMENT_PENDING
                 )
         ))
-                .thenReturn(List.of(offeredOffer, acceptedOffer, paymentPendingOffer));
+                .thenReturn(List.of(paymentPendingOffer));
         when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdInOrderByMatchingRequestGroupIdAscIdAsc(
-                List.of(20L, 21L, 22L)
+                List.of(22L)
         ))
-                .thenReturn(List.of(offeredItem, acceptedItem, paymentPendingItem));
+                .thenReturn(List.of(paymentPendingItem));
         when(lessonRepository.findByInstructorProfileIdAndStatusInOrderByScheduledAtAscIdAsc(
                 1L,
                 UPCOMING_LESSON_STATUSES
@@ -191,16 +182,11 @@ class InstructorHomeServiceTest {
 
         assertThat(response.lessonCards())
                 .extracting(InstructorHomeResponse.LessonCardResponse::displayStatus)
-                .containsExactly(
-                        InstructorHomeDisplayStatus.WAITING_FOR_INSTRUCTOR.name(),
-                        InstructorHomeDisplayStatus.WAITING_FOR_CONFIRMATION.name(),
-                        InstructorHomeDisplayStatus.PAYMENT_PENDING.name()
-        );
-        assertThat(response.lessonCards())
-                .extracting(InstructorHomeResponse.LessonCardResponse::sport)
-                .containsExactly(Sport.SKI, Sport.SKI, Sport.SKI);
+                .containsExactly(InstructorHomeDisplayStatus.PAYMENT_PENDING.name());
+        assertThat(response.lessonCards().getFirst().offerId()).isEqualTo(33L);
+        assertThat(response.lessonCards().getFirst().sport()).isSameAs(Sport.SKI);
         assertThat(response.lessonCards().get(0).scheduledAt())
-                .isEqualTo(OffsetDateTime.of(2026, 7, 9, 10, 0, 0, 0, ZoneOffset.ofHours(9)));
+                .isEqualTo(OffsetDateTime.of(2026, 7, 9, 12, 0, 0, 0, ZoneOffset.ofHours(9)));
     }
 
     @Test

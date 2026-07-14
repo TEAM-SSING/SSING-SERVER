@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
+import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
@@ -52,6 +53,9 @@ public record InstructorMatchingOffersResponse(
             @Schema(description = "현 정책은 무기한 대기라 응답에서 생략되는 제안 만료 시각 예비 필드")
             Instant expiresAt,
 
+            @Schema(description = "대표 요청자와 그룹 요청 수 요약")
+            RequestSummaryResponse requestSummary,
+
             @Schema(description = "강습 조건 요약")
             LessonSummaryResponse lessonSummary,
 
@@ -65,8 +69,35 @@ public record InstructorMatchingOffersResponse(
                     result.groupId(),
                     result.offerStatus(),
                     result.expiresAt(),
+                    RequestSummaryResponse.from(result.requestSummary()),
                     LessonSummaryResponse.from(result.lessonSummary()),
                     MatchingPriceSummaryResponse.from(result.priceSummary())
+            );
+        }
+    }
+
+    @Schema(name = "InstructorMatchingOfferRequestSummary", description = "강사 매칭 제안의 대표 요청자 요약")
+    public record RequestSummaryResponse(
+
+            @Schema(description = "그룹 첫 요청자의 닉네임", example = "홍길동")
+            String requesterName,
+
+            @Schema(description = "그룹 첫 요청의 인원", example = "2")
+            int headcount,
+
+            @Schema(description = "같은 매칭 그룹의 요청 수", example = "1")
+            int matchingRequestCount
+    ) {
+
+        public static RequestSummaryResponse from(InstructorMatchingOffersResult.RequestSummaryResult result) {
+            if (result == null) {
+                return null;
+            }
+
+            return new RequestSummaryResponse(
+                    result.requesterName(),
+                    result.headcount(),
+                    result.matchingRequestCount()
             );
         }
     }
@@ -78,13 +109,33 @@ public record InstructorMatchingOffersResponse(
             ResortResponse resort,
 
             @Schema(description = "종목", example = "SNOWBOARD")
-            Sport sport
+            Sport sport,
+
+            @Schema(description = "강습 레벨", example = "FIRST_TIME")
+            LessonLevel level,
+
+            @Schema(description = "서버가 확정한 강습 시간(분)", example = "120")
+            int durationMinutes,
+
+            @Schema(description = "그룹 전체 인원", example = "3")
+            int totalHeadcount,
+
+            @Schema(description = "강습 시작 유형", example = "IMMEDIATE")
+            String startType
     ) {
 
-        private static LessonSummaryResponse from(InstructorMatchingOffersResult.LessonSummaryResult result) {
+        public static LessonSummaryResponse from(InstructorMatchingOffersResult.LessonSummaryResult result) {
+            if (result == null) {
+                return null;
+            }
+
             return new LessonSummaryResponse(
                     ResortResponse.from(result.resort()),
-                    result.sport()
+                    result.sport(),
+                    result.level(),
+                    result.durationMinutes(),
+                    result.totalHeadcount(),
+                    result.startType()
             );
         }
     }
@@ -99,7 +150,11 @@ public record InstructorMatchingOffersResponse(
             String displayName
     ) {
 
-        private static ResortResponse from(InstructorMatchingOffersResult.ResortResult result) {
+        public static ResortResponse from(InstructorMatchingOffersResult.ResortResult result) {
+            if (result == null) {
+                return null;
+            }
+
             return new ResortResponse(result.code(), result.displayName());
         }
     }

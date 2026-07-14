@@ -79,13 +79,14 @@ class InstructorServiceTest {
                 10L,
                 LessonStatus.IN_PROGRESS
         )).thenReturn(false);
-        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L)).thenReturn(Optional.empty());
+        when(instructorMatchingSettingRepository.existsByInstructorProfileId(10L)).thenReturn(false);
 
         InstructorMatchingExposureResponse response = service.startExposure(1L, request);
 
         ArgumentCaptor<InstructorMatchingSetting> settingCaptor =
                 ArgumentCaptor.forClass(InstructorMatchingSetting.class);
         verify(instructorMatchingSettingRepository).save(settingCaptor.capture());
+        verify(instructorMatchingSettingRepository, never()).findByInstructorProfileIdForUpdate(10L);
 
         InstructorMatchingSetting savedSetting = settingCaptor.getValue();
         assertThat(response.isExposed()).isTrue();
@@ -120,11 +121,13 @@ class InstructorServiceTest {
                 10L,
                 LessonStatus.IN_PROGRESS
         )).thenReturn(false);
-        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
+        when(instructorMatchingSettingRepository.existsByInstructorProfileId(10L)).thenReturn(true);
+        when(instructorMatchingSettingRepository.findByInstructorProfileIdForUpdate(10L))
                 .thenReturn(Optional.of(existingSetting));
 
         service.startExposure(1L, request);
 
+        verify(instructorMatchingSettingRepository).findByInstructorProfileIdForUpdate(10L);
         verify(instructorMatchingSettingRepository).save(existingSetting);
         assertThat(existingSetting.getSport()).isSameAs(Sport.SNOWBOARD);
         assertThat(existingSetting.getLessonLevels())
@@ -149,7 +152,7 @@ class InstructorServiceTest {
         );
 
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
-        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
+        when(instructorMatchingSettingRepository.findByInstructorProfileIdForUpdate(10L))
                 .thenReturn(Optional.of(existingSetting));
         when(instructorMatchingSettingRepository.saveAndFlush(existingSetting)).thenAnswer(invocation -> {
             ReflectionTestUtils.setField(existingSetting, "updatedAt", FIXED_UPDATED_AT);
@@ -158,6 +161,7 @@ class InstructorServiceTest {
 
         InstructorMatchingExposureCancelResponse response = service.cancelExposure(1L);
 
+        verify(instructorMatchingSettingRepository).findByInstructorProfileIdForUpdate(10L);
         verify(instructorMatchingSettingRepository).saveAndFlush(existingSetting);
         assertThat(response.isExposed()).isFalse();
         assertThat(response.updatedAt()).isEqualTo(FIXED_UPDATED_AT.atOffset(ZoneOffset.ofHours(9)));
@@ -181,7 +185,7 @@ class InstructorServiceTest {
         ReflectionTestUtils.setField(existingSetting, "updatedAt", FIXED_UPDATED_AT);
 
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
-        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
+        when(instructorMatchingSettingRepository.findByInstructorProfileIdForUpdate(10L))
                 .thenReturn(Optional.of(existingSetting));
 
         InstructorMatchingExposureCancelResponse response = service.cancelExposure(1L);
@@ -199,7 +203,8 @@ class InstructorServiceTest {
         InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
 
         when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
-        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L)).thenReturn(Optional.empty());
+        when(instructorMatchingSettingRepository.findByInstructorProfileIdForUpdate(10L))
+                .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.cancelExposure(1L))
                 .isInstanceOf(BusinessException.class)
@@ -342,6 +347,46 @@ class InstructorServiceTest {
     }
 
     @Test
+    void startExposure는_동시생성_충돌_재시도에서_생성된_설정을_잠그고_갱신한다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        InstructorMatchingSetting concurrentlyCreatedSetting = InstructorMatchingSetting.create(
+                profile,
+                Sport.SKI,
+                List.of(LessonLevel.CERTIFIED),
+                List.of(120),
+                1,
+                true
+        );
+        concurrentlyCreatedSetting.stopExposure();
+
+        when(instructorProfileRepository.findByMemberId(1L))
+                .thenReturn(Optional.of(profile), Optional.of(profile));
+        when(lessonRepository.existsByInstructorProfileIdAndStatus(
+                10L,
+                LessonStatus.IN_PROGRESS
+        )).thenReturn(false);
+        when(instructorMatchingSettingRepository.existsByInstructorProfileId(10L)).thenReturn(false);
+        when(instructorMatchingSettingRepository.findByInstructorProfileIdForUpdate(10L))
+                .thenReturn(Optional.of(concurrentlyCreatedSetting));
+        when(instructorMatchingSettingRepository.save(any(InstructorMatchingSetting.class)))
+                .thenThrow(new DataIntegrityViolationException("concurrent insert"))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        InstructorMatchingExposureResponse response = service.startExposure(1L, request());
+
+        assertThat(response.isExposed()).isTrue();
+        assertThat(concurrentlyCreatedSetting.getSport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(concurrentlyCreatedSetting.getLessonLevels())
+                .containsExactlyInAnyOrder(LessonLevel.FIRST_TIME, LessonLevel.BEGINNER);
+        assertThat(concurrentlyCreatedSetting.getAvailableDurationMinutes())
+                .containsExactlyInAnyOrder(120, 180, 240);
+        verify(instructorMatchingSettingRepository).findByInstructorProfileIdForUpdate(10L);
+        verify(instructorMatchingSettingRepository, times(2)).save(any(InstructorMatchingSetting.class));
+        verify(matchingSearchTriggerService).triggerAllRequested();
+    }
+
+    @Test
     void startExposure는_동시생성_충돌_재시도에서도_최신_자격증으로_종목을_재검증한다() {
         InstructorService service = createService();
         InstructorProfile firstProfile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
@@ -358,8 +403,7 @@ class InstructorServiceTest {
                 10L,
                 LessonStatus.IN_PROGRESS
         )).thenReturn(false);
-        when(instructorMatchingSettingRepository.findByInstructorProfileId(10L))
-                .thenReturn(Optional.empty());
+        when(instructorMatchingSettingRepository.existsByInstructorProfileId(10L)).thenReturn(false);
         when(instructorMatchingSettingRepository.save(any()))
                 .thenThrow(new DataIntegrityViolationException("concurrent insert"));
 

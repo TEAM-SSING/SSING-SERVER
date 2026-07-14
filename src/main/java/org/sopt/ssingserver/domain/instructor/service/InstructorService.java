@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.instructor.service;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
 import org.sopt.ssingserver.domain.instructor.dto.result.InstructorMatchingExposureConditionsResult;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureCancelResponse;
@@ -83,7 +84,7 @@ public class InstructorService {
         InstructorProfile instructorProfile = findInstructorProfile(memberId);
 
         InstructorMatchingSetting setting = instructorMatchingSettingRepository
-                .findByInstructorProfileId(instructorProfile.getId())
+                .findByInstructorProfileIdForUpdate(instructorProfile.getId())
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
 
         if (setting.isExposed()) {
@@ -143,9 +144,22 @@ public class InstructorService {
             InstructorMatchingExposureRequest request,
             boolean createWhenMissing
     ) {
-        return instructorMatchingSettingRepository.findByInstructorProfileId(instructorProfile.getId())
+        return findExistingMatchingSettingForUpdate(instructorProfile.getId(), createWhenMissing)
                 .map(existingSetting -> updateMatchingSetting(existingSetting, request))
                 .orElseGet(() -> createMatchingSetting(instructorProfile, request, createWhenMissing));
+    }
+
+    // 최초 생성은 unique constraint에 맡기고, 실제 기존 row가 있을 때만 후보 선정과 같은 잠금을 획득
+    private Optional<InstructorMatchingSetting> findExistingMatchingSettingForUpdate(
+            Long instructorProfileId,
+            boolean createWhenMissing
+    ) {
+        if (createWhenMissing
+                && !instructorMatchingSettingRepository.existsByInstructorProfileId(instructorProfileId)) {
+            return Optional.empty();
+        }
+
+        return instructorMatchingSettingRepository.findByInstructorProfileIdForUpdate(instructorProfileId);
     }
 
     // 기존 즉시 노출 조건의 요청값 덮어쓰기와 노출 ON 전환

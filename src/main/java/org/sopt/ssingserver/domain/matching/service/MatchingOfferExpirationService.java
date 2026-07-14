@@ -22,6 +22,7 @@ import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupRepos
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -36,7 +37,7 @@ public class MatchingOfferExpirationService {
     private final Clock clock;
 
     // 유한 응답 시간 정책 재도입 시 OFFERED 제안 하나를 만료 처리하고 다음 우선순위 강사에게 넘기는 구현체
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void expireOffer(Long matchingOfferId) {
         Instant now = clock.instant();
         Optional<MatchingOffer> offerToExpire = matchingOfferRepository.findByIdForUpdate(matchingOfferId)
