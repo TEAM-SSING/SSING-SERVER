@@ -4,19 +4,26 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sopt.ssingserver.domain.matching.event.MatchingDomainEvent;
-import org.sopt.ssingserver.domain.matching.event.MatchingEventPublisher;
+import org.sopt.ssingserver.domain.matching.event.MatchingEventHandler;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Component
+@Order(1)
 @RequiredArgsConstructor
-public class MatchingRealtimeEventPublisher implements MatchingEventPublisher {
+public class MatchingRealtimeEventPublisher implements MatchingEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(MatchingRealtimeEventPublisher.class);
 
     private final MatchingRealtimeEventFactory matchingRealtimeEventFactory;
     private final MatchingRealtimeNotifier matchingRealtimeNotifier;
 
+    // Composite publisher가 호출하는 공통 이벤트 처리 진입점이다.
     @Override
+    public void handle(MatchingDomainEvent event) {
+        publish(event);
+    }
+
     public void publish(MatchingDomainEvent event) {
         try {
             var deliveries = matchingRealtimeEventFactory.create(event);
