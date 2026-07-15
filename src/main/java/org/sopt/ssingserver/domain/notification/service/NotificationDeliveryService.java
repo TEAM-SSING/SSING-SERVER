@@ -73,7 +73,7 @@ public class NotificationDeliveryService {
                     .addKeyValue("event", PUSH_SKIPPED_NO_TOKEN_EVENT)
                     .addKeyValue("notification_id", String.valueOf(notification.getId()))
                     .addKeyValue("notification_type", payload.type().name())
-                    .addKeyValue("recipient_member_id", String.valueOf(memberId))
+                    .addKeyValue("member_id", String.valueOf(memberId))
                     .addKeyValue("client_app", payload.clientApp().name())
                     .log("FCM push skipped because no token was registered");
             return;

@@ -147,7 +147,7 @@ class NotificationDeliveryServiceTest {
                         .containsEntry("event", "fcm.push.skipped.no_token")
                         .containsEntry("notification_id", "201")
                         .containsEntry("notification_type", payload.type().name())
-                        .containsEntry("recipient_member_id", "100")
+                        .containsEntry("member_id", "100")
                         .containsEntry("client_app", "INSTRUCTOR");
             });
         } finally {
