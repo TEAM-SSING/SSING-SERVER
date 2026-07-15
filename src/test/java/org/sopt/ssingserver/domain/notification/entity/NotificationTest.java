@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.notification.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,22 @@ class NotificationTest {
 
         assertThat(notification.isRead()).isTrue();
         assertThat(notification.getReadAt()).isEqualTo(firstReadAt);
+    }
+
+    @Test
+    void markRead에_null을_전달하면_예외가_발생한다() {
+        Notification notification = Notification.create(
+                activeMember("강사", MemberRole.INSTRUCTOR),
+                ClientApp.INSTRUCTOR,
+                NotificationType.MATCHING_OFFER_CLOSED,
+                "강습 거절",
+                "요청 받았던 강습이 거절되었어요.",
+                "{\"matchingOfferId\":\"10\"}"
+        );
+
+        assertThatThrownBy(() -> notification.markRead(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("readAt must not be null.");
     }
 
     private Member activeMember(String nickname, MemberRole role) {

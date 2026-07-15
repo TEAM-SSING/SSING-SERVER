@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenClaims;
@@ -104,7 +103,11 @@ class NotificationControllerTest {
                 ISSUED_AT,
                 EXPIRES_AT
         ));
-        when(accessAuthorizationService.authorize(authenticatedMember, AccessPolicy.ACTIVE_MEMBER))
+        when(accessAuthorizationService.authorize(
+                authenticatedMember,
+                AccessPolicy.CONSUMER,
+                AccessPolicy.APPROVED_INSTRUCTOR
+        ))
                 .thenReturn(currentMember);
     }
 
@@ -116,7 +119,7 @@ class NotificationControllerTest {
                         NotificationType.MATCHING_OFFER_RECEIVED,
                         "씽 매칭 강습 도착",
                         "새로운 강습이 도착했어요. 강습생 정보를 확인하고 강습을 수락해보세요.",
-                        Map.of("matchingOfferId", 10),
+                        "ssing://matching/offers/10",
                         false,
                         Instant.parse("2026-07-14T10:00:00Z")
                 )),
@@ -140,7 +143,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.data.notifications[0].body").value(
                         "새로운 강습이 도착했어요. 강습생 정보를 확인하고 강습을 수락해보세요."
                 ))
-                .andExpect(jsonPath("$.data.notifications[0].payload.matchingOfferId").value(10))
+                .andExpect(jsonPath("$.data.notifications[0].deepLink").value("ssing://matching/offers/10"))
                 .andExpect(jsonPath("$.data.notifications[0].isRead").value(false))
                 .andExpect(jsonPath("$.data.notifications[0].createdAt").value("2026-07-14T10:00:00Z"))
                 .andExpect(jsonPath("$.data.nextCursor").value("next-cursor"))

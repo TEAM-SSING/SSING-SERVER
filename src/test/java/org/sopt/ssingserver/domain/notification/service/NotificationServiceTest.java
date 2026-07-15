@@ -71,9 +71,9 @@ class NotificationServiceTest {
 
         assertThat(response.notifications()).hasSize(2);
         assertThat(response.notifications().get(0).notificationId()).isEqualTo(100L);
-        assertThat(response.notifications().get(0).payload())
-                .containsEntry("matchingOfferId", 10);
-        assertThat(response.nextCursor()).isNotBlank();
+        assertThat(response.notifications().get(0).deepLink())
+                .isEqualTo("ssing://matching/offers/10");
+        assertThat(response.nextCursor()).isEqualTo("2026-07-14T09:00:00Z_99");
         assertThat(response.hasNext()).isTrue();
     }
 
@@ -144,6 +144,30 @@ class NotificationServiceTest {
                 .isEqualTo(CommonErrorCode.BAD_REQUEST);
     }
 
+    @Test
+    void getNotifications는_빈_cursor면_BAD_REQUEST를_던진다() {
+        assertThatThrownBy(() -> notificationService.getNotifications(
+                currentMember(MemberRole.CONSUMER),
+                " ",
+                20
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(CommonErrorCode.BAD_REQUEST);
+    }
+
+    @Test
+    void getNotifications는_ADMIN을_소비자_앱으로_분류하지_않는다() {
+        assertThatThrownBy(() -> notificationService.getNotifications(
+                currentMember(MemberRole.ADMIN),
+                null,
+                20
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(CommonErrorCode.FORBIDDEN);
+    }
+
     private Notification notification(Long id, Instant createdAt, Instant readAt) {
         Notification notification = Notification.create(
                 Member.create("회원", null, MemberRole.INSTRUCTOR, MemberStatus.ACTIVE),
@@ -151,7 +175,7 @@ class NotificationServiceTest {
                 NotificationType.MATCHING_OFFER_RECEIVED,
                 "씽 매칭 강습 도착",
                 "새로운 강습이 도착했어요. 강습생 정보를 확인하고 강습을 수락해보세요.",
-                "{\"matchingOfferId\":10}"
+                "{\"deepLink\":\"ssing://matching/offers/10\",\"matchingOfferId\":\"10\"}"
         );
         ReflectionTestUtils.setField(notification, "id", id);
         ReflectionTestUtils.setField(notification, "createdAt", createdAt);
