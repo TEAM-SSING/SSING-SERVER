@@ -1,10 +1,15 @@
 name: Deploy Dev
 
-# dev 자동 배포와 수동 재배포 트리거
+# CI 성공 뒤 호출되는 자동 배포와 긴급한 현재 main 수동 배포 트리거
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      deploy_sha:
+        description: 검증을 통과해 배포할 main commit SHA
+        required: true
+        type: string
+  # 긴급 상황에서 CI 성공 여부와 무관하게 팀이 명시적으로 실행하는 예외 경로
+  # 단, 아래 현재 main SHA 검증은 자동·수동 배포 모두 동일하게 적용한다.
   workflow_dispatch:
 
 # dev 배포 동시 실행 제어
@@ -20,9 +25,12 @@ permissions:
 env:
   DEPLOY_DIR: /home/ubuntu/ssing
   COMPOSE_FILE: docker-compose.dev.yml
+  DEPLOY_SHA: ${{ inputs.deploy_sha || github.sha }}
 
 jobs:
   build-and-deploy:
+    if: github.ref == 'refs/heads/main'
+
     # GitHub Environment dev 배포 컨텍스트
     environment: dev
 
@@ -33,6 +41,23 @@ jobs:
       # 저장소 코드 체크아웃
       - name: 저장소 코드 체크아웃
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+
+      # 자동 배포가 대기하는 사이 main이 앞서가면 이전 SHA의 역배포를 차단
+      - name: 현재 main SHA 확인
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          if [ "$DEPLOY_SHA" != "$current_main_sha" ]; then
+            echo "::error title=오래된 배포 SHA 차단::현재 main이 아닌 ${DEPLOY_SHA} 배포를 차단했습니다. 최신 main CI 또는 긴급 수동 배포를 다시 실행하세요."
+            exit 1
+          fi
+          echo "::notice title=현재 main SHA 확인 완료::배포 SHA가 현재 main과 일치합니다."
 
       - name: dev DB 대상 로그 마스킹
         env:
@@ -123,6 +148,12 @@ jobs:
             exit 1
           fi
 
+          if [[ ! "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error title=배포 SHA 형식 오류::검증된 40자리 소문자 Git commit SHA만 배포할 수 있습니다."
+            echo "::endgroup::"
+            exit 1
+          fi
+
           if [ "$SSING_DEV_DOMAIN" != ":80" ]; then
             if [[ "$SSING_DEV_DOMAIN" == *"://"* || "$SSING_DEV_DOMAIN" == *"/"* || "$SSING_DEV_DOMAIN" == *":"* ]]; then
               echo "::error title=dev 도메인 형식 오류::SSING_DEV_DOMAIN에는 https://, 경로, 포트 없이 도메인만 입력하세요. 예: dev-api.ssing.app"
@@ -148,11 +179,8 @@ jobs:
           set -euo pipefail
 
           echo "::group::Docker 이미지 태그 생성"
-          {
-            printf 'IMAGE_TAG=%s\n' "${DOCKERHUB_IMAGE}:dev-${GITHUB_SHA}"
-            printf 'IMAGE_LATEST=%s\n' "${DOCKERHUB_IMAGE}:dev-latest"
-          } >> "$GITHUB_ENV"
-          echo "::notice title=Docker 이미지 태그 생성 완료::커밋 고정 태그와 dev-latest 태그를 생성했습니다."
+          printf 'IMAGE_TAG=%s\n' "${DOCKERHUB_IMAGE}:dev-${DEPLOY_SHA}" >> "$GITHUB_ENV"
+          echo "::notice title=Docker 이미지 태그 생성 완료::검증된 커밋 고정 태그를 생성했습니다."
           echo "::endgroup::"
 
       # dev 배포 시작 Slack 알림
@@ -173,50 +201,12 @@ jobs:
                     value: "${{ github.actor }}"
                     short: true
                   - title: "커밋"
-                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|커밋 보기>"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ env.DEPLOY_SHA }}|커밋 보기>"
                     short: true
                   - title: "실행 내역"
                     value: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 보기>"
                 mrkdwn_in:
                   - fields
-
-      # 프로젝트 Java 21 실행 환경
-      - name: Java 21 실행 환경 준비
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      # Gradle 캐시와 실행 환경
-      - name: Gradle 캐시와 실행 환경 준비
-        uses: gradle/actions/setup-gradle@v4
-
-      # Gradle Wrapper 실행 권한
-      - name: Gradle Wrapper 실행 권한 부여
-        run: |
-          set -euo pipefail
-
-          echo "::group::Gradle Wrapper 실행 권한"
-          chmod +x gradlew
-          echo "::notice title=Gradle Wrapper 실행 권한 완료::gradlew 실행 권한을 부여했습니다."
-          echo "::endgroup::"
-
-      # 전체 빌드와 테스트 검증
-      - name: Gradle 빌드와 테스트 검증
-        run: |
-          set -euo pipefail
-
-          echo "::group::Gradle 빌드와 테스트 검증"
-          echo "실행 명령: ./gradlew clean build"
-
-          if ! ./gradlew clean build; then
-            echo "::error title=Gradle 빌드 실패::컴파일 오류, 테스트 실패, 또는 Gradle 설정 문제입니다. 이 단계 위쪽의 FAILED task와 테스트 리포트 경로를 확인하세요."
-            echo "::endgroup::"
-            exit 1
-          fi
-
-          echo "::notice title=Gradle 검증 완료::컴파일과 테스트가 통과했습니다."
-          echo "::endgroup::"
 
       # Docker Hub 이미지 push 인증
       - name: Docker Hub 로그인
@@ -237,9 +227,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/arm64
           push: true
-          tags: |
-            ${{ env.IMAGE_TAG }}
-            ${{ env.IMAGE_LATEST }}
+          tags: ${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -349,7 +337,7 @@ jobs:
           JAVA_OPTS: ${{ vars.SSING_DEV_JAVA_OPTS }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_ENVIRONMENT: dev
-          SENTRY_RELEASE: ssing-server@dev-${{ github.sha }}
+          SENTRY_RELEASE: ssing-server@dev-${{ env.DEPLOY_SHA }}
           SENTRY_SAMPLE_RATE: "1.0"
           SENTRY_TRACES_SAMPLE_RATE: "0.0"
           EC2_HOST: ${{ vars.EC2_HOST }}
@@ -653,7 +641,7 @@ jobs:
                     value: "${{ github.actor }}"
                     short: true
                   - title: "커밋"
-                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|커밋 보기>"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ env.DEPLOY_SHA }}|커밋 보기>"
                     short: true
                   - title: "배포 결과"
                     value: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 보기>"
@@ -679,7 +667,7 @@ jobs:
                     value: "${{ github.actor }}"
                     short: true
                   - title: "커밋"
-                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|커밋 보기>"
+                    value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ env.DEPLOY_SHA }}|커밋 보기>"
                     short: true
                   - title: "실패 원인"
                     value: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 확인>"
@@ -695,7 +683,7 @@ jobs:
             echo ""
             echo "- 상태: \`${{ job.status }}\`"
             echo "- 브랜치: \`${{ github.ref_name }}\`"
-            echo "- 커밋: \`${{ github.sha }}\`"
+            echo "- 커밋: \`${{ env.DEPLOY_SHA }}\`"
             echo "- 배포 경로: \`$DEPLOY_DIR\`"
             echo ""
             echo "실패한 경우 GitHub Actions 화면에서 자동으로 펼쳐진 실패 step을 먼저 확인하세요."

@@ -5,9 +5,12 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 RESET_WORKFLOW = ROOT / ".github/workflows/reset-dev-db.yml"
+CI_WORKFLOW = ROOT / ".github/workflows/ci.yml"
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/deploy-dev.yml"
 DB_CHECK_WORKFLOW = ROOT / ".github/workflows/db-seed-check.yml"
 DEV_COMPOSE = ROOT / "deploy/docker-compose.dev.yml"
+BUILD_GRADLE = ROOT / "build.gradle"
+DEV_ENV_EXAMPLE = ROOT / "deploy/env.dev.example"
 DEV_RUNNERS = (
     ROOT / "scripts/db/dev-common.sh",
     ROOT / "scripts/db/reset-dev.sh",
@@ -40,10 +43,15 @@ class DevWorkflowContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.reset = RESET_WORKFLOW.read_text(encoding="utf-8")
+        cls.ci = CI_WORKFLOW.read_text(encoding="utf-8")
         cls.deploy = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
         cls.db_check = DB_CHECK_WORKFLOW.read_text(encoding="utf-8")
         cls.dev_compose = DEV_COMPOSE.read_text(encoding="utf-8")
+        cls.build_gradle = BUILD_GRADLE.read_text(encoding="utf-8")
+        cls.dev_env_example = DEV_ENV_EXAMPLE.read_text(encoding="utf-8")
         cls.reset_job = indented_block(cls.reset, "reset:", 2)
+        cls.ci_verify_job = indented_block(cls.ci, "verify:", 2)
+        cls.ci_deploy_job = indented_block(cls.ci, "deploy-dev:", 2)
         cls.deploy_job = indented_block(cls.deploy, "build-and-deploy:", 2)
 
     def test_reset_has_only_scenario_and_boolean_confirmation_inputs(self):
@@ -98,6 +106,107 @@ class DevWorkflowContractTest(unittest.TestCase):
             self.assertIn("group: ssing-dev-mutation", concurrency)
             self.assertIn("queue: max", concurrency)
             self.assertNotIn("cancel-in-progress: true", concurrency)
+
+    def test_gradle_shards_are_complementary_and_fail_closed(self):
+        def shard_block(shard):
+            match = re.search(
+                rf"case '{re.escape(shard)}':(?P<body>.*?)\n\s+break",
+                self.build_gradle,
+                re.DOTALL,
+            )
+            self.assertIsNotNone(match, f"missing Gradle shard: {shard}")
+            return match.group("body")
+
+        seed_shard = shard_block("seed-migration")
+        application_shard = shard_block("application")
+        seed_contract = (
+            "includeTestsMatching "
+            "'org.sopt.ssingserver.database.DatabaseSeedContractTest'"
+        )
+        migration_contract = "includeTestsMatching '*MigrationTest'"
+        seed_exclusion = seed_contract.replace("includeTestsMatching", "excludeTestsMatching")
+        migration_exclusion = migration_contract.replace(
+            "includeTestsMatching",
+            "excludeTestsMatching",
+        )
+
+        for contract in (seed_contract, migration_contract):
+            self.assertIn(contract, seed_shard)
+            self.assertNotIn(contract, application_shard)
+        for exclusion in (seed_exclusion, migration_exclusion):
+            self.assertIn(exclusion, application_shard)
+            self.assertNotIn(exclusion, seed_shard)
+
+        self.assertIn("setFailOnNoMatchingTests(true)", self.build_gradle)
+        self.assertRegex(self.build_gradle, r"(?m)^\s+case null:$")
+        self.assertIn(
+            'throw new GradleException("Unsupported integrationTestShard: ${shard}")',
+            self.build_gradle,
+        )
+
+    def test_ci_uses_two_complementary_runners_before_exact_sha_deploy(self):
+        self.assertIn("max-parallel: 2", self.ci_verify_job)
+        matrix_pairs = re.findall(
+            r"(?m)^            shard: ([a-z-]+)\n"
+            r"            gradle-tasks: ([A-Za-z][A-Za-z0-9-]*)$",
+            self.ci_verify_job,
+        )
+        self.assertEqual(
+            [
+                ("application", "build"),
+                ("seed-migration", "integrationTest"),
+            ],
+            matrix_pairs,
+        )
+        self.assertIn("-PintegrationTestShard=${{ matrix.shard }}", self.ci_verify_job)
+
+        fast_contract_commands = (
+            "bash -n scripts/db/*.sh",
+            "bash scripts/db/test-mysql-client-auth.sh",
+            "bash scripts/db/test-dev-runner-contract.sh",
+            "python3 scripts/db/test_dev_workflow_contract.py",
+        )
+        self.assertIn("if: matrix.shard == 'application'", self.ci_verify_job)
+        for command in fast_contract_commands:
+            self.assertIn(command, self.ci_verify_job)
+            self.assertNotIn(command, self.db_check)
+
+        self.assertIn(
+            "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+            self.ci_deploy_job,
+        )
+        for bypass in ("always()", "failure()", "cancelled()"):
+            self.assertNotIn(bypass, self.ci_deploy_job)
+        self.assertIn("needs: verify", self.ci_deploy_job)
+        self.assertIn("uses: ./.github/workflows/deploy-dev.yml", self.ci_deploy_job)
+        self.assertIn("deploy_sha: ${{ github.sha }}", self.ci_deploy_job)
+        self.assertIn("workflow_call:", self.deploy)
+        self.assertIn("workflow_dispatch:", self.deploy)
+        self.assertNotRegex(self.deploy, r"(?m)^  push:$")
+
+        self.assertIn("DEPLOY_SHA: ${{ inputs.deploy_sha || github.sha }}", self.deploy)
+        self.assertNotIn("./gradlew", self.deploy_job)
+        self.assertIn("ref: ${{ env.DEPLOY_SHA }}", self.deploy_job)
+        self.assertIn(
+            'current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" '
+            "--jq '.sha')\"",
+            self.deploy_job,
+        )
+        self.assertIn(
+            'if [ "$DEPLOY_SHA" != "$current_main_sha" ]; then',
+            self.deploy_job,
+        )
+        self.assertIn("dev-${DEPLOY_SHA}", self.deploy_job)
+        self.assertIn("ssing-server@dev-${{ env.DEPLOY_SHA }}", self.deploy_job)
+        self.assertNotIn("dev-latest", self.deploy_job)
+        self.assertNotIn("dev-latest", self.dev_env_example)
+
+        for workflow in (self.ci, self.db_check):
+            self.assertIn(
+                "github.event.pull_request.number || github.run_id",
+                workflow,
+            )
+            self.assertNotIn("github.head_ref", workflow)
 
     def test_runtime_and_migration_credentials_and_ssh_trust_are_separated(self):
         self.assertIn("SSING_DEV_DB_MIGRATION_PASSWORD", self.reset)
@@ -216,6 +325,11 @@ class DevWorkflowContractTest(unittest.TestCase):
         )
         for value in forbidden:
             self.assertNotIn(value, self.db_check)
+        self.assertNotIn("./gradlew", self.db_check)
+        self.assertEqual(
+            1,
+            self.db_check.count("./scripts/db/reset-all-local.sh --confirm-local-reset\n"),
+        )
 
 
 if __name__ == "__main__":
