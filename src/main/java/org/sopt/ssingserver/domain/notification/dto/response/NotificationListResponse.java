@@ -2,7 +2,6 @@ package org.sopt.ssingserver.domain.notification.dto.response;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import org.sopt.ssingserver.domain.notification.enums.NotificationType;
 
 public record NotificationListResponse(
@@ -16,7 +15,7 @@ public record NotificationListResponse(
             NotificationType type,
             String title,
             String body,
-            Map<String, Object> payload,
+            String deepLink,
             boolean isRead,
             Instant createdAt
     ) {

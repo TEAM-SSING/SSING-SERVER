@@ -21,7 +21,7 @@ public interface NotificationApiDocs {
 
     @Operation(
             summary = "알림 목록 조회",
-            description = "현재 로그인한 회원의 최근 7일 이내 알림 목록을 최신순으로 커서 기반 조회합니다.",
+            description = "현재 로그인한 소비자 또는 승인된 강사의 최근 7일 이내 알림 목록을 최신순으로 커서 기반 조회합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "알림 목록 조회 성공")
@@ -42,7 +42,7 @@ public interface NotificationApiDocs {
     ResponseEntity<BaseResponse<NotificationListResponse>> getNotifications(
             @Parameter(hidden = true)
             CurrentMember currentMember,
-            @Parameter(description = "다음 페이지 조회용 opaque cursor")
+            @Parameter(description = "다음 페이지 조회용 커서 (createdAt_notificationId 형식)")
             @RequestParam(required = false) String cursor,
             @Parameter(description = "조회할 알림 개수")
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size

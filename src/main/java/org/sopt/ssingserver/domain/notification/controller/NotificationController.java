@@ -10,6 +10,7 @@ import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.response.CommonSuccessCode;
 import org.sopt.ssingserver.global.response.SuccessResponseFactory;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
+import org.sopt.ssingserver.global.security.access.AccessPolicy;
 import org.sopt.ssingserver.global.security.access.RequireAccess;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@RequireAccess
+@RequireAccess({AccessPolicy.CONSUMER, AccessPolicy.APPROVED_INSTRUCTOR})
 @Validated
 @RestController
 @RequiredArgsConstructor

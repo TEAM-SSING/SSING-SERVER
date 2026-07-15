@@ -1,10 +1,8 @@
 package org.sopt.ssingserver.domain.notification.service;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 public class NotificationService {
 
     private static final int RETENTION_DAYS = 7;
+    private static final String CURSOR_SEPARATOR = "_";
     private static final TypeReference<Map<String, Object>> DATA_JSON_TYPE = new TypeReference<>() {
     };
 
@@ -75,10 +74,11 @@ public class NotificationService {
 
     // 회원 역할에 따라 알림을 노출할 앱 구분값을 결정함
     private ClientApp clientAppFrom(MemberRole memberRole) {
-        if (memberRole == MemberRole.INSTRUCTOR) {
-            return ClientApp.INSTRUCTOR;
-        }
-        return ClientApp.CONSUMER;
+        return switch (memberRole) {
+            case CONSUMER -> ClientApp.CONSUMER;
+            case INSTRUCTOR -> ClientApp.INSTRUCTOR;
+            case ADMIN -> throw new BusinessException(CommonErrorCode.FORBIDDEN);
+        };
     }
 
     // 알림 엔티티를 목록 조회 응답의 단일 알림 항목으로 변환함
@@ -88,13 +88,17 @@ public class NotificationService {
                 notification.getType(),
                 notification.getTitle(),
                 notification.getBody(),
-                parseDataJson(notification.getDataJson()),
+                deepLinkFrom(notification.getDataJson()),
                 notification.isRead(),
                 notification.getCreatedAt()
         );
     }
 
-    // DB에 문자열로 저장된 알림 payload JSON을 응답용 객체로 변환함
+    // DB에 문자열로 저장된 알림 data JSON에서 목록 응답에 필요한 딥링크를 추출함
+    private String deepLinkFrom(String dataJson) {
+        return requiredPayloadString(parseDataJson(dataJson), "deepLink");
+    }
+
     private Map<String, Object> parseDataJson(String dataJson) {
         if (dataJson == null || dataJson.isBlank()) {
             return Map.of();
@@ -106,6 +110,14 @@ public class NotificationService {
         }
     }
 
+    private String requiredPayloadString(Map<String, Object> payload, String key) {
+        Object value = payload.get(key);
+        if (!(value instanceof String stringValue) || stringValue.isBlank()) {
+            throw new IllegalStateException("Notification payload " + key + " must be a non-blank string.");
+        }
+        return stringValue;
+    }
+
     // 다음 페이지가 있을 때 마지막 응답 알림을 기준으로 다음 조회 커서를 생성함
     private String nextCursor(List<Notification> notifications, boolean hasNext) {
         if (!hasNext || notifications.isEmpty()) {
@@ -115,29 +127,27 @@ public class NotificationService {
         return encodeCursor(new Cursor(lastNotification.getCreatedAt(), lastNotification.getId()));
     }
 
-    // 클라이언트가 전달한 opaque cursor를 createdAt, notificationId 기준값으로 복원함
+    // 클라이언트가 전달한 createdAt_notificationId 커서를 다음 페이지 조회 기준값으로 복원함
     private Cursor decodeCursor(String cursor) {
-        if (cursor == null || cursor.isBlank()) {
+        if (cursor == null) {
             return null;
         }
         try {
-            String decodedCursor = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
-            return objectMapper.readValue(decodedCursor, Cursor.class);
-        } catch (IllegalArgumentException | JacksonException exception) {
+            int separatorIndex = cursor.lastIndexOf(CURSOR_SEPARATOR);
+            if (separatorIndex < 1 || separatorIndex == cursor.length() - 1) {
+                throw new IllegalArgumentException("Invalid notification cursor.");
+            }
+            Instant createdAt = Instant.parse(cursor.substring(0, separatorIndex));
+            Long notificationId = Long.parseLong(cursor.substring(separatorIndex + 1));
+            return new Cursor(createdAt, notificationId);
+        } catch (IllegalArgumentException exception) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, exception);
         }
     }
 
-    // 커서 내부 구조를 클라이언트가 해석하지 못하도록 URL-safe Base64 문자열로 인코딩함
+    // 다음 페이지의 마지막 조회 기준을 createdAt_notificationId 평문 커서로 생성함
     private String encodeCursor(Cursor cursor) {
-        try {
-            String json = objectMapper.writeValueAsString(cursor);
-            return Base64.getUrlEncoder()
-                    .withoutPadding()
-                    .encodeToString(json.getBytes(StandardCharsets.UTF_8));
-        } catch (JacksonException exception) {
-            throw new IllegalStateException("Notification cursor must be serializable.", exception);
-        }
+        return cursor.createdAt() + CURSOR_SEPARATOR + cursor.notificationId();
     }
 
     // createdAt DESC, id DESC 정렬에서 다음 페이지 경계를 표현하는 서비스 내부 cursor 값
