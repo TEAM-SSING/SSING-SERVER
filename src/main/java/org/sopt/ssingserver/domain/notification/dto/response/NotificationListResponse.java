@@ -15,7 +15,6 @@ public record NotificationListResponse(
             NotificationType type,
             String title,
             String body,
-            String deepLink,
             boolean isRead,
             Instant createdAt
     ) {

@@ -27,7 +27,6 @@ import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
-import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -46,7 +45,6 @@ class NotificationServiceTest {
     void setUp() {
         notificationService = new NotificationService(
                 notificationRepository,
-                new ObjectMapper(),
                 FIXED_CLOCK
         );
     }
@@ -71,8 +69,6 @@ class NotificationServiceTest {
 
         assertThat(response.notifications()).hasSize(2);
         assertThat(response.notifications().get(0).notificationId()).isEqualTo(100L);
-        assertThat(response.notifications().get(0).deepLink())
-                .isEqualTo("ssing://matching/offers/10");
         assertThat(response.nextCursor()).isEqualTo("2026-07-14T09:00:00Z_99");
         assertThat(response.hasNext()).isTrue();
     }

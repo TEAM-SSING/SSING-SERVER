@@ -119,7 +119,6 @@ class NotificationControllerTest {
                         NotificationType.MATCHING_OFFER_RECEIVED,
                         "씽 매칭 강습 도착",
                         "새로운 강습이 도착했어요. 강습생 정보를 확인하고 강습을 수락해보세요.",
-                        "ssing://matching/offers/10",
                         false,
                         Instant.parse("2026-07-14T10:00:00Z")
                 )),
@@ -143,7 +142,6 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.data.notifications[0].body").value(
                         "새로운 강습이 도착했어요. 강습생 정보를 확인하고 강습을 수락해보세요."
                 ))
-                .andExpect(jsonPath("$.data.notifications[0].deepLink").value("ssing://matching/offers/10"))
                 .andExpect(jsonPath("$.data.notifications[0].isRead").value(false))
                 .andExpect(jsonPath("$.data.notifications[0].createdAt").value("2026-07-14T10:00:00Z"))
                 .andExpect(jsonPath("$.data.nextCursor").value("next-cursor"))

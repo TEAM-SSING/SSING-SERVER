@@ -5,7 +5,6 @@ import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.notification.dto.response.NotificationListResponse;
@@ -19,9 +18,6 @@ import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -30,11 +26,7 @@ public class NotificationService {
 
     private static final int RETENTION_DAYS = 7;
     private static final String CURSOR_SEPARATOR = "_";
-    private static final TypeReference<Map<String, Object>> DATA_JSON_TYPE = new TypeReference<>() {
-    };
-
     private final NotificationRepository notificationRepository;
-    private final ObjectMapper objectMapper;
     private final Clock clock;
 
     // 현재 회원 앱 기준의 최근 알림을 커서 기반으로 조회하고 다음 페이지 여부를 계산함
@@ -89,34 +81,9 @@ public class NotificationService {
                 notification.getType(),
                 notification.getTitle(),
                 notification.getBody(),
-                deepLinkFrom(notification.getDataJson()),
                 notification.isRead(),
                 notification.getCreatedAt()
         );
-    }
-
-    // DB에 문자열로 저장된 알림 data JSON에서 목록 응답에 필요한 딥링크를 추출함
-    private String deepLinkFrom(String dataJson) {
-        return requiredPayloadString(parseDataJson(dataJson), "deepLink");
-    }
-
-    private Map<String, Object> parseDataJson(String dataJson) {
-        if (dataJson == null || dataJson.isBlank()) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(dataJson, DATA_JSON_TYPE);
-        } catch (JacksonException exception) {
-            throw new IllegalStateException("Notification dataJson must be a JSON object.", exception);
-        }
-    }
-
-    private String requiredPayloadString(Map<String, Object> payload, String key) {
-        Object value = payload.get(key);
-        if (!(value instanceof String stringValue) || stringValue.isBlank()) {
-            throw new IllegalStateException("Notification payload " + key + " must be a non-blank string.");
-        }
-        return stringValue;
     }
 
     // 다음 페이지가 있을 때 마지막 응답 알림을 기준으로 다음 조회 커서를 생성함
