@@ -8,20 +8,31 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.sopt.ssingserver.domain.member.entity.Member;
-import org.sopt.ssingserver.domain.notification.enums.NotificationDeliveryStatus;
+import org.sopt.ssingserver.domain.notification.enums.ClientApp;
+import org.sopt.ssingserver.domain.notification.enums.NotificationType;
 import org.sopt.ssingserver.global.entity.BaseTimeEntity;
 
 @Getter
 @Entity
-@Table(name = "notifications")
+@Table(
+        name = "notifications",
+        indexes = {
+                @Index(
+                        name = "idx_notifications_member_app_created_id",
+                        columnList = "member_id, client_app, created_at, id"
+                )
+        }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Notification extends BaseTimeEntity {
 
@@ -33,9 +44,13 @@ public class Notification extends BaseTimeEntity {
     @JoinColumn(nullable = false)
     private Member member;
 
-    // NotificationType enum 값 미확정
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ClientApp clientApp;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private String type;
+    private NotificationType type;
 
     @Column(nullable = false, length = 100)
     private String title;
@@ -46,11 +61,35 @@ public class Notification extends BaseTimeEntity {
     @Column(columnDefinition = "json")
     private String dataJson;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
-    private NotificationDeliveryStatus deliveryStatus;
-
-    private Instant sentAt;
-
     private Instant readAt;
+
+    public static Notification create(
+            Member member,
+            ClientApp clientApp,
+            NotificationType type,
+            String title,
+            String body,
+            String dataJson
+    ) {
+        Notification notification = new Notification();
+        notification.member = member;
+        notification.clientApp = clientApp;
+        notification.type = type;
+        notification.title = title;
+        notification.body = body;
+        notification.dataJson = dataJson;
+        return notification;
+    }
+
+    public boolean isRead() {
+        return readAt != null;
+    }
+
+    public void markRead(Instant readAt) {
+        Objects.requireNonNull(readAt, "readAt must not be null.");
+        if (isRead()) {
+            return;
+        }
+        this.readAt = readAt;
+    }
 }

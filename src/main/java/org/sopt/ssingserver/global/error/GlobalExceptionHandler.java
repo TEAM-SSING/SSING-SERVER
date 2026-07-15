@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.global.error;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sopt.ssingserver.global.monitoring.ErrorTracker;
@@ -89,6 +90,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<BaseResponse<Void>> handleHandlerMethodValidation(
             HandlerMethodValidationException exception,
+            HttpServletRequest request
+    ) {
+        return errorResponseFactory.validationError(ValidationErrorMapper.from(exception), request);
+    }
+
+    // @Validated 기반 컨트롤러 메서드 파라미터 검증 실패
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<BaseResponse<Void>> handleConstraintViolation(
+            ConstraintViolationException exception,
             HttpServletRequest request
     ) {
         return errorResponseFactory.validationError(ValidationErrorMapper.from(exception), request);

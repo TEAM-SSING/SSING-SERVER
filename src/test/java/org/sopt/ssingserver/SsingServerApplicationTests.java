@@ -24,6 +24,7 @@ import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipan
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
+import org.sopt.ssingserver.domain.notification.repository.NotificationRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPriceSnapshotRepository;
@@ -53,6 +54,7 @@ class SsingServerApplicationTests {
 			"POST /api/v1/auth/logout",
 			"PUT /api/v1/fcm-tokens",
 			"POST /api/v1/fcm-tokens/unregister",
+			"GET /api/v1/notifications",
 			"GET /api/v1/consumer/home",
 			"GET /api/v1/instructor/home",
 			"GET /api/v1/instructor/matching-exposure",
@@ -157,6 +159,9 @@ class SsingServerApplicationTests {
 	private FcmTokenRepository fcmTokenRepository;
 
 	@MockitoBean
+	private NotificationRepository notificationRepository;
+
+	@MockitoBean
 	private ReviewRepository reviewRepository;
 
 	@MockitoBean
@@ -245,6 +250,84 @@ class SsingServerApplicationTests {
 				});
 			});
 		});
+	}
+
+	@Test
+	void generatedOpenApiDocumentsNotificationListContract() throws Exception {
+		JsonNode openApi = generatedOpenApi();
+		JsonNode operation = findOperation(openApi, "GET /api/v1/notifications");
+		JsonNode responses = operation.path("responses");
+		JsonNode successMediaType = responses.path("200").path("content").path("application/json");
+		JsonNode schemas = openApi.path("components").path("schemas");
+		JsonNode listSchema = schemas.path("NotificationListResponse");
+		JsonNode itemSchema = schemas.path("NotificationItemResponse");
+
+		assertThat(successMediaType.path("schema").path("properties").path("data").path("$ref").asString())
+				.isEqualTo("#/components/schemas/NotificationListResponse");
+		assertThat(fieldNames(listSchema.path("properties")))
+				.containsExactlyInAnyOrder("notifications", "nextCursor", "hasNext");
+		assertThat(notificationTextValues(listSchema.path("required")))
+				.contains("notifications", "hasNext")
+				.doesNotContain("nextCursor");
+		assertThat(listSchema.path("properties").path("notifications").path("items").path("$ref").asString())
+				.isEqualTo("#/components/schemas/NotificationItemResponse");
+
+		assertThat(fieldNames(itemSchema.path("properties"))).containsExactlyInAnyOrder(
+				"notificationId",
+				"type",
+				"title",
+				"body",
+				"isRead",
+				"createdAt"
+		);
+		assertThat(notificationTextValues(itemSchema.path("required"))).containsExactlyInAnyOrder(
+				"notificationId",
+				"type",
+				"title",
+				"body",
+				"isRead",
+				"createdAt"
+		);
+		assertThat(notificationTextValues(itemSchema.path("properties").path("type").path("enum")))
+				.containsExactlyInAnyOrder(
+						"MATCHING_OFFER_RECEIVED",
+						"MATCHING_OFFER_CLOSED",
+						"MATCHING_CONFIRMED"
+				);
+		assertThat(itemSchema.path("properties").path("createdAt").path("format").asString())
+				.isEqualTo("date-time");
+		assertThat(itemSchema.path("properties").path("createdAt").path("example").asString())
+				.endsWith("Z");
+
+		JsonNode cursorParameter = findParameter(operation, "cursor");
+		JsonNode sizeParameter = findParameter(operation, "size");
+		assertThat(cursorParameter.path("required").asBoolean()).isFalse();
+		assertThat(cursorParameter.path("example").asString()).isEqualTo("2026-07-04T12:59:00Z_99");
+		assertThat(sizeParameter.path("required").asBoolean()).isFalse();
+		assertThat(sizeParameter.path("schema").path("default").asInt()).isEqualTo(20);
+		assertThat(sizeParameter.path("schema").path("minimum").asInt()).isEqualTo(1);
+		assertThat(sizeParameter.path("schema").path("maximum").asInt()).isEqualTo(100);
+
+		assertThat(fieldNames(responses)).containsExactlyInAnyOrder("200", "400", "401", "403", "500");
+		assertThat(fieldNames(responses.path("400").path("content").path("application/json").path("examples")))
+				.containsExactlyInAnyOrder("VALIDATION_FAILED", "BAD_REQUEST");
+		assertThat(fieldNames(responses.path("401").path("content").path("application/json").path("examples")))
+				.containsExactlyInAnyOrder("UNAUTHENTICATED", "AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED");
+		assertThat(fieldNames(responses.path("403").path("content").path("application/json").path("examples")))
+				.containsExactly("FORBIDDEN");
+		assertThat(fieldNames(responses.path("500").path("content").path("application/json").path("examples")))
+				.containsExactly("INTERNAL_ERROR");
+
+		JsonNode successExamples = successMediaType.path("examples");
+		assertThat(fieldNames(successExamples)).containsExactlyInAnyOrder("PAGE_WITH_NEXT", "LAST_PAGE");
+		assertThat(successExamples.path("PAGE_WITH_NEXT").path("value").path("data")
+				.path("nextCursor").asString()).isEqualTo("2026-07-04T12:59:00Z_99");
+		assertThat(successExamples.path("PAGE_WITH_NEXT").path("value").path("data")
+				.path("hasNext").asBoolean()).isTrue();
+		assertThat(successExamples.path("LAST_PAGE").path("value").path("data")
+				.path("notifications").isEmpty()).isTrue();
+		assertThat(successExamples.path("LAST_PAGE").path("value").path("data")
+				.path("hasNext").asBoolean()).isFalse();
 	}
 
 	@Test
@@ -702,6 +785,27 @@ class SsingServerApplicationTests {
 		String method = operationKey.substring(0, separatorIndex).toLowerCase();
 		String path = operationKey.substring(separatorIndex + 1);
 		return openApi.path("paths").path(path).path(method);
+	}
+
+	private JsonNode findParameter(JsonNode operation, String parameterName) {
+		for (JsonNode parameter : operation.path("parameters")) {
+			if (parameterName.equals(parameter.path("name").asString())) {
+				return parameter;
+			}
+		}
+		throw new AssertionError("OpenAPI parameter not found: " + parameterName);
+	}
+
+	private Set<String> fieldNames(JsonNode objectNode) {
+		Set<String> names = new TreeSet<>();
+		objectNode.forEachEntry((name, value) -> names.add(name));
+		return names;
+	}
+
+	private Set<String> notificationTextValues(JsonNode arrayNode) {
+		Set<String> values = new TreeSet<>();
+		arrayNode.forEach(value -> values.add(value.asString()));
+		return values;
 	}
 
 	private void assertAuthenticationContract(String operationKey, JsonNode operation) {
