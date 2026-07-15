@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class FcmPushClient implements PushClient {
 
     private static final Logger log = LoggerFactory.getLogger(FcmPushClient.class);
+    private static final String PUSH_DELIVERY_FAILED_EVENT = "fcm.push.delivery_failed";
 
     private final FirebaseMessaging firebaseMessaging;
 
@@ -31,9 +32,11 @@ public class FcmPushClient implements PushClient {
                     .build());
         } catch (FirebaseMessagingException exception) {
             log.atWarn()
-                    .addKeyValue("event", "fcm.push.delivery_failed")
-                    .addKeyValue("errorCode", exception.getMessagingErrorCode())
-                    .setCause(exception)
+                    .addKeyValue("event", PUSH_DELIVERY_FAILED_EVENT)
+                    .addKeyValue("provider", "firebase")
+                    .addKeyValue("operation", "send")
+                    .addKeyValue("error_code", exception.getMessagingErrorCode())
+                    .addKeyValue("exception_type", exception.getClass().getSimpleName())
                     .log("FCM push delivery failed");
         }
     }
