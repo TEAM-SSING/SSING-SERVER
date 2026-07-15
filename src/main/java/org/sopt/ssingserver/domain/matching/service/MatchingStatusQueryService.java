@@ -1,10 +1,14 @@
 package org.sopt.ssingserver.domain.matching.service;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
+import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingProgressSummaryResult;
@@ -25,8 +29,11 @@ import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
 import org.sopt.ssingserver.domain.payment.enums.MatchingRequestPaymentStatus;
 import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
+import org.sopt.ssingserver.domain.review.entity.Review;
+import org.sopt.ssingserver.domain.review.repository.ReviewRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
+import org.sopt.ssingserver.global.time.AppZoneId;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,14 +41,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MatchingStatusQueryService {
 
+    private static final String IMMEDIATE_START_TYPE = "IMMEDIATE";
+
     private final MatchingRequestRepository matchingRequestRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
     private final MatchingRequestPaymentRepository matchingRequestPaymentRepository;
     private final LessonRepository lessonRepository;
+    private final ReviewRepository reviewRepository;
     private final MatchingStatusResolver matchingStatusResolver;
     private final MatchingTimeoutPolicy matchingTimeoutPolicy;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public MatchingStatusQueryResult getStatus(
@@ -52,7 +63,7 @@ public class MatchingStatusQueryService {
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_REQUEST_NOT_FOUND));
 
         validateOwner(memberId, matchingRequest);
-        return getStatus(matchingRequest);
+        return toLegacyQueryResult(loadContext(matchingRequest));
     }
 
     @Transactional(readOnly = true)
@@ -63,11 +74,13 @@ public class MatchingStatusQueryService {
                 )
                 .map(matchingRequest -> {
                     validateOwner(memberId, matchingRequest);
-                    return getStatus(matchingRequest);
-                });
+                    return loadContext(matchingRequest);
+                })
+                .filter(context -> isActiveRecoveryStatus(context.matchingStatus()))
+                .map(this::toActiveQueryResult);
     }
 
-    private MatchingStatusQueryResult getStatus(MatchingRequest matchingRequest) {
+    private MatchingStatusContext loadContext(MatchingRequest matchingRequest) {
         Long matchingRequestId = matchingRequest.getId();
 
         // 조회 API는 상태를 바꾸지 않고 현재 요청 주변 row를 모아 Android 복구 응답을 만든다.
@@ -90,7 +103,7 @@ public class MatchingStatusQueryService {
         );
         Optional<Lesson> lesson = findConfirmedLesson(matchingStatus, matchingOffer);
 
-        return toQueryResult(
+        return new MatchingStatusContext(
                 matchingRequest,
                 matchingStatus,
                 matchingRequestGroup,
@@ -101,17 +114,14 @@ public class MatchingStatusQueryService {
         );
     }
 
-    private MatchingStatusQueryResult toQueryResult(
-            MatchingRequest matchingRequest,
-            MatchingStatus matchingStatus,
-            Optional<MatchingRequestGroup> matchingRequestGroup,
-            Optional<MatchingRequestGroupItem> matchingRequestGroupItem,
-            Optional<MatchingOffer> matchingOffer,
-            Optional<MatchingRequestPayment> matchingRequestPayment,
-            Optional<Lesson> lesson
-    ) {
-        Optional<MatchingRequestGroup> responseMatchingRequestGroup = matchingRequestGroup
-                .or(() -> matchingOffer.map(MatchingOffer::getMatchingRequestGroup));
+    private MatchingStatusQueryResult toLegacyQueryResult(MatchingStatusContext context) {
+        MatchingRequest matchingRequest = context.matchingRequest();
+        MatchingStatus matchingStatus = context.matchingStatus();
+        Optional<MatchingRequestGroup> responseMatchingRequestGroup = context.matchingRequestGroup()
+                .or(() -> context.matchingOffer().map(MatchingOffer::getMatchingRequestGroup));
+        List<MatchingRequestGroupItem> groupItems = isConfirmationScreenStatus(matchingStatus)
+                ? findScreenGroupItems(matchingStatus, responseMatchingRequestGroup)
+                : List.of();
 
         return new MatchingStatusQueryResult(
                 matchingRequest.getId(),
@@ -120,38 +130,97 @@ public class MatchingStatusQueryService {
                 matchingRequest.getStatusReason(),
                 responseMatchingRequestGroup.map(MatchingRequestGroup::getId).orElse(null),
                 responseMatchingRequestGroup.map(MatchingRequestGroup::getStatus).orElse(null),
-                matchingRequestGroupItem.map(MatchingRequestGroupItem::getStatus).orElse(null),
-                matchingOffer.map(MatchingOffer::getStatus).orElse(null),
-                matchingRequestPayment.map(MatchingRequestPayment::getStatus).orElse(null),
-                resolveProgressSummary(matchingStatus, matchingRequestGroup, matchingOffer),
+                context.matchingRequestGroupItem().map(MatchingRequestGroupItem::getStatus).orElse(null),
+                context.matchingOffer().map(MatchingOffer::getStatus).orElse(null),
+                context.matchingRequestPayment().map(MatchingRequestPayment::getStatus).orElse(null),
+                resolveProgressSummary(matchingStatus, context.matchingOffer(), groupItems),
                 matchingTimeoutPolicy.matchingStatusExpiresAt(
                         matchingStatus,
                         matchingRequest,
-                        matchingOffer,
-                        matchingRequestPayment
+                        context.matchingOffer(),
+                        context.matchingRequestPayment()
                 ).orElse(null),
-                resolveInstructorProfile(matchingOffer),
-                resolveLessonId(matchingStatus, lesson),
-                resolvePriceSummary(matchingStatus, matchingOffer, matchingRequestPayment)
+                resolveBasicInstructorProfile(context.matchingOffer()),
+                resolveLessonId(matchingStatus, context.lesson()),
+                resolvePriceSummary(matchingStatus, context.matchingOffer(), context.matchingRequestPayment()),
+                null,
+                null
+        );
+    }
+
+    private MatchingStatusQueryResult toActiveQueryResult(MatchingStatusContext context) {
+        MatchingRequest matchingRequest = context.matchingRequest();
+        MatchingStatus matchingStatus = context.matchingStatus();
+        boolean shouldHideRelations = matchingStatus == MatchingStatus.REMATCHING;
+        Optional<MatchingRequestGroup> responseMatchingRequestGroup = shouldHideRelations
+                ? Optional.empty()
+                : context.matchingRequestGroup()
+                        .or(() -> context.matchingOffer().map(MatchingOffer::getMatchingRequestGroup));
+        Optional<MatchingRequestGroupItem> responseGroupItem = shouldHideRelations
+                ? Optional.empty()
+                : context.matchingRequestGroupItem();
+        Optional<MatchingOffer> responseOffer = shouldHideRelations
+                ? Optional.empty()
+                : context.matchingOffer();
+        Optional<MatchingRequestPayment> responsePayment = isPaymentScreenStatus(matchingStatus)
+                ? context.matchingRequestPayment()
+                : Optional.empty();
+        List<MatchingRequestGroupItem> groupItems = findScreenGroupItems(
+                matchingStatus,
+                responseMatchingRequestGroup
+        );
+
+        return new MatchingStatusQueryResult(
+                matchingRequest.getId(),
+                matchingStatus,
+                matchingRequest.getStatus(),
+                matchingRequest.getStatusReason(),
+                responseMatchingRequestGroup.map(MatchingRequestGroup::getId).orElse(null),
+                responseMatchingRequestGroup.map(MatchingRequestGroup::getStatus).orElse(null),
+                responseGroupItem.map(MatchingRequestGroupItem::getStatus).orElse(null),
+                responseOffer.map(MatchingOffer::getStatus).orElse(null),
+                responsePayment.map(MatchingRequestPayment::getStatus).orElse(null),
+                resolveProgressSummary(matchingStatus, responseOffer, groupItems),
+                null,
+                resolveActiveInstructorProfile(matchingStatus, responseOffer),
+                null,
+                resolvePriceSummary(matchingStatus, responseOffer, responsePayment),
+                MatchingStatusQueryResult.RequestSummaryResult.from(matchingRequest),
+                resolveLessonSummary(matchingStatus, responseMatchingRequestGroup, groupItems)
         );
     }
 
     private MatchingProgressSummaryResult resolveProgressSummary(
             MatchingStatus matchingStatus,
-            Optional<MatchingRequestGroup> matchingRequestGroup,
-            Optional<MatchingOffer> matchingOffer
+            Optional<MatchingOffer> matchingOffer,
+            List<MatchingRequestGroupItem> groupItems
     ) {
         return switch (matchingStatus) {
             case WAITING_FOR_CONFIRMATION, WAITING_FOR_OTHER_CONFIRMATIONS ->
-                    resolveConfirmationProgress(matchingRequestGroup);
+                    resolveConfirmationProgress(groupItems);
             case PAYMENT_PENDING, WAITING_FOR_OTHER_PAYMENTS -> resolvePaymentProgress(matchingOffer);
             default -> null;
         };
     }
 
-    private MatchingProgressSummaryResult resolveConfirmationProgress(
+    private MatchingProgressSummaryResult resolveConfirmationProgress(List<MatchingRequestGroupItem> groupItems) {
+        if (groupItems.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
+        }
+        int acceptedRequesterCount = (int) groupItems.stream()
+                .filter(item -> item.getStatus() == MatchingRequestGroupItemStatus.ACCEPTED)
+                .count();
+        return MatchingProgressSummaryResult.confirmation(acceptedRequesterCount, groupItems.size());
+    }
+
+    private List<MatchingRequestGroupItem> findScreenGroupItems(
+            MatchingStatus matchingStatus,
             Optional<MatchingRequestGroup> matchingRequestGroup
     ) {
+        if (!isLessonScreenStatus(matchingStatus)) {
+            return List.of();
+        }
+
         Long groupId = matchingRequestGroup
                 .map(MatchingRequestGroup::getId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
@@ -160,10 +229,29 @@ public class MatchingStatusQueryService {
         if (groupItems.isEmpty()) {
             throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
         }
-        int acceptedRequesterCount = (int) groupItems.stream()
-                .filter(item -> item.getStatus() == MatchingRequestGroupItemStatus.ACCEPTED)
-                .count();
-        return MatchingProgressSummaryResult.confirmation(acceptedRequesterCount, groupItems.size());
+        return groupItems;
+    }
+
+    private MatchingStatusQueryResult.LessonSummaryResult resolveLessonSummary(
+            MatchingStatus matchingStatus,
+            Optional<MatchingRequestGroup> matchingRequestGroup,
+            List<MatchingRequestGroupItem> groupItems
+    ) {
+        if (!isLessonScreenStatus(matchingStatus)) {
+            return null;
+        }
+
+        MatchingRequestGroup group = matchingRequestGroup
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
+        int totalHeadcount = groupItems.stream()
+                .map(MatchingRequestGroupItem::getMatchingRequest)
+                .mapToInt(MatchingRequest::getHeadcount)
+                .sum();
+        return new MatchingStatusQueryResult.LessonSummaryResult(
+                group.getDurationMinutes(),
+                totalHeadcount,
+                IMMEDIATE_START_TYPE
+        );
     }
 
     private MatchingProgressSummaryResult resolvePaymentProgress(Optional<MatchingOffer> matchingOffer) {
@@ -214,14 +302,94 @@ public class MatchingStatusQueryService {
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.INTERNAL_ERROR));
     }
 
-    private static MatchingStatusQueryResult.InstructorProfileResult resolveInstructorProfile(
+    private static MatchingStatusQueryResult.InstructorProfileResult resolveBasicInstructorProfile(
             Optional<MatchingOffer> matchingOffer
     ) {
         return matchingOffer
                 .filter(offer -> offer.getStatus() == MatchingOfferStatus.ACCEPTED)
                 .map(MatchingOffer::getInstructorProfile)
-                .map(MatchingStatusQueryResult.InstructorProfileResult::from)
+                .map(MatchingStatusQueryResult.InstructorProfileResult::basicFrom)
                 .orElse(null);
+    }
+
+    private MatchingStatusQueryResult.InstructorProfileResult resolveActiveInstructorProfile(
+            MatchingStatus matchingStatus,
+            Optional<MatchingOffer> matchingOffer
+    ) {
+        if (!isLessonScreenStatus(matchingStatus)) {
+            return null;
+        }
+
+        return matchingOffer
+                .filter(offer -> offer.getStatus() == MatchingOfferStatus.ACCEPTED)
+                .map(MatchingOffer::getInstructorProfile)
+                .map(instructorProfile -> {
+                    Long instructorProfileId = instructorProfile.getId();
+                    long completedLessonCount = lessonRepository.countByInstructorProfileIdAndStatus(
+                            instructorProfileId,
+                            LessonStatus.COMPLETED
+                    );
+                    Double averageRating = Optional.ofNullable(
+                                    reviewRepository.findAverageRatingByInstructorProfileId(instructorProfileId)
+                            )
+                            .map(MatchingStatusQueryService::roundToOneDecimal)
+                            .orElse(null);
+                    MatchingStatusQueryResult.LatestReviewResult latestReview = reviewRepository
+                            .findFirstByInstructorProfileIdOrderByCreatedAtDescIdDesc(instructorProfileId)
+                            .map(Review::getContent)
+                            .map(MatchingStatusQueryResult.LatestReviewResult::new)
+                            .orElse(null);
+                    LocalDate today = clock.instant().atZone(AppZoneId.SEOUL).toLocalDate();
+                    int careerYears = Period.between(instructorProfile.getCareerStartDate(), today).getYears();
+
+                    return MatchingStatusQueryResult.InstructorProfileResult.activeFrom(
+                            instructorProfile,
+                            careerYears,
+                            completedLessonCount,
+                            averageRating,
+                            instructorProfile.getCertificateTypes().stream().sorted().toList(),
+                            latestReview
+                    );
+                })
+                .orElse(null);
+    }
+
+    private static double roundToOneDecimal(double value) {
+        return Math.round(value * 10.0) / 10.0;
+    }
+
+    private static boolean isActiveRecoveryStatus(MatchingStatus matchingStatus) {
+        return switch (matchingStatus) {
+            case SEARCHING,
+                    WAITING_FOR_TEAM,
+                    WAITING_FOR_INSTRUCTOR,
+                    REMATCHING,
+                    WAITING_FOR_CONFIRMATION,
+                    WAITING_FOR_OTHER_CONFIRMATIONS,
+                    PAYMENT_PENDING,
+                    WAITING_FOR_OTHER_PAYMENTS -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isLessonScreenStatus(MatchingStatus matchingStatus) {
+        return switch (matchingStatus) {
+            case WAITING_FOR_CONFIRMATION,
+                    WAITING_FOR_OTHER_CONFIRMATIONS,
+                    PAYMENT_PENDING,
+                    WAITING_FOR_OTHER_PAYMENTS -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isPaymentScreenStatus(MatchingStatus matchingStatus) {
+        return matchingStatus == MatchingStatus.PAYMENT_PENDING
+                || matchingStatus == MatchingStatus.WAITING_FOR_OTHER_PAYMENTS;
+    }
+
+    private static boolean isConfirmationScreenStatus(MatchingStatus matchingStatus) {
+        return matchingStatus == MatchingStatus.WAITING_FOR_CONFIRMATION
+                || matchingStatus == MatchingStatus.WAITING_FOR_OTHER_CONFIRMATIONS;
     }
 
     private static Long resolveLessonId(
@@ -279,5 +447,16 @@ public class MatchingStatusQueryService {
                 .map(MatchingOffer::getId)
                 .filter(Objects::nonNull)
                 .flatMap(lessonRepository::findByMatchingOfferId);
+    }
+
+    private record MatchingStatusContext(
+            MatchingRequest matchingRequest,
+            MatchingStatus matchingStatus,
+            Optional<MatchingRequestGroup> matchingRequestGroup,
+            Optional<MatchingRequestGroupItem> matchingRequestGroupItem,
+            Optional<MatchingOffer> matchingOffer,
+            Optional<MatchingRequestPayment> matchingRequestPayment,
+            Optional<Lesson> lesson
+    ) {
     }
 }

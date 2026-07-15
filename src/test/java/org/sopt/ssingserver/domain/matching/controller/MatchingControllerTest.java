@@ -8,14 +8,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenClaims;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
+import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
+import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
+import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
+import org.sopt.ssingserver.domain.matching.dto.result.MatchingProgressSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
+import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
+import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
+import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.matching.service.MatchingStatusQueryService;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
@@ -103,7 +113,7 @@ class MatchingControllerTest {
     }
 
     @Test
-    void getActiveStatus는_활성_요청이_있으면_ACTIVE와_기존_flat_필드를_200으로_반환한다() throws Exception {
+    void getActiveStatus는_SEARCHING이면_요청요약만_담아_200으로_반환한다() throws Exception {
         when(matchingStatusQueryService.getActiveStatus(MEMBER_ID))
                 .thenReturn(Optional.of(searchingResult()));
 
@@ -116,7 +126,47 @@ class MatchingControllerTest {
                 .andExpect(jsonPath("$.data.matchingRequestId").value(10L))
                 .andExpect(jsonPath("$.data.matchingStatus").value("SEARCHING"))
                 .andExpect(jsonPath("$.data.requestStatus").value("REQUESTED"))
+                .andExpect(jsonPath("$.data.requestSummary.resort.code").value("HIGH1"))
+                .andExpect(jsonPath("$.data.requestSummary.resort.displayName").value("하이원"))
+                .andExpect(jsonPath("$.data.requestSummary.sport").value("SNOWBOARD"))
+                .andExpect(jsonPath("$.data.requestSummary.lessonLevel").value("FIRST_TIME"))
+                .andExpect(jsonPath("$.data.requestSummary.headcount").value(2))
+                .andExpect(jsonPath("$.data.groupId").doesNotExist())
+                .andExpect(jsonPath("$.data.offerStatus").doesNotExist())
+                .andExpect(jsonPath("$.data.paymentStatus").doesNotExist())
+                .andExpect(jsonPath("$.data.lessonSummary").doesNotExist())
+                .andExpect(jsonPath("$.data.instructorProfile").doesNotExist())
+                .andExpect(jsonPath("$.data.progressSummary").doesNotExist())
+                .andExpect(jsonPath("$.data.priceSummary").doesNotExist())
                 .andExpect(jsonPath("$.data.payload").doesNotExist())
+                .andExpect(jsonPath("$.data.expiresAt").doesNotExist())
+                .andExpect(jsonPath("$.data.lessonId").doesNotExist());
+
+        verify(matchingStatusQueryService).getActiveStatus(MEMBER_ID);
+    }
+
+    @Test
+    void getActiveStatus는_최종확인이면_강습과_강사_화면블록을_200으로_반환한다() throws Exception {
+        when(matchingStatusQueryService.getActiveStatus(MEMBER_ID))
+                .thenReturn(Optional.of(confirmationResult()));
+
+        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.matchingStatus").value("WAITING_FOR_CONFIRMATION"))
+                .andExpect(jsonPath("$.data.lessonSummary.durationMinutes").value(120))
+                .andExpect(jsonPath("$.data.lessonSummary.totalHeadcount").value(4))
+                .andExpect(jsonPath("$.data.lessonSummary.startType").value("IMMEDIATE"))
+                .andExpect(jsonPath("$.data.instructorProfile.instructorId").value(40L))
+                .andExpect(jsonPath("$.data.instructorProfile.careerYears").value(6))
+                .andExpect(jsonPath("$.data.instructorProfile.completedLessonCount").value(24L))
+                .andExpect(jsonPath("$.data.instructorProfile.averageRating").value(4.7))
+                .andExpect(jsonPath("$.data.instructorProfile.certificateTypes[0]")
+                        .value("KSIA_SNOWBOARD_LEVEL_2"))
+                .andExpect(jsonPath("$.data.instructorProfile.latestReview.content")
+                        .value("설명을 친절하게 해주셨어요."))
+                .andExpect(jsonPath("$.data.paymentStatus").doesNotExist())
                 .andExpect(jsonPath("$.data.expiresAt").doesNotExist())
                 .andExpect(jsonPath("$.data.lessonId").doesNotExist());
 
@@ -158,7 +208,8 @@ class MatchingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.matchingRequestId").value(10L))
                 .andExpect(jsonPath("$.data.matchingStatus").value("SEARCHING"))
-                .andExpect(jsonPath("$.data.recoveryState").doesNotExist());
+                .andExpect(jsonPath("$.data.recoveryState").doesNotExist())
+                .andExpect(jsonPath("$.data.requestSummary").doesNotExist());
 
         verify(matchingStatusQueryService).getStatus(MEMBER_ID, 10L);
     }
@@ -178,7 +229,52 @@ class MatchingControllerTest {
                 null,
                 null,
                 null,
+                null,
+                requestSummary(),
                 null
+        );
+    }
+
+    private MatchingStatusQueryResult confirmationResult() {
+        return new MatchingStatusQueryResult(
+                10L,
+                MatchingStatus.WAITING_FOR_CONFIRMATION,
+                MatchingRequestStatus.MATCHED,
+                null,
+                20L,
+                MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
+                MatchingRequestGroupItemStatus.PENDING,
+                MatchingOfferStatus.ACCEPTED,
+                null,
+                MatchingProgressSummaryResult.confirmation(1, 2),
+                null,
+                new MatchingStatusQueryResult.InstructorProfileResult(
+                        40L,
+                        "김강사",
+                        null,
+                        Gender.FEMALE,
+                        1998,
+                        3,
+                        6,
+                        24L,
+                        4.7,
+                        "친절한 강사입니다.",
+                        List.of(InstructorCertificateType.KSIA_SNOWBOARD_LEVEL_2),
+                        new MatchingStatusQueryResult.LatestReviewResult("설명을 친절하게 해주셨어요.")
+                ),
+                null,
+                new MatchingPriceSummaryResult(80_000, 20_000, 100_000),
+                requestSummary(),
+                new MatchingStatusQueryResult.LessonSummaryResult(120, 4, "IMMEDIATE")
+        );
+    }
+
+    private MatchingStatusQueryResult.RequestSummaryResult requestSummary() {
+        return new MatchingStatusQueryResult.RequestSummaryResult(
+                new MatchingStatusQueryResult.ResortResult("HIGH1", "하이원"),
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                2
         );
     }
 }

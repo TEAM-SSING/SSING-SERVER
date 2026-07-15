@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -51,6 +52,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
@@ -352,10 +354,48 @@ class DatabaseSeedContractTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.matchingStatus").value("SEARCHING"))
                 .andExpect(jsonPath("$.data.requestStatus").value("REQUESTED"));
+        assertActiveMatchingReadback(
+                consumerToken,
+                matchingRequestId,
+                "SEARCHING",
+                "REQUESTED"
+        );
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM matching_request_groups", Integer.class))
                 .isZero();
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM matching_offers", Integer.class))
                 .isZero();
+    }
+
+    @Test
+    void MATCHED인데_결제자식만_만료된_이상데이터는_active에서_NONE으로_닫는다() throws Exception {
+        applyScenario("matching-price-vivaldi");
+        Long consumerMemberId = personaMemberId("consumer-default");
+        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
+        String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
+
+        MvcResult creation = mockMvc.perform(post("/api/v1/consumer/matching-requests")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(scenarioRequestJson()))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long matchingRequestId = responseJson(creation).at("/data/matchingRequestId").asLong();
+        long offerId = readInstructorOffer(instructorToken).at("/data/items/0/offerId").asLong();
+        acceptInstructorOffer(instructorToken, offerId);
+        acceptConsumerConfirmation(consumerToken, matchingRequestId);
+
+        jdbcTemplate.update(
+                "UPDATE matching_request_payments SET status = 'EXPIRED' WHERE matching_request_id = ?",
+                matchingRequestId
+        );
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM matching_requests WHERE id = ?",
+                String.class,
+                matchingRequestId
+        )).isEqualTo("MATCHED");
+        assertNoActiveMatchingRequest(consumerToken);
     }
 
     @Test
@@ -530,13 +570,27 @@ class DatabaseSeedContractTest {
             String matchingStatus,
             String requestStatus
     ) throws Exception {
-        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+        ResultActions result = mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recoveryState").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
                 .andExpect(jsonPath("$.data.matchingStatus").value(matchingStatus))
-                .andExpect(jsonPath("$.data.requestStatus").value(requestStatus));
+                .andExpect(jsonPath("$.data.requestStatus").value(requestStatus))
+                .andExpect(jsonPath("$.data.lessonSummary").doesNotExist())
+                .andExpect(jsonPath("$.data.instructorProfile").doesNotExist())
+                .andExpect(jsonPath("$.data.progressSummary").doesNotExist())
+                .andExpect(jsonPath("$.data.priceSummary").doesNotExist())
+                .andExpect(jsonPath("$.data.paymentStatus").doesNotExist())
+                .andExpect(jsonPath("$.data.expiresAt").doesNotExist())
+                .andExpect(jsonPath("$.data.lessonId").doesNotExist());
+        assertActiveRequestSummary(result, matchingRequestId);
+        if ("SEARCHING".equals(matchingStatus)) {
+            result.andExpect(jsonPath("$.data.groupId").doesNotExist())
+                    .andExpect(jsonPath("$.data.groupStatus").doesNotExist())
+                    .andExpect(jsonPath("$.data.itemStatus").doesNotExist())
+                    .andExpect(jsonPath("$.data.offerStatus").doesNotExist());
+        }
     }
 
     private void assertActiveConfirmationReadback(
@@ -545,7 +599,7 @@ class DatabaseSeedContractTest {
             int acceptedRequesterCount,
             int totalRequesterCount
     ) throws Exception {
-        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+        ResultActions result = mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recoveryState").value("ACTIVE"))
@@ -556,7 +610,11 @@ class DatabaseSeedContractTest {
                         .value(acceptedRequesterCount))
                 .andExpect(jsonPath("$.data.progressSummary.totalRequesterCount")
                         .value(totalRequesterCount))
-                .andExpect(jsonPath("$.data.progressSummary.paidRequesterCount").doesNotExist());
+                .andExpect(jsonPath("$.data.progressSummary.paidRequesterCount").doesNotExist())
+                .andExpect(jsonPath("$.data.paymentStatus").doesNotExist())
+                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000));
+        assertActiveRequestSummary(result, matchingRequestId);
+        assertActiveLessonAndInstructorSummary(result, matchingRequestId);
     }
 
     private void assertActivePaymentReadback(
@@ -565,18 +623,93 @@ class DatabaseSeedContractTest {
             int paidRequesterCount,
             int totalRequesterCount
     ) throws Exception {
-        mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
+        ResultActions result = mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recoveryState").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
                 .andExpect(jsonPath("$.data.matchingStatus").value("PAYMENT_PENDING"))
                 .andExpect(jsonPath("$.data.requestStatus").value("MATCHED"))
+                .andExpect(jsonPath("$.data.paymentStatus").value("PENDING"))
                 .andExpect(jsonPath("$.data.progressSummary.acceptedRequesterCount").doesNotExist())
                 .andExpect(jsonPath("$.data.progressSummary.totalRequesterCount")
                         .value(totalRequesterCount))
                 .andExpect(jsonPath("$.data.progressSummary.paidRequesterCount")
-                        .value(paidRequesterCount));
+                        .value(paidRequesterCount))
+                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000));
+        assertActiveRequestSummary(result, matchingRequestId);
+        assertActiveLessonAndInstructorSummary(result, matchingRequestId);
+    }
+
+    private void assertActiveRequestSummary(
+            ResultActions result,
+            long matchingRequestId
+    ) throws Exception {
+        Map<String, Object> expected = jdbcTemplate.queryForMap(
+                """
+                SELECT resort.code,
+                       resort.display_name,
+                       request.sport,
+                       request.lesson_level,
+                       request.headcount
+                FROM matching_requests request
+                JOIN resorts resort ON resort.id = request.resort_id
+                WHERE request.id = ?
+                """,
+                matchingRequestId
+        );
+        result.andExpect(jsonPath("$.data.requestSummary.resort.code").value(expected.get("code")))
+                .andExpect(jsonPath("$.data.requestSummary.resort.displayName")
+                        .value(expected.get("display_name")))
+                .andExpect(jsonPath("$.data.requestSummary.sport").value(expected.get("sport").toString()))
+                .andExpect(jsonPath("$.data.requestSummary.lessonLevel")
+                        .value(expected.get("lesson_level").toString()))
+                .andExpect(jsonPath("$.data.requestSummary.headcount").value(expected.get("headcount")));
+    }
+
+    private void assertActiveLessonAndInstructorSummary(
+            ResultActions result,
+            long matchingRequestId
+    ) throws Exception {
+        Map<String, Object> expectedLesson = jdbcTemplate.queryForMap(
+                """
+                SELECT request_group.duration_minutes,
+                       SUM(group_request.headcount) AS total_headcount
+                FROM matching_request_group_items item
+                JOIN matching_request_groups request_group
+                  ON request_group.id = item.matching_request_group_id
+                JOIN matching_requests group_request
+                  ON group_request.id = item.matching_request_id
+                WHERE item.matching_request_group_id = (
+                    SELECT current_item.matching_request_group_id
+                    FROM matching_request_group_items current_item
+                    WHERE current_item.matching_request_id = ?
+                    ORDER BY current_item.id DESC
+                    LIMIT 1
+                )
+                GROUP BY request_group.id, request_group.duration_minutes
+                """,
+                matchingRequestId
+        );
+        result.andExpect(jsonPath("$.data.lessonSummary.durationMinutes")
+                        .value(expectedLesson.get("duration_minutes")))
+                .andExpect(jsonPath("$.data.lessonSummary.totalHeadcount")
+                        .value(expectedLesson.get("total_headcount")))
+                .andExpect(jsonPath("$.data.lessonSummary.startType").value("IMMEDIATE"))
+                .andExpect(jsonPath("$.data.instructorProfile.instructorId").isNumber())
+                .andExpect(jsonPath("$.data.instructorProfile.name").isNotEmpty())
+                .andExpect(jsonPath("$.data.instructorProfile.gender").isNotEmpty())
+                .andExpect(jsonPath("$.data.instructorProfile.birthYear").isNumber())
+                .andExpect(jsonPath("$.data.instructorProfile.level").isNumber())
+                .andExpect(jsonPath("$.data.instructorProfile.careerYears").isNumber())
+                .andExpect(jsonPath("$.data.instructorProfile.completedLessonCount").value(0))
+                .andExpect(jsonPath("$.data.instructorProfile.introduction").isNotEmpty())
+                .andExpect(jsonPath("$.data.instructorProfile.certificateTypes").isArray())
+                .andExpect(jsonPath("$.data.instructorProfile.averageRating").doesNotExist())
+                .andExpect(jsonPath("$.data.instructorProfile.latestReview").doesNotExist())
+                .andExpect(jsonPath("$.data.instructorProfile.phone").doesNotExist())
+                .andExpect(jsonPath("$.data.expiresAt").doesNotExist())
+                .andExpect(jsonPath("$.data.lessonId").doesNotExist());
     }
 
     private void assertNoActiveMatchingRequest(String consumerToken) throws Exception {

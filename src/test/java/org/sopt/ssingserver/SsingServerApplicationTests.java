@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
@@ -525,15 +526,49 @@ class SsingServerApplicationTests {
 		assertThat(consumerActiveProperties.has("matchingRequestId")).isTrue();
 		assertThat(consumerActiveProperties.has("matchingStatus")).isTrue();
 		assertThat(consumerActiveProperties.has("requestStatus")).isTrue();
+		assertThat(consumerActiveProperties.has("requestSummary")).isTrue();
+		assertThat(consumerActiveProperties.has("lessonSummary")).isTrue();
+		assertThat(consumerActiveProperties.has("instructorProfile")).isTrue();
+		assertThat(consumerActiveProperties.has("progressSummary")).isTrue();
+		assertThat(consumerActiveProperties.has("priceSummary")).isTrue();
 		assertThat(consumerActiveProperties.has("expiresAt")).isFalse();
 		assertThat(consumerActiveProperties.has("lessonId")).isFalse();
 		assertThat(consumerActiveProperties.has("payload")).isFalse();
 		assertThat(textValues(schemas.path("ConsumerActiveMatchingActive").path("required")))
-				.contains("recoveryState", "matchingRequestId");
+				.contains(
+						"recoveryState",
+						"matchingRequestId",
+						"matchingStatus",
+						"requestStatus",
+						"requestSummary"
+				);
 		assertThat(textValues(consumerActiveProperties.path("recoveryState").path("enum")))
 				.containsExactly("ACTIVE");
 		assertThat(textValues(consumerActiveProperties.path("requestStatus").path("enum")))
 				.containsExactlyInAnyOrder("REQUESTED", "GROUPED", "MATCHED");
+		assertThat(schemas.path("ConsumerActiveMatchingRequestSummary").path("properties")
+				.has("resort")).isTrue();
+		assertThat(schemas.path("ConsumerActiveMatchingRequestSummary").path("properties")
+				.has("headcount")).isTrue();
+		assertThat(schemas.path("ConsumerActiveMatchingResort").path("properties")
+				.has("displayName")).isTrue();
+		assertThat(schemas.path("ConsumerActiveMatchingLessonSummary").path("properties")
+				.has("totalHeadcount")).isTrue();
+		assertThat(schemas.path("ConsumerActiveMatchingInstructorProfile").path("properties")
+				.has("careerYears")).isTrue();
+		assertThat(schemas.path("ConsumerActiveMatchingInstructorProfile").path("properties")
+				.has("completedLessonCount")).isTrue();
+		assertThat(schemas.path("ConsumerActiveMatchingInstructorProfile").path("properties")
+				.has("certificateTypes")).isTrue();
+		assertThat(schemas.path("ConsumerActiveMatchingLatestReview").path("properties")
+				.has("content")).isTrue();
+		JsonNode legacyInstructorProfileProperties = schemas
+				.path("ConsumerMatchingStatusInstructorProfile")
+				.path("properties");
+		assertThat(legacyInstructorProfileProperties.has("level")).isTrue();
+		assertThat(legacyInstructorProfileProperties.has("careerYears")).isFalse();
+		assertThat(legacyInstructorProfileProperties.has("completedLessonCount")).isFalse();
+		assertThat(legacyInstructorProfileProperties.has("certificateTypes")).isFalse();
 		JsonNode consumerNoneProperties = schemas.path("ConsumerActiveMatchingNone").path("properties");
 		assertThat(consumerNoneProperties.has("recoveryState")).isTrue();
 		assertThat(consumerNoneProperties.size()).isEqualTo(1);
@@ -561,11 +596,61 @@ class SsingServerApplicationTests {
 				.path("content")
 				.path("application/json")
 				.path("examples");
-		assertThat(consumerExamples.has("ACTIVE")).isTrue();
-		assertThat(consumerExamples.has("NONE")).isTrue();
-		assertThat(consumerExamples.path("ACTIVE").path("value").path("data")
-				.path("recoveryState").asString()).isEqualTo("ACTIVE");
-		assertThat(consumerExamples.path("ACTIVE").path("value").path("data").has("payload")).isFalse();
+		assertThat(fieldNames(consumerExamples)).containsExactlyInAnyOrder(
+				"SEARCHING",
+				"WAITING_FOR_TEAM",
+				"WAITING_FOR_INSTRUCTOR",
+				"REMATCHING",
+				"WAITING_FOR_CONFIRMATION",
+				"WAITING_FOR_OTHER_CONFIRMATIONS",
+				"PAYMENT_PENDING",
+				"WAITING_FOR_OTHER_PAYMENTS",
+				"NONE"
+		);
+		JsonNode searchingExample = consumerExamples.path("SEARCHING").path("value").path("data");
+		assertThat(searchingExample.path("recoveryState").asString()).isEqualTo("ACTIVE");
+		assertThat(searchingExample.path("requestSummary").path("headcount").asInt()).isEqualTo(2);
+		assertThat(searchingExample.has("groupId")).isFalse();
+		assertThat(searchingExample.has("lessonSummary")).isFalse();
+		assertThat(searchingExample.has("instructorProfile")).isFalse();
+		assertThat(searchingExample.has("progressSummary")).isFalse();
+		assertThat(searchingExample.has("priceSummary")).isFalse();
+		JsonNode rematchingExample = consumerExamples.path("REMATCHING").path("value").path("data");
+		assertThat(rematchingExample.path("matchingStatus").asString()).isEqualTo("REMATCHING");
+		assertThat(rematchingExample.path("requestStatusReason").asString())
+				.isEqualTo("CONSUMER_REJECTED_INSTRUCTOR");
+		assertThat(rematchingExample.has("groupId")).isFalse();
+		assertThat(rematchingExample.has("offerStatus")).isFalse();
+		assertThat(rematchingExample.has("paymentStatus")).isFalse();
+		JsonNode confirmationExample = consumerExamples
+				.path("WAITING_FOR_CONFIRMATION")
+				.path("value")
+				.path("data");
+		assertThat(confirmationExample.path("lessonSummary").path("startType").asString())
+				.isEqualTo("IMMEDIATE");
+		assertThat(confirmationExample.path("instructorProfile").path("careerYears").asInt())
+				.isEqualTo(6);
+		assertThat(confirmationExample.has("paymentStatus")).isFalse();
+		JsonNode paymentExample = consumerExamples.path("PAYMENT_PENDING").path("value").path("data");
+		assertThat(paymentExample.path("paymentStatus").asString()).isEqualTo("PENDING");
+		assertThat(paymentExample.path("progressSummary").path("paidRequesterCount").asInt())
+				.isZero();
+		for (String exampleName : List.of(
+				"SEARCHING",
+				"WAITING_FOR_TEAM",
+				"WAITING_FOR_INSTRUCTOR",
+				"REMATCHING",
+				"WAITING_FOR_CONFIRMATION",
+				"WAITING_FOR_OTHER_CONFIRMATIONS",
+				"PAYMENT_PENDING",
+				"WAITING_FOR_OTHER_PAYMENTS"
+		)) {
+			JsonNode activeExample = consumerExamples.path(exampleName).path("value").path("data");
+			assertThat(activeExample.has("requestSummary")).isTrue();
+			assertThat(activeExample.has("expiresAt")).isFalse();
+			assertThat(activeExample.has("lessonId")).isFalse();
+			assertThat(activeExample.has("payload")).isFalse();
+		}
 		assertThat(consumerExamples.path("NONE").path("value").path("data")
 				.path("recoveryState").asString()).isEqualTo("NONE");
 		assertThat(consumerExamples.path("NONE").path("value").path("data").size()).isEqualTo(1);

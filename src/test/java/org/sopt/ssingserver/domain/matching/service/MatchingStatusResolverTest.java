@@ -264,6 +264,29 @@ class MatchingStatusResolverTest {
     }
 
     @Test
+    void 재매칭_요청은_과거_결제가_만료되어도_REMATCHING으로_먼저_계산한다() {
+        MatchingRequest matchingRequest = matchingRequest(1, 120);
+        matchingRequest.rematchAfterConsumerRejected();
+        MatchingRequestGroup oldGroup = MatchingRequestGroup.createCandidate(120);
+        MatchingOffer oldOffer = MatchingOffer.create(
+                instructorProfile(),
+                oldGroup,
+                Instant.parse("2026-07-07T00:00:00Z")
+        );
+        MatchingRequestPayment oldPayment = matchingRequestPayment(MatchingRequestPaymentStatus.EXPIRED);
+
+        MatchingStatus status = resolver.resolve(
+                matchingRequest,
+                Optional.of(oldGroup),
+                Optional.empty(),
+                Optional.of(oldOffer),
+                Optional.of(oldPayment)
+        );
+
+        assertThat(status).isSameAs(MatchingStatus.REMATCHING);
+    }
+
+    @Test
     void 후보없음_실패_요청은_NO_AVAILABLE_INSTRUCTOR로_계산한다() {
         MatchingRequest matchingRequest = matchingRequest(1, 120);
         matchingRequest.failNoAvailableInstructor();
