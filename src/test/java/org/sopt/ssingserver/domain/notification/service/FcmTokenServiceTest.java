@@ -30,6 +30,8 @@ import org.sopt.ssingserver.domain.notification.enums.ClientPlatform;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
 
@@ -156,6 +158,16 @@ class FcmTokenServiceTest {
         fcmTokenService.unregister(MEMBER_ID, request);
 
         verify(fcmTokenRepository).deleteByMemberIdAndToken(MEMBER_ID, FCM_TOKEN);
+    }
+
+    @Test
+    void removeInvalidToken은_afterCommit에서도_삭제를_커밋하도록_독립_트랜잭션을_사용한다()
+            throws NoSuchMethodException {
+        Transactional transactional = FcmTokenService.class
+                .getDeclaredMethod("removeInvalidToken", String.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(transactional.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
     }
 
     private RegisterFcmTokenRequest registerRequest(ClientApp clientApp, ClientPlatform platform) {

@@ -11,6 +11,7 @@ import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -52,7 +53,7 @@ public class FcmTokenService {
     }
 
     // Firebase가 더 이상 유효하지 않다고 확인한 토큰(UNREGISTERED) 제거
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void removeInvalidToken(String token) {
         fcmTokenRepository.deleteByToken(token);
     }
