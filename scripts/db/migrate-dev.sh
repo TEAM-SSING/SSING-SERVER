@@ -19,5 +19,6 @@ assert_dev_connection_contract
 printf 'Flyway migrate와 validate를 실행합니다.\n'
 run_dev_flyway migrate
 run_dev_flyway validate
+assert_dev_connection_contract
 
 printf 'dev DB migration과 validate가 완료되었습니다.\n'

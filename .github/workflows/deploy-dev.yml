@@ -444,7 +444,7 @@ jobs:
             exit 1
           fi
 
-          echo "::notice title=EC2 런타임 환경변수 후보 준비 완료::migration이 통과하면 .env.next를 현재 .env로 원자적으로 전환합니다."
+          echo "::notice title=EC2 런타임 환경변수 후보 준비 완료::migration·컨테이너 재기동·health가 통과하면 .env.next를 현재 .env로 원자적으로 전환합니다."
           echo "::endgroup::"
 
       # 새 앱을 재기동하기 전에 고정 Flyway 실행기로 DB를 비파괴 검증
@@ -536,19 +536,19 @@ jobs:
           fi
 
           echo "최신 Docker 이미지 pull"
-          sudo docker compose --env-file .env.next -f "$COMPOSE_FILE" pull
+          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
+            docker compose --env-file .env.next -f "$COMPOSE_FILE" pull
 
-          echo "migration 검증을 통과한 런타임 설정으로 원자적 전환"
-          mv -f .env.next .env
-
-          echo "Docker Compose 컨테이너 재시작"
-          sudo docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans
+          echo "후보 런타임 설정으로 Docker Compose 컨테이너 재시작"
+          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
+            docker compose --env-file .env.next -f "$COMPOSE_FILE" up -d --remove-orphans
 
           echo "Docker Compose 컨테이너 상태"
-          sudo docker compose --env-file .env -f "$COMPOSE_FILE" ps
+          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
+            docker compose --env-file .env.next -f "$COMPOSE_FILE" ps
           EOF
           then
-            echo "::error title=EC2 Docker Compose 재시작 실패::EC2의 Docker 실행 상태, Docker Hub 이미지 pull 가능 여부, docker-compose.dev.yml 문법, .env 값을 확인하세요."
+            echo "::error title=EC2 Docker Compose 재시작 실패::Docker 실행 상태, 이미지 pull 가능 여부, docker-compose.dev.yml 문법, 후보 .env.next 값을 확인하세요. 기존 .env는 교체하지 않았습니다."
             echo "::endgroup::"
             exit 1
           fi
@@ -576,6 +576,11 @@ jobs:
             echo "헬스체크 시도: ${attempt}/30"
             if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
               echo "헬스체크 성공: /actuator/health status UP"
+              echo "검증을 마친 런타임 설정으로 원자적 전환"
+              if ! mv -f .env.next .env; then
+                echo "런타임 설정 전환 실패: .env.next를 .env로 교체하지 못했습니다. 파일 권한과 디스크 여유 공간을 확인하세요."
+                exit 1
+              fi
               exit 0
             fi
 
@@ -583,11 +588,12 @@ jobs:
           done
 
           echo "헬스체크 실패: app 컨테이너 최근 로그"
-          sudo docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=100 app
+          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
+            docker compose --env-file .env.next -f "$COMPOSE_FILE" logs --tail=100 app
           exit 1
           EOF
           then
-            echo "::error title=애플리케이션 헬스체크 실패::앱 기동 실패, DB 연결 실패, JWT/환경변수 누락, 또는 /actuator/health 비정상 가능성이 있습니다. 바로 위 app 컨테이너 로그를 확인하세요."
+            echo "::error title=애플리케이션 검증 또는 설정 전환 실패::health 로그와 런타임 설정 전환 실패 메시지를 확인하세요. 기존 .env 보존 여부, 후보 .env.next 권한, 디스크 여유 공간을 함께 확인하세요."
             echo "::endgroup::"
             exit 1
           fi

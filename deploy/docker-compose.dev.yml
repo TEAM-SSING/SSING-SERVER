@@ -9,7 +9,7 @@ services:
 
     # GitHub Actions가 생성해서 EC2에 업로드하는 런타임 환경변수 파일
     env_file:
-      - .env
+      - ${SSING_RUNTIME_ENV_FILE:-.env}
 
     # 기본 dev 프로필과 JVM 옵션
     environment:

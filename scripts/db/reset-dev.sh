@@ -27,6 +27,35 @@ if [[ -e "$(dev_reset_marker_path)" ]]; then
   DB_STATE="이전 reset의 부분 또는 미확인 상태"
 fi
 
+assert_dev_reset_artifacts() {
+  local scenario_key="$1"
+  local scenario_directory="$PROJECT_ROOT/db/seed/scenarios/$scenario_key"
+  local -a base_files=("$PROJECT_ROOT/db/seed/base"/*.sql)
+  local -a migration_files=("$PROJECT_ROOT/src/main/resources/db/migration"/*.sql)
+  local -a required_files=(
+    "$scenario_directory/seed.sql"
+    "$scenario_directory/verify.sql"
+    "$PROJECT_ROOT/db/seed/verify-utf8.sql"
+  )
+
+  [[ "$scenario_key" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && -d "$scenario_directory" ]] \
+    || dev_fail "선택한 Seed 시나리오 디렉터리가 없습니다."
+  [[ -s "${migration_files[0]:-}" && -s "${base_files[0]:-}" ]] \
+    || dev_fail "필요한 migration 또는 Base Seed SQL 파일이 없습니다."
+
+  if [[ "$scenario_key" == "pm-full-requested-catalog" ]]; then
+    required_files+=(
+      "$scenario_directory/dev-playground.sql"
+      "$scenario_directory/verify-dev-playground.sql"
+    )
+  fi
+
+  local sql_file
+  for sql_file in "${migration_files[@]}" "${base_files[@]}" "${required_files[@]}"; do
+    [[ -s "$sql_file" ]] || dev_fail "필요한 reset SQL 파일이 없습니다."
+  done
+}
+
 write_report() {
   local next_action
 
@@ -146,6 +175,7 @@ CURRENT_STAGE="대상·권한·UTF-8 사전 검사"
 dev_require_command sudo
 dev_require_command docker
 dev_require_command curl
+assert_dev_reset_artifacts "$SAFE_SCENARIO"
 assert_dev_target
 assert_dev_account_separation true
 
@@ -155,7 +185,10 @@ require_dev_value SSING_RESET_COMMIT_SHA
 [[ -f "$DEPLOY_DIR/.env" && -f "$DEPLOY_DIR/$COMPOSE_FILE" ]] \
   || dev_fail "EC2 배포 파일이 준비되지 않았습니다."
 
-deployed_image="$(sed -n 's/^SSING_IMAGE=//p' "$DEPLOY_DIR/.env" | head -n 1)"
+deployed_image_line_count="$(grep -c '^SSING_IMAGE=' "$DEPLOY_DIR/.env" || true)"
+[[ "$deployed_image_line_count" == "1" ]] \
+  || dev_fail "배포된 앱 이미지 설정을 하나로 확정할 수 없습니다."
+deployed_image="$(sed -n 's/^SSING_IMAGE=//p' "$DEPLOY_DIR/.env")"
 [[ "$deployed_image" == *":dev-${SSING_RESET_COMMIT_SHA}" ]] \
   || dev_fail "reset commit과 마지막 배포 설정의 commit이 다릅니다. 먼저 같은 commit을 dev에 배포하세요."
 deployed_datasource_line_count="$(grep -c '^SSING_DATASOURCE_URL=' "$DEPLOY_DIR/.env" || true)"
@@ -235,6 +268,7 @@ CURRENT_STAGE="최종 Flyway migrate와 validate"
 select_dev_db_account migration
 run_dev_flyway migrate
 run_dev_flyway validate
+assert_dev_connection_contract
 DB_VERIFIED=true
 DB_STATE="Seed와 migration 검증 완료"
 clear_dev_reset_marker

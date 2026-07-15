@@ -67,7 +67,7 @@ jobs:
     timeout-minutes: 30
     env:
       DEPLOY_DIR: /home/ubuntu/ssing
-      REMOTE_WORK_DIR: /home/ubuntu/ssing/.dev-reset-work/${{ github.run_id }}
+      REMOTE_WORK_DIR: /home/ubuntu/ssing/.dev-reset-work/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: 실행 시작 시각 기록
         run: |

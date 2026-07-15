@@ -104,7 +104,11 @@ sudo() {
     for argument in "${arguments[@]}"; do
       case "$argument" in
         --execute=*character_set_client*)
-          if [[ "${FAKE_FAIL_STAGE:-}" == "charset" ]]; then
+          local charset_occurrence
+          charset_occurrence="$(grep -Fc 'character_set_client' "$FAKE_COMMAND_LOG")"
+          if [[ "${FAKE_FAIL_STAGE:-}" == "charset" \
+              || ( "${FAKE_FAIL_STAGE:-}" == "final-charset" && "$charset_occurrence" -eq 3 ) \
+              || ( "${FAKE_FAIL_STAGE:-}" == "migration-final-charset" && "$charset_occurrence" -eq 2 ) ]]; then
             printf 'latin1|latin1|latin1\n'
           else
             printf 'utf8mb4|utf8mb4|utf8mb4\n'
@@ -275,6 +279,7 @@ run_case() {
   local case_target="${db_host}:${db_port}/${db_name}"
   local deployed_image="${RUN_CASE_DEPLOYED_IMAGE:-$EXPECTED_IMAGE}"
   local running_image="${RUN_CASE_RUNNING_IMAGE:-$deployed_image}"
+  local reset_script="${RUN_CASE_RESET_SCRIPT:-$PROJECT_ROOT/scripts/db/reset-dev.sh}"
 
   local case_dir="$TEST_TMP/$case_name"
   local deploy_dir="$case_dir/deploy"
@@ -292,6 +297,9 @@ run_case() {
     printf 'SPRING_PROFILES_ACTIVE=%s\n' "$deployed_profile"
     printf 'SSING_JPA_DDL_AUTO=%s\n' "$deployed_ddl_auto"
   } > "$deploy_dir/.env"
+  if [[ -n "${RUN_CASE_EXTRA_ENV_LINES:-}" ]]; then
+    printf '%s\n' "$RUN_CASE_EXTRA_ENV_LINES" >> "$deploy_dir/.env"
+  fi
   : > "$deploy_dir/docker-compose.dev.yml"
   if [[ "$preexisting_marker" == true ]]; then
     printf 'RESET_INCOMPLETE\n' > "$deploy_dir/.dev-db-reset-incomplete"
@@ -323,10 +331,10 @@ run_case() {
     ln -s "$(command -v dirname)" "$isolated_bin/dirname"
     ln -s "$(command -v chmod)" "$isolated_bin/chmod"
     /usr/bin/env -u 'BASH_FUNC_docker%%' PATH="$isolated_bin" /bin/bash \
-      "$PROJECT_ROOT/scripts/db/reset-dev.sh" \
+      "$reset_script" \
       "$confirmation" "$ref_name" "$scenario" > "$output_file" 2>&1
   else
-    bash "$PROJECT_ROOT/scripts/db/reset-dev.sh" \
+    bash "$reset_script" \
       "$confirmation" "$ref_name" "$scenario" > "$output_file" 2>&1
   fi
   local exit_code=$?
@@ -417,6 +425,26 @@ EXPECTED_IMAGE="teamssing/server:dev-${TEST_SHA}"
 TEST_TARGET_SHA256="$(target_sha256 "$TEST_TARGET")"
 export TEST_TMP EXPECTED_IMAGE TEST_TARGET_SHA256
 
+missing_artifact_root="$TEST_TMP/missing-artifact-project"
+mkdir -p \
+  "$missing_artifact_root/scripts/db" \
+  "$missing_artifact_root/src/main/resources/db/migration" \
+  "$missing_artifact_root/db/seed/base" \
+  "$missing_artifact_root/db/seed/scenarios/matching-price-vivaldi"
+cp \
+  "$PROJECT_ROOT/scripts/db/common.sh" \
+  "$PROJECT_ROOT/scripts/db/dev-common.sh" \
+  "$PROJECT_ROOT/scripts/db/reset-dev.sh" \
+  "$missing_artifact_root/scripts/db/"
+printf '%s\n' '-- migration fixture' 'SELECT 1;' \
+  > "$missing_artifact_root/src/main/resources/db/migration/V1__fixture.sql"
+printf '%s\n' '-- base fixture' 'SELECT 1;' \
+  > "$missing_artifact_root/db/seed/base/001_fixture.sql"
+printf '%s\n' '-- scenario fixture' 'SELECT 1;' \
+  > "$missing_artifact_root/db/seed/scenarios/matching-price-vivaldi/seed.sql"
+printf '%s\n' '-- utf8 fixture' 'SELECT 1;' \
+  > "$missing_artifact_root/db/seed/verify-utf8.sql"
+
 run_case invalid-confirm "" wrong-confirm main pm-full-requested-catalog false
 assert_no_mutation_command "$TEST_TMP/invalid-confirm/commands.log"
 
@@ -448,6 +476,16 @@ grep -Fq '필수 명령 docker' "$TEST_TMP/missing-docker/output.log" \
   || fail_test "docker 누락 안내가 한글로 제공되지 않았습니다."
 grep -Fq '현재 DB 상태: 변경 없음' "$TEST_TMP/missing-docker/report.md" \
   || fail_test "docker 누락 시 DB 무변경 report가 없습니다."
+
+(
+  RUN_CASE_RESET_SCRIPT="$missing_artifact_root/scripts/db/reset-dev.sh" \
+    run_case missing-scenario-verify "" --confirm-dev-reset main \
+      matching-price-vivaldi false
+)
+assert_no_mutation_command "$TEST_TMP/missing-scenario-verify/commands.log"
+grep -Fq '필요한 reset SQL 파일이 없습니다' \
+  "$TEST_TMP/missing-scenario-verify/output.log" \
+  || fail_test "scenario verify 누락을 clean 전에 안내하지 않았습니다."
 
 run_case invalid-target "" --confirm-dev-reset main pm-full-requested-catalog false \
   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -490,6 +528,16 @@ stale_image="teamssing/server:dev-1111111111111111111111111111111111111111"
       pm-full-requested-catalog false
 )
 assert_no_mutation_command "$TEST_TMP/deployed-commit-mismatch/commands.log"
+
+(
+  RUN_CASE_EXTRA_ENV_LINES="SSING_IMAGE=$stale_image" \
+    run_case duplicate-deployed-image "" --confirm-dev-reset main \
+      pm-full-requested-catalog false
+)
+assert_no_mutation_command "$TEST_TMP/duplicate-deployed-image/commands.log"
+grep -Fq '배포된 앱 이미지 설정을 하나로 확정할 수 없습니다' \
+  "$TEST_TMP/duplicate-deployed-image/output.log" \
+  || fail_test "중복 SSING_IMAGE를 clean 전에 차단하지 않았습니다."
 
 (
   RUN_CASE_RUNNING_IMAGE="$stale_image" \
@@ -570,6 +618,7 @@ playground|PM dev playground 적용과 검증
 playground-verify|PM dev playground 적용과 검증
 flyway-final-migrate|최종 Flyway migrate와 validate
 flyway-final-validate|최종 Flyway migrate와 validate
+final-charset|최종 Flyway migrate와 validate
 EOF
 
 [[ "$(< "$TEST_TMP/failure-flyway-clean/exit-code")" == "43" ]] \
@@ -639,6 +688,9 @@ grep -Fq 'SQL_STAGE=playground' \
   || fail_test "PM 시나리오에 dev playground overlay가 적용되지 않았습니다."
 assert_pm_success_order \
   "$TEST_TMP/success-pm-full-requested-catalog/commands.log"
+[[ "$(grep -Fc 'character_set_client' \
+    "$TEST_TMP/success-pm-full-requested-catalog/commands.log")" == "3" ]] \
+  || fail_test "reset 성공 전에 최종 schema UTF-8 계약을 다시 확인하지 않았습니다."
 
 run_migrate_case migration-blocked-by-marker "" true false
 ! grep -Eq ' flyway/flyway:' "$TEST_TMP/migration-blocked-by-marker/commands.log" \
@@ -662,6 +714,13 @@ run_migrate_case migration-failure flyway-migrate false false
   || fail_test "migration Flyway 실패 종료 코드가 보존되지 않았습니다."
 ! grep -Eq ' compose .* up ' "$TEST_TMP/migration-failure/commands.log" \
   || fail_test "migration 실패 뒤 앱을 재기동했습니다."
+run_migrate_case migration-final-charset migration-final-charset false false
+grep -Fq '문자셋이 모두 utf8mb4가 아닙니다' \
+  "$TEST_TMP/migration-final-charset/output.log" \
+  || fail_test "migration 후 최종 UTF-8 계약 실패를 놓쳤습니다."
 run_migrate_case migration-success "" false true
+[[ "$(grep -Fc 'character_set_client' \
+    "$TEST_TMP/migration-success/commands.log")" == "2" ]] \
+  || fail_test "일반 migration 성공 전에 최종 schema UTF-8 계약을 다시 확인하지 않았습니다."
 
 printf 'dev runner contract test passed\n'
