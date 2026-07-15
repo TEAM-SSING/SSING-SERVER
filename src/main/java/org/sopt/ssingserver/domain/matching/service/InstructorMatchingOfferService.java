@@ -2,15 +2,15 @@ package org.sopt.ssingserver.domain.matching.service;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
+import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
@@ -40,7 +40,6 @@ import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshot
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -53,6 +52,7 @@ public class InstructorMatchingOfferService {
     private static final String IMMEDIATE_START_TYPE = "IMMEDIATE";
 
     private final InstructorProfileRepository instructorProfileRepository;
+    private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
@@ -63,42 +63,64 @@ public class InstructorMatchingOfferService {
     private final MatchingEventDispatcher matchingEventDispatcher;
     private final Clock clock;
 
-    // 강사 앱 재진입/WebSocket 유실 복구 시 현재 강사에게 노출된 제안만 조회
+    // 홈 카드 진입 시 새 제안과 저장된 대기 조건을 함께 조회해 REST 기준 화면을 복구한다.
     @Transactional(readOnly = true)
-    public InstructorMatchingOffersResult getCurrentOffers(
-            Long memberId,
-            int page,
-            int size
-    ) {
+    public InstructorMatchingOffersResult getCurrentOffers(Long memberId) {
         InstructorProfile instructorProfile = findInstructorProfile(memberId);
-        Page<MatchingOffer> matchingOffers = matchingOfferRepository.findByInstructorProfileIdAndStatusOrderByIdAsc(
-                instructorProfile.getId(),
-                MatchingOfferStatus.OFFERED,
-                PageRequest.of(page, size)
-        );
-
-        List<MatchingOffer> offerItems = matchingOffers.getContent();
-        Map<Long, List<MatchingRequestGroupItem>> groupItemsByGroupId = findGroupItemsByGroupId(offerItems);
-        Map<Long, MatchingOfferPriceSnapshot> priceSnapshotsByOfferId = findPriceSnapshotsByOfferId(offerItems);
+        List<Long> activeOfferIds = matchingOfferRepository
+                .findIdsByInstructorProfileIdAndStatusAndGroupStatusOrderByIdAsc(
+                        instructorProfile.getId(),
+                        MatchingOfferStatus.OFFERED,
+                        MatchingRequestGroupStatus.EXPOSED,
+                        PageRequest.of(0, 2)
+                );
+        if (activeOfferIds.size() > 1) {
+            throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
+        }
+        InstructorMatchingSetting matchingSetting = instructorMatchingSettingRepository
+                .findByInstructorProfileId(instructorProfile.getId())
+                .orElseThrow(() -> new BusinessException(
+                        activeOfferIds.isEmpty()
+                                ? MatchingErrorCode.MATCHING_NOT_ACTIVE
+                                : CommonErrorCode.INTERNAL_ERROR
+                ));
+        if (activeOfferIds.isEmpty() && !matchingSetting.isExposed()) {
+            throw new BusinessException(MatchingErrorCode.MATCHING_NOT_ACTIVE);
+        }
 
         return new InstructorMatchingOffersResult(
-                offerItems.stream()
-                        .map(matchingOffer -> toItemResult(
-                                matchingOffer,
-                                groupItemsByGroupId.getOrDefault(
-                                        matchingOffer.getMatchingRequestGroup().getId(),
-                                        List.of()
-                                ),
-                                priceSnapshotsByOfferId.get(matchingOffer.getId())
-                        ))
-                        .toList(),
-                matchingOffers.getNumber(),
-                matchingOffers.getSize(),
-                matchingOffers.hasNext()
+                activeOfferIds.isEmpty() ? null : activeOfferIds.getFirst(),
+                toMatchingSettingResult(instructorProfile, matchingSetting)
         );
     }
 
-    // 제안 존재·소유권을 먼저 확인한 뒤 복구 가능하면 상세를, 종료됐으면 STALE만 반환한다.
+    // LAZY 저장 조건을 트랜잭션 안에서 응답 값으로 복사하고, Set 순서를 API 계약에 맞게 고정한다.
+    private InstructorMatchingOffersResult.MatchingSettingResult toMatchingSettingResult(
+            InstructorProfile instructorProfile,
+            InstructorMatchingSetting matchingSetting
+    ) {
+        Resort resort = Optional.ofNullable(instructorProfile.getResort())
+                .orElseThrow(() -> new BusinessException(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET));
+
+        return new InstructorMatchingOffersResult.MatchingSettingResult(
+                matchingSetting.isExposed(),
+                new InstructorMatchingOffersResult.ResortResult(
+                        resort.getCode(),
+                        resort.getDisplayName()
+                ),
+                matchingSetting.getSport(),
+                matchingSetting.getLessonLevels().stream()
+                        .sorted()
+                        .toList(),
+                matchingSetting.getAvailableDurationMinutes().stream()
+                        .sorted()
+                        .toList(),
+                matchingSetting.getMaxHeadcount(),
+                matchingSetting.isEquipmentReady()
+        );
+    }
+
+    // 제안 존재·소유권을 먼저 확인한 뒤 진행 중인 협상만 상세 화면으로 복구한다.
     @Transactional(readOnly = true)
     public InstructorMatchingOfferDetailResult getOfferDetail(
             Long memberId,
@@ -108,10 +130,12 @@ public class InstructorMatchingOfferService {
         MatchingOffer matchingOffer = matchingOfferRepository.findDetailById(offerId)
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND));
         validateOfferOwner(instructorProfile, matchingOffer);
-        Optional<MatchingStatus> matchingStatus = resolveRecoveryMatchingStatus(matchingOffer);
-        if (matchingStatus.isEmpty()) {
-            return InstructorMatchingOfferDetailResult.stale(matchingOffer.getId());
-        }
+        MatchingStatus matchingStatus = resolveRecoveryMatchingStatus(matchingOffer)
+                .orElseThrow(() -> new BusinessException(
+                        isClosedMatching(matchingOffer)
+                                ? MatchingErrorCode.MATCHING_NOT_ACTIVE
+                                : CommonErrorCode.INTERNAL_ERROR
+                ));
 
         List<MatchingRequestGroupItem> groupItems = matchingRequestGroupItemRepository
                 .findByMatchingRequestGroupIdOrderByIdAsc(matchingOffer.getMatchingRequestGroup().getId());
@@ -130,7 +154,7 @@ public class InstructorMatchingOfferService {
                 item.groupId(),
                 item.offerStatus(),
                 matchingOffer.getMatchingRequestGroup().getStatus(),
-                matchingStatus.get(),
+                matchingStatus,
                 item.requestSummary(),
                 item.lessonSummary(),
                 item.priceSummary(),
@@ -257,20 +281,6 @@ public class InstructorMatchingOfferService {
         }
     }
 
-    private Map<Long, List<MatchingRequestGroupItem>> findGroupItemsByGroupId(List<MatchingOffer> matchingOffers) {
-        List<Long> groupIds = matchingOffers.stream()
-                .map(matchingOffer -> matchingOffer.getMatchingRequestGroup().getId())
-                .distinct()
-                .toList();
-        if (groupIds.isEmpty()) {
-            return Map.of();
-        }
-
-        return matchingRequestGroupItemRepository.findByMatchingRequestGroupIdInOrderByGroupIdAscItemIdAsc(groupIds)
-                .stream()
-                .collect(Collectors.groupingBy(item -> item.getMatchingRequestGroup().getId()));
-    }
-
     private InstructorMatchingOffersResult.ItemResult toItemResult(
             MatchingOffer matchingOffer,
             List<MatchingRequestGroupItem> groupItems,
@@ -344,26 +354,6 @@ public class InstructorMatchingOfferService {
         );
     }
 
-    // 목록 크기와 무관하게 가격 스냅샷을 한 번에 조회하고 오퍼별 단일 스냅샷 계약 보호
-    private Map<Long, MatchingOfferPriceSnapshot> findPriceSnapshotsByOfferId(List<MatchingOffer> matchingOffers) {
-        List<Long> offerIds = matchingOffers.stream()
-                .map(MatchingOffer::getId)
-                .toList();
-        if (offerIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, MatchingOfferPriceSnapshot> snapshotsByOfferId = new HashMap<>();
-        for (MatchingOfferPriceSnapshot snapshot
-                : matchingOfferPriceSnapshotRepository.findByMatchingOfferIdIn(offerIds)) {
-            Long offerId = snapshot.getMatchingOffer().getId();
-            if (snapshotsByOfferId.put(offerId, snapshot) != null) {
-                throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
-            }
-        }
-        return snapshotsByOfferId;
-    }
-
     private Instant resolveOfferExpiresAt(MatchingOffer matchingOffer) {
         if (matchingOffer.getStatus() != MatchingOfferStatus.OFFERED) {
             return null;
@@ -403,6 +393,21 @@ public class InstructorMatchingOfferService {
             case INSTRUCTOR_ACCEPTED -> Optional.of(MatchingStatus.WAITING_FOR_CONFIRMATION);
             case PAYMENT_PENDING -> Optional.of(MatchingStatus.PAYMENT_PENDING);
             default -> Optional.empty();
+        };
+    }
+
+    // 정상 종료만 409로 분류하고, 내부 중간 상태나 불가능한 조합은 호출부의 500 경로로 남긴다.
+    private boolean isClosedMatching(MatchingOffer matchingOffer) {
+        return switch (matchingOffer.getStatus()) {
+            case REJECTED, CANCELED, EXPIRED -> true;
+            case OFFERED, ACCEPTED -> isClosedGroupStatus(matchingOffer.getMatchingRequestGroup().getStatus());
+        };
+    }
+
+    private boolean isClosedGroupStatus(MatchingRequestGroupStatus groupStatus) {
+        return switch (groupStatus) {
+            case PAYMENT_EXPIRED, CONFIRMED, LOST, CANCELED, EXPIRED -> true;
+            case CANDIDATE, EXPOSED, INSTRUCTOR_ACCEPTED, CONSUMER_ACCEPTED, PAYMENT_PENDING -> false;
         };
     }
 

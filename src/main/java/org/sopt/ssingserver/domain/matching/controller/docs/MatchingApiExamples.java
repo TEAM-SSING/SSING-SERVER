@@ -6,6 +6,7 @@ import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerActiveMatchingResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDetailResponse;
+import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffersResponse;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
@@ -101,14 +102,27 @@ final class MatchingApiExamples {
                             "복구 가능한 매칭 제안",
                             CommonSuccessCode.SUCCESS,
                             InstructorMatchingOfferDetailResponse.from(availableInstructorOffer())
+                    )
+            );
+        }
+    }
+
+    public static final class InstructorCurrentOffers implements ApiSuccessExampleProvider {
+
+        @Override
+        public List<ApiSuccessExampleValue> examples() {
+            return List.of(
+                    ApiSuccessExampleValue.success(
+                            "WAITING",
+                            "새 제안 없이 저장된 조건으로 매칭 대기 화면 복구",
+                            CommonSuccessCode.SUCCESS,
+                            InstructorMatchingOffersResponse.from(waitingInstructorOffers())
                     ),
                     ApiSuccessExampleValue.success(
-                            "STALE",
-                            "본인 소유지만 종료된 매칭 제안",
+                            "OFFERED",
+                            "홈 조회 뒤 새 제안을 재확인해 상세 조회용 offerId 반환",
                             CommonSuccessCode.SUCCESS,
-                            InstructorMatchingOfferDetailResponse.from(
-                                    InstructorMatchingOfferDetailResult.stale(21L)
-                            )
+                            InstructorMatchingOffersResponse.from(offeredInstructorOffers())
                     )
             );
         }
@@ -303,6 +317,32 @@ final class MatchingApiExamples {
                         new InstructorMatchingOfferDetailResult.ParticipantResult(10, Gender.MALE),
                         new InstructorMatchingOfferDetailResult.ParticipantResult(12, Gender.FEMALE)
                 )
+        );
+    }
+
+    private static InstructorMatchingOffersResult waitingInstructorOffers() {
+        return new InstructorMatchingOffersResult(
+                null,
+                instructorMatchingSetting()
+        );
+    }
+
+    private static InstructorMatchingOffersResult offeredInstructorOffers() {
+        return new InstructorMatchingOffersResult(
+                21L,
+                instructorMatchingSetting()
+        );
+    }
+
+    private static InstructorMatchingOffersResult.MatchingSettingResult instructorMatchingSetting() {
+        return new InstructorMatchingOffersResult.MatchingSettingResult(
+                true,
+                new InstructorMatchingOffersResult.ResortResult("HIGH1", "하이원"),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME, LessonLevel.BEGINNER),
+                List.of(120, 240),
+                3,
+                true
         );
     }
 }

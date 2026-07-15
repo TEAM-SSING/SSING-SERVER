@@ -1,77 +1,103 @@
 package org.sopt.ssingserver.domain.matching.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.time.Instant;
 import java.util.List;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
-import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@Schema(description = "강사 현재 노출 매칭 제안 목록 응답")
+@Schema(description = "강사 매칭 대기 화면 복구용 현재 제안 재확인 응답")
 public record InstructorMatchingOffersResponse(
 
-        @Schema(description = "현재 로그인한 강사에게 노출된 매칭 제안 목록. MVP에서는 보통 0개 또는 1개")
-        List<ItemResponse> items,
+        @Schema(
+                description = "홈 조회 이후 발견된 복구 가능한 실시간 제안 ID. 제안이 없으면 null",
+                example = "21",
+                nullable = true,
+                requiredMode = Schema.RequiredMode.REQUIRED
+        )
+        @JsonInclude(JsonInclude.Include.ALWAYS)
+        Long offerId,
 
-        @Schema(description = "현재 페이지 번호. 0부터 시작", example = "0")
-        int currentPage,
-
-        @Schema(description = "페이지 크기", example = "20")
-        int size,
-
-        @Schema(description = "다음 페이지 존재 여부", example = "false")
-        boolean hasNext
+        @Schema(
+                description = "매칭 대기 화면 복구에 사용하는 강사의 저장 조건",
+                requiredMode = Schema.RequiredMode.REQUIRED
+        )
+        MatchingSettingResponse matchingSetting
 ) {
 
     public static InstructorMatchingOffersResponse from(InstructorMatchingOffersResult result) {
         return new InstructorMatchingOffersResponse(
-                result.items().stream()
-                        .map(ItemResponse::from)
-                        .toList(),
-                result.currentPage(),
-                result.size(),
-                result.hasNext()
+                result.offerId(),
+                MatchingSettingResponse.from(result.matchingSetting())
         );
     }
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Schema(description = "강사 매칭 제안 항목")
-    public record ItemResponse(
+    @Schema(name = "InstructorMatchingWaitingSetting", description = "강사의 저장된 실시간 매칭 대기 조건")
+    public record MatchingSettingResponse(
 
-            @Schema(description = "매칭 제안 ID", example = "21")
-            Long offerId,
+            @JsonProperty("isExposed")
+            @Schema(
+                    description = "현재 실시간 매칭 대기열 노출 여부",
+                    example = "true",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            boolean isExposed,
 
-            @Schema(description = "매칭 요청 그룹 ID", example = "3")
-            Long groupId,
+            @Schema(
+                    description = "강사가 활동하는 리조트",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            ResortResponse resort,
 
-            @Schema(description = "제안 상태", example = "OFFERED")
-            MatchingOfferStatus offerStatus,
+            @Schema(
+                    description = "저장된 강습 종목",
+                    example = "SNOWBOARD",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            Sport sport,
 
-            @Schema(description = "현 정책은 무기한 대기라 응답에서 생략되는 제안 만료 시각 예비 필드")
-            Instant expiresAt,
+            @Schema(
+                    description = "저장된 강습 가능 레벨. 중복 없이 서버 enum 선언 순서로 반환",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            List<LessonLevel> lessonLevels,
 
-            @Schema(description = "대표 요청자와 그룹 요청 수 요약")
-            RequestSummaryResponse requestSummary,
+            @Schema(
+                    description = "저장된 강습 가능 시간(분). 중복 없이 숫자 오름차순으로 반환",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            List<Integer> availableDurationMinutes,
 
-            @Schema(description = "강습 조건 요약")
-            LessonSummaryResponse lessonSummary,
+            @Schema(
+                    description = "최대 강습 가능 인원",
+                    example = "3",
+                    minimum = "1",
+                    maximum = "5",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            int maxHeadcount,
 
-            @Schema(description = "제안 생성 시점에 고정된 예상 가격")
-            MatchingPriceSummaryResponse priceSummary
+            @Schema(
+                    description = "장비 준비 완료 여부",
+                    example = "true",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            boolean equipmentReady
     ) {
 
-        private static ItemResponse from(InstructorMatchingOffersResult.ItemResult result) {
-            return new ItemResponse(
-                    result.offerId(),
-                    result.groupId(),
-                    result.offerStatus(),
-                    result.expiresAt(),
-                    RequestSummaryResponse.from(result.requestSummary()),
-                    LessonSummaryResponse.from(result.lessonSummary()),
-                    MatchingPriceSummaryResponse.from(result.priceSummary())
+        private static MatchingSettingResponse from(
+                InstructorMatchingOffersResult.MatchingSettingResult result
+        ) {
+            return new MatchingSettingResponse(
+                    result.isExposed(),
+                    ResortResponse.from(result.resort()),
+                    result.sport(),
+                    result.lessonLevels(),
+                    result.availableDurationMinutes(),
+                    result.maxHeadcount(),
+                    result.equipmentReady()
             );
         }
     }
@@ -143,10 +169,18 @@ public record InstructorMatchingOffersResponse(
     @Schema(description = "리조트 요약")
     public record ResortResponse(
 
-            @Schema(description = "서버 식별 코드", example = "HIGH1")
+            @Schema(
+                    description = "서버 식별 코드",
+                    example = "HIGH1",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
             String code,
 
-            @Schema(description = "Android 표시 이름", example = "하이원")
+            @Schema(
+                    description = "Android 표시 이름",
+                    example = "하이원",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
             String displayName
     ) {
 

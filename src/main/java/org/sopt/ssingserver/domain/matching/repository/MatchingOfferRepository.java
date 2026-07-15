@@ -9,7 +9,6 @@ import java.util.Optional;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -50,26 +49,21 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
             """)
     Optional<MatchingOffer> findDetailById(@Param("id") Long id);
 
-    // 제안 목록 응답에서 그룹 id와 확정 강습 시간을 추가 lazy loading 없이 사용하기 위한 조회
-    @Query(
-            value = """
-                    select matchingOffer
-                    from MatchingOffer matchingOffer
-                    join fetch matchingOffer.matchingRequestGroup
-                    where matchingOffer.instructorProfile.id = :instructorProfileId
-                      and matchingOffer.status = :status
-                    order by matchingOffer.id asc
-                    """,
-            countQuery = """
-                    select count(matchingOffer)
-                    from MatchingOffer matchingOffer
-                    where matchingOffer.instructorProfile.id = :instructorProfileId
-                      and matchingOffer.status = :status
-                    """
-    )
-    Page<MatchingOffer> findByInstructorProfileIdAndStatusOrderByIdAsc(
+    // 홈의 ID 없는 MATCHING 카드 진입 시 복구 가능한 실시간 제안 ID를 최대 2건만 확인한다.
+    // 정상 카디널리티는 0~1건이며, Service가 2건을 불변식 위반으로 처리한다.
+    @Query("""
+            select matchingOffer.id
+            from MatchingOffer matchingOffer
+            join matchingOffer.matchingRequestGroup matchingRequestGroup
+            where matchingOffer.instructorProfile.id = :instructorProfileId
+              and matchingOffer.status = :status
+              and matchingRequestGroup.status = :groupStatus
+            order by matchingOffer.id asc
+            """)
+    List<Long> findIdsByInstructorProfileIdAndStatusAndGroupStatusOrderByIdAsc(
             @Param("instructorProfileId") Long instructorProfileId,
             @Param("status") MatchingOfferStatus status,
+            @Param("groupStatus") MatchingRequestGroupStatus groupStatus,
             Pageable pageable
     );
 

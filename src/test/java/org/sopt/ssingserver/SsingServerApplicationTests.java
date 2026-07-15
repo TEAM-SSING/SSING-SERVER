@@ -665,28 +665,92 @@ class SsingServerApplicationTests {
 				.path("$ref")
 				.asString()).isEqualTo("#/components/schemas/ConsumerMatchingStatusResponse");
 
-		assertThat(schemaReferences(schemas.path("InstructorMatchingOfferDetailResponse").path("oneOf")))
-				.containsExactlyInAnyOrder(
-						"#/components/schemas/InstructorMatchingOfferDetailAvailable",
-						"#/components/schemas/InstructorMatchingOfferDetailStale"
-				);
-		assertRecoveryDiscriminatorMapping(
-				schemas,
-				"InstructorMatchingOfferDetailResponse",
-				"AVAILABLE",
-				"#/components/schemas/InstructorMatchingOfferDetailAvailable"
+		JsonNode currentOffersOperation = findOperation(
+				openApi,
+				"GET /api/v1/instructor/matching-offers"
 		);
-		assertRecoveryDiscriminatorMapping(
-				schemas,
-				"InstructorMatchingOfferDetailResponse",
-				"STALE",
-				"#/components/schemas/InstructorMatchingOfferDetailStale"
+		assertThat(currentOffersOperation.path("parameters").size()).isZero();
+		JsonNode currentOffersResponses = currentOffersOperation.path("responses");
+		assertThat(currentOffersResponses.has("400")).isFalse();
+		assertThat(currentOffersResponses.path("404")
+				.path("content")
+				.path("application/json")
+				.path("examples")
+				.has("NOT_FOUND")).isTrue();
+		assertThat(currentOffersResponses.path("409")
+				.path("content")
+				.path("application/json")
+				.path("examples")
+				.has("MATCHING_NOT_ACTIVE")).isTrue();
+		assertThat(currentOffersResponses.path("200")
+				.path("content")
+				.path("application/json")
+				.path("schema")
+				.path("properties")
+				.path("data")
+				.path("$ref")
+				.asString()).isEqualTo("#/components/schemas/InstructorMatchingOffersResponse");
+
+		JsonNode currentOffersSchema = schemas.path("InstructorMatchingOffersResponse");
+		JsonNode currentOffersProperties = currentOffersSchema.path("properties");
+		assertThat(fieldNames(currentOffersProperties)).containsExactlyInAnyOrder(
+				"offerId",
+				"matchingSetting"
 		);
+		assertThat(currentOffersProperties.has("activeOffer")).isFalse();
+		assertThat(textValues(currentOffersSchema.path("required"))).contains(
+				"offerId",
+				"matchingSetting"
+		);
+		JsonNode offerIdSchema = currentOffersProperties.path("offerId");
+		boolean nullableOfferId = offerIdSchema.path("nullable").asBoolean()
+				|| offerIdSchema.path("type").toString().matches(".*\\\"null\\\".*")
+				|| offerIdSchema.path("types").toString().matches(".*\\\"null\\\".*")
+				|| offerIdSchema.path("anyOf").toString().matches(".*\\\"null\\\".*");
+		assertThat(nullableOfferId).isTrue();
+		assertThat(currentOffersProperties.path("matchingSetting").path("$ref").asString())
+				.isEqualTo("#/components/schemas/InstructorMatchingWaitingSetting");
+
+		JsonNode matchingSettingSchema = schemas.path("InstructorMatchingWaitingSetting");
+		JsonNode matchingSettingProperties = matchingSettingSchema.path("properties");
+		assertThat(fieldNames(matchingSettingProperties)).containsExactlyInAnyOrder(
+				"isExposed",
+				"resort",
+				"sport",
+				"lessonLevels",
+				"availableDurationMinutes",
+				"maxHeadcount",
+				"equipmentReady"
+		);
+		assertThat(matchingSettingProperties.has("price")).isFalse();
+		assertThat(textValues(matchingSettingSchema.path("required"))).contains(
+				"isExposed",
+				"resort",
+				"sport",
+				"lessonLevels",
+				"availableDurationMinutes",
+				"maxHeadcount",
+				"equipmentReady"
+		);
+
+		JsonNode currentOffersExamples = currentOffersResponses.path("200")
+				.path("content")
+				.path("application/json")
+				.path("examples");
+		assertThat(fieldNames(currentOffersExamples)).containsExactlyInAnyOrder("WAITING", "OFFERED");
+		JsonNode waitingOfferExample = currentOffersExamples.path("WAITING").path("value").path("data");
+		assertThat(waitingOfferExample.has("offerId")).isTrue();
+		assertThat(waitingOfferExample.path("offerId").isNull()).isTrue();
+		assertThat(waitingOfferExample.path("matchingSetting").path("isExposed").asBoolean()).isTrue();
+		assertThat(waitingOfferExample.has("activeOffer")).isFalse();
+		JsonNode offeredOfferExample = currentOffersExamples.path("OFFERED").path("value").path("data");
+		assertThat(offeredOfferExample.path("offerId").asLong()).isEqualTo(21L);
+		assertThat(offeredOfferExample.has("matchingSetting")).isTrue();
+		assertThat(offeredOfferExample.has("activeOffer")).isFalse();
+
 		JsonNode instructorBaseSchema = schemas.path("InstructorMatchingOfferDetailResponse");
-		assertThat(instructorBaseSchema.path("properties").has("recoveryState")).isTrue();
-		assertThat(textValues(instructorBaseSchema.path("required"))).contains("recoveryState");
-		assertThat(textValues(instructorBaseSchema.path("properties").path("recoveryState").path("enum")))
-				.containsExactlyInAnyOrder("AVAILABLE", "STALE");
+		assertThat(instructorBaseSchema.has("oneOf")).isFalse();
+		assertThat(instructorBaseSchema.has("discriminator")).isFalse();
 
 		JsonNode detailOperation = findOperation(
 				openApi,
@@ -704,6 +768,11 @@ class SsingServerApplicationTests {
 				.path("application/json")
 				.path("examples")
 				.has("MATCHING_OFFER_NOT_FOUND")).isTrue();
+		assertThat(detailResponses.path("409")
+				.path("content")
+				.path("application/json")
+				.path("examples")
+				.has("MATCHING_NOT_ACTIVE")).isTrue();
 
 		assertThat(detailResponses.path("200")
 				.path("content")
@@ -717,21 +786,13 @@ class SsingServerApplicationTests {
 				.path("content")
 				.path("application/json")
 				.path("examples");
-		assertThat(detailExamples.has("AVAILABLE")).isTrue();
-		assertThat(detailExamples.has("STALE")).isTrue();
+		assertThat(fieldNames(detailExamples)).containsExactly("AVAILABLE");
 		assertThat(detailExamples.path("AVAILABLE").path("value").path("data")
 				.path("recoveryState").asString()).isEqualTo("AVAILABLE");
-		assertThat(detailExamples.path("STALE").path("value").path("data")
-				.path("recoveryState").asString()).isEqualTo("STALE");
-		assertThat(detailExamples.path("STALE").path("value").path("data").has("matchingStatus")).isFalse();
 
-		JsonNode instructorAvailableSchema = schemas.path("InstructorMatchingOfferDetailAvailable");
+		JsonNode instructorAvailableSchema = schemas.path("InstructorMatchingOfferDetailResponse");
 		assertThat(instructorAvailableSchema.path("description").asString())
-				.contains(
-						"OFFERED + EXPOSED + WAITING_FOR_INSTRUCTOR",
-						"ACCEPTED + INSTRUCTOR_ACCEPTED + WAITING_FOR_CONFIRMATION",
-						"ACCEPTED + PAYMENT_PENDING + PAYMENT_PENDING"
-				);
+				.contains("종료된 매칭은 MATCHING_NOT_ACTIVE 오류로 반환");
 		JsonNode detailProperties = instructorAvailableSchema.path("properties");
 		assertThat(detailProperties.has("recoveryState")).isTrue();
 		assertThat(detailProperties.has("offerId")).isTrue();
@@ -741,8 +802,19 @@ class SsingServerApplicationTests {
 		assertThat(detailProperties.has("lessonSummary")).isTrue();
 		assertThat(detailProperties.has("priceSummary")).isTrue();
 		assertThat(detailProperties.has("participants")).isTrue();
-		assertThat(textValues(schemas.path("InstructorMatchingOfferDetailAvailable").path("required")))
-				.contains("recoveryState", "offerId");
+		assertThat(textValues(schemas.path("InstructorMatchingOfferDetailResponse").path("required")))
+				.containsExactlyInAnyOrder(
+						"recoveryState",
+						"offerId",
+						"groupId",
+						"offerStatus",
+						"groupStatus",
+						"matchingStatus",
+						"requestSummary",
+						"lessonSummary",
+						"priceSummary",
+						"participants"
+				);
 		assertThat(textValues(detailProperties.path("recoveryState").path("enum")))
 				.containsExactly("AVAILABLE");
 		assertThat(textValues(detailProperties.path("offerStatus").path("enum")))
@@ -763,14 +835,8 @@ class SsingServerApplicationTests {
 		assertThat(participantProperties.has("gender")).isTrue();
 		assertThat(participantProperties.size()).isEqualTo(2);
 		assertThat(detailProperties.has("expiresAt")).isFalse();
-		JsonNode staleProperties = schemas.path("InstructorMatchingOfferDetailStale").path("properties");
-		assertThat(staleProperties.has("recoveryState")).isTrue();
-		assertThat(staleProperties.has("offerId")).isTrue();
-		assertThat(staleProperties.size()).isEqualTo(2);
-		assertThat(textValues(schemas.path("InstructorMatchingOfferDetailStale").path("required")))
-				.contains("recoveryState", "offerId");
-		assertThat(textValues(staleProperties.path("recoveryState").path("enum")))
-				.containsExactly("STALE");
+		assertThat(schemas.has("InstructorMatchingOfferDetailAvailable")).isFalse();
+		assertThat(schemas.has("InstructorMatchingOfferDetailStale")).isFalse();
 	}
 
 	@Test

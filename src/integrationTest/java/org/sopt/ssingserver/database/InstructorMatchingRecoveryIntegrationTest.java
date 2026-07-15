@@ -287,14 +287,10 @@ class InstructorMatchingRecoveryIntegrationTest {
 
         mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.recoveryState").value("STALE"))
-                .andExpect(jsonPath("$.data.offerId").value(offerId))
-                .andExpect(jsonPath("$.data.groupId").doesNotExist())
-                .andExpect(jsonPath("$.data.matchingStatus").doesNotExist())
-                .andExpect(jsonPath("$.data.participants").doesNotExist());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("MATCHING_NOT_ACTIVE"))
+                .andExpect(jsonPath("$.data").doesNotExist());
 
         MvcResult homeResult = mockMvc.perform(get("/api/v1/instructor/home")
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
@@ -310,7 +306,7 @@ class InstructorMatchingRecoveryIntegrationTest {
     }
 
     @Test
-    void 다른강사와_없는제안은_404이고_본인종료제안은_STALE을_반환한다() throws Exception {
+    void 다른강사와_없는제안은_404이고_본인종료제안은_MATCHING_NOT_ACTIVE를_반환한다() throws Exception {
         Long consumerMemberId = personaMemberId("consumer-default");
         Long instructorMemberId = personaMemberId("instructor-approved-default");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
@@ -340,10 +336,44 @@ class InstructorMatchingRecoveryIntegrationTest {
 
         mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("MATCHING_NOT_ACTIVE"))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    void ID없는_재확인API는_OFFERED여도_EXPOSED가_아닌_그룹의_제안을_제외한다() throws Exception {
+        Long consumerMemberId = personaMemberId("consumer-default");
+        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
+        String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
+
+        long matchingRequestId = createMatchingRequest(consumerToken);
+        Long groupId = jdbcTemplate.queryForObject(
+                "SELECT matching_request_group_id FROM matching_request_group_items WHERE matching_request_id = ?",
+                Long.class,
+                matchingRequestId
+        );
+        jdbcTemplate.update(
+                "UPDATE matching_request_groups SET status = 'CANCELED' WHERE id = ?",
+                groupId
+        );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM matching_offers WHERE matching_request_group_id = ?",
+                String.class,
+                groupId
+        )).isEqualTo("OFFERED");
+
+        MvcResult result = mockMvc.perform(get("/api/v1/instructor/matching-offers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.recoveryState").value("STALE"))
-                .andExpect(jsonPath("$.data.offerId").value(offerId))
-                .andExpect(jsonPath("$.data.offerStatus").doesNotExist());
+                .andReturn();
+        JsonNode data = objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("data");
+
+        assertThat(data.has("offerId")).isTrue();
+        assertThat(data.path("offerId").isNull()).isTrue();
+        assertThat(data.path("matchingSetting").path("isExposed").asBoolean()).isTrue();
     }
 
     private EventSubscription subscribe(String token, String destination) throws Exception {
