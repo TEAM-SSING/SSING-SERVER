@@ -14,14 +14,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javax.sql.DataSource;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.sopt.ssingserver.database.support.BaseSeedLoader;
+import org.sopt.ssingserver.database.support.DatabaseCleaner;
+import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
@@ -45,8 +46,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
@@ -63,37 +62,10 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
 
     private static final long CONCURRENCY_TIMEOUT_SECONDS = 10L;
     private static final long LOCK_BLOCK_ASSERTION_MILLIS = 500L;
-    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
-            .withDatabaseName("ssing_instructor_negotiation_concurrency")
-            .withUsername("ssing")
-            .withPassword("ssing");
-    private static final Flyway FLYWAY;
-
-    static {
-        MYSQL.start();
-        FLYWAY = Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
-                .validateMigrationNaming(true)
-                .failOnMissingLocations(true)
-                .validateOnMigrate(true)
-                .baselineOnMigrate(false)
-                .cleanDisabled(false)
-                .load();
-        FLYWAY.migrate();
-    }
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.datasource.driver-class-name", MYSQL::getDriverClassName);
-    }
-
-    @AfterAll
-    static void stopMysql() {
-        MYSQL.stop();
+        SharedMySqlDatabase.configureDatasource(registry);
     }
 
     @Autowired
@@ -116,10 +88,8 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
 
     @BeforeEach
     void resetDatabase() {
-        FLYWAY.clean();
-        FLYWAY.migrate();
-        runSql("db/seed/base/001_reference_data.sql");
-        runSql("db/seed/base/010_dev_personas.sql");
+        DatabaseCleaner.clean(dataSource);
+        BaseSeedLoader.apply(dataSource);
         runSql("db/seed/scenarios/matching-price-vivaldi/seed.sql");
     }
 

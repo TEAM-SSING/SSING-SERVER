@@ -13,9 +13,10 @@
 로컬 DB를 초기화할 때는 SQL 파일을 직접 하나씩 실행하지 말고 reset 스크립트를 사용한다.
 스크립트가 `clean → migrate → base → scenario → verify` 순서를 보장한다.
 
-로컬 reset 스크립트는 로컬 DB에만 사용한다. 공유 dev DB는 `main`으로 제한된
-`Reset Dev DB` GitHub Actions workflow로만 초기화한다. 운영 DB에는 로컬·dev reset
-스크립트와 workflow를 모두 사용할 수 없다.
+로컬 reset 스크립트는 로컬 DB에만 사용한다. 공유 dev DB는 `main` 자동 배포 또는
+`Reset Dev DB` GitHub Actions workflow로만 초기화한다. 아직 Dev 데이터를 보존하지 않는
+동안에는 main 배포마다 `clean → migrate → validate → base → verify`를 실행한다. 운영 DB에는
+로컬·dev reset 스크립트와 workflow를 모두 사용할 수 없다.
 
 ## 데이터 구성
 
@@ -77,6 +78,8 @@
 ## 공유 dev DB에서 QA 상태 만들기
 
 공유 dev DB는 명령어를 직접 입력하지 않고 GitHub Actions의 `Reset Dev DB`에서 실행한다.
+main 자동 배포 직후에는 base seed만 있는 초기 상태이며, 특정 QA 시나리오가 필요할 때 이
+workflow를 추가로 실행한다.
 
 1. `main` ref에서 실행할 시나리오를 고른다.
 2. 기존 dev 데이터를 지우는 `confirmReset`을 체크한다.
@@ -88,16 +91,17 @@
 일반 DML 용도로 분리하고, migration 계정 하나가 Flyway migration과 dev clean/seed를
 함께 수행한다.
 
-reset은 dev DB 전체를 다시 만들기 때문에 기존 access token과 resource ID를 계속 사용하면
-안 된다. `pm-full-requested-catalog`를 골랐다면 새 QA는 요청이 없는
+자동 배포와 수동 reset은 dev DB 전체를 다시 만들기 때문에 기존 access token과 resource ID를
+계속 사용하면 안 된다. `pm-full-requested-catalog`를 골랐다면 새 QA는 요청이 없는
 `qa-free-consumer`로 시작한다. 이 시나리오는 canonical snapshot을 먼저 검증한 뒤 dev 전용
 playground 데이터를 더하고, scheduler 기본 설정을 켠 채 앱을 재기동하므로 시간이 지나면서
 상태가 자연스럽게 바뀔 수 있다.
 
-결과 report에 incomplete marker가 남았다고 나오면 부분 DB일 수 있으므로 앱을 켜거나 새
-배포를 시도하지 말고 실패 원인을 수정한 뒤 전체 reset을 다시 실행한다. report 자체를
-가져오지 못한 경우에는 reset 미시작·진행 중·완료를 단정할 수 없다. 먼저 EC2 marker, 앱
-컨테이너, DB 상태를 확인한 뒤 복구 방향을 정한다.
+결과 report에 incomplete marker가 남았다고 나오면 부분 DB일 수 있으므로 앱을 직접 켜지
+않는다. 수동 reset은 기존 marker가 있으면 중단한다. 자동 배포는 현재 main SHA와 dev DB
+대상을 다시 확인한 뒤 전체 clean부터 재실행해 복구하며, 성공 전까지 marker가 앱 재기동을
+막는다. report 자체를 가져오지 못한 경우에는 reset 미시작·진행 중·완료를 단정할 수 없다.
+먼저 EC2 marker, 앱 컨테이너, DB 상태를 확인한다.
 
 ## 로컬 서버와 토큰 사용하기
 
@@ -203,27 +207,54 @@ WebSocket 통합 테스트만 실행한다.
 
 ## 자동 검증과 CI
 
-`DatabaseSeedContractTest`는 모든 scenario 디렉터리를 찾아 각각 다음 조건으로 검증한다.
+필수 CI의 두 Runner는 각각 integration test JVM 하나와 MySQL 8.4.8 컨테이너 하나를 사용한다.
+테스트 클래스마다 컨테이너를 다시 만들거나 Testcontainers reuse 기능을 사용하지 않는다.
+DB 테스트는 한 JVM 안에서 순차 실행한다.
 
-- 깨끗한 MySQL 8.4.8에서 migration과 base seed 적용
+`DatabaseBootstrapContractTest`는 빈 DB를 V1부터 최신까지 한 번 migration하고 validate한다.
+그 뒤 `DatabaseCleaner`가 `flyway_schema_history`와 migration 소유 필수 데이터인
+`platform_fee_policies`를 보존하면서 애플리케이션 테이블만 비우는지 두 번 반복해 확인한다.
+
+`DatabaseSeedContractTest`는 최신 schema를 그대로 두고 각 scenario 전에 데이터만 비운 뒤
+base seed를 다시 적용한다. 다음 조건은 그대로 검증한다.
+
 - scenario의 `scenario.yml`, `seed.sql`, `verify.sql` 존재 확인
 - scenario SQL과 검증 SQL 실행
 - `integration-test` 공통 프로필에서 모든 `@Scheduled` 자동 실행 차단
-- `DatabaseSeedContractTest`에서만 실제 매칭 scheduler 빈을 선택 활성화하고 `runScheduledSearch()`를 수동 실행
+- 실제 매칭 scheduler 빈의 `runScheduledSearch()`를 수동 실행
 - PM snapshot의 103개 원본 매핑과 실제 DB 관계를 비교한 뒤, 조건이 맞는 2건의 전이와 재실행 멱등성 확인
 
 통합 테스트가 `@Scheduled` 자동 등록을 끄는 이유는 테스트가 60초 안에 끝나기를 기대하지 않고,
 상태를 바꾸는 시점을 테스트 코드가 직접 소유하기 위해서다. 실제 매칭 scheduler 빈은 수동
 호출하므로 운영 진입점부터 DB 상태 전이까지 검증한다. 전역 예약 작업이 꺼져 있어도 실제
 WebSocket 통합 테스트는 통과하므로 STOMP heartbeat와 업무 `@Scheduled` 작업도 분리해 검증한다.
+Scheduler Bean 설정 자체는 DB가 필요 없는 단위 테스트로 분리했다. V4의 활성 3개·이력 5개
+제약은 서로 다른 회원을 사용해 schema/data 준비 한 번으로 모두 확인한다.
 
-`db-seed-check.yml`은 로컬과 같은 `reset-all-local.sh`을 두 번 실행해 전체 reset의
-재실행 안전성을 확인하고, 별도의 Testcontainers DB에서 통합 테스트를 실행한다.
+V3→V4와 V4→V5의 기존 데이터 보존 테스트는 삭제하지 않았다. Dev 데이터를 폐기할 수 있는
+현재에는 PR 필수 경로에서 제외하고 `Legacy Migration Compatibility` nightly 또는 수동
+workflow로 실행한다.
+
+```bash
+./gradlew legacyMigrationTest
+```
+
+운영 데이터가 생기기 전에는 이 두 테스트를 PR 필수 CI로 다시 올려야 한다. 새 migration과
+빈 DB V1→최신 bootstrap 검증은 계속 필수 CI에 남는다.
+
+`db-seed-check.yml`은 disposable 로컬 MySQL에 `reset-all-local.sh`을 한 번 실행해 모든
+시나리오 reset 경로를 검증한다. 통합 테스트는 CI/CD의 두 Gradle Runner에서 별도로 실행한다.
 
 `test-dev-runner-contract.sh`와 `test_dev_workflow_contract.py`는 실제 dev DB 대신 가짜
 명령과 workflow 구조를 사용해 대상 allowlist, UTF-8 client 설정, DB 주소 마스킹, 실패
 종료 코드, incomplete marker, 한글 복구 안내를 검증한다. 자동 테스트는 공유 dev DB를
 초기화하지 않는다.
+
+main 배포에서는 애플리케이션 테스트, DB·Seed 테스트, ARM64 이미지 build·push가 동시에
+시작한다. 세 작업이 모두 성공해야 Dev DB를 초기화하고 앱을 재기동한다. 이미지는
+`dev-{commit SHA}` 태그로 찾되 실제 배포 설정은 registry digest까지 고정한다. DB clean 직전과
+Compose 재시작 직전에 현재 main SHA를 다시 확인하므로 오래된 main은 DB를 지우거나 앱을
+재기동할 수 없다.
 
 ## 현재 범위 밖의 후속 작업
 

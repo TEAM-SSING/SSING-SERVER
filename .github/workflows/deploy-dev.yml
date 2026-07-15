@@ -8,6 +8,11 @@ on:
         description: 검증을 통과해 배포할 main commit SHA
         required: true
         type: string
+      image_digest:
+        description: CI에서 미리 빌드한 Docker image digest
+        required: false
+        default: ""
+        type: string
   # 긴급 상황에서 CI 성공 여부와 무관하게 팀이 명시적으로 실행하는 예외 경로
   # 단, 아래 현재 main SHA 검증은 자동·수동 배포 모두 동일하게 적용한다.
   workflow_dispatch:
@@ -88,6 +93,7 @@ jobs:
           DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          PREBUILT_IMAGE_DIGEST: ${{ inputs.image_digest }}
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
@@ -114,8 +120,6 @@ jobs:
 
           required_vars=(
             DOCKERHUB_IMAGE
-            DOCKERHUB_USERNAME
-            DOCKERHUB_TOKEN
             EC2_HOST
             EC2_USERNAME
             EC2_SSH_PRIVATE_KEY
@@ -135,6 +139,13 @@ jobs:
             SENTRY_DSN
             FIREBASE_ADMIN_JSON
           )
+
+          if [ -z "$PREBUILT_IMAGE_DIGEST" ]; then
+            required_vars+=(DOCKERHUB_USERNAME DOCKERHUB_TOKEN)
+          elif [[ ! "$PREBUILT_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error title=이미지 digest 형식 오류::sha256 형식의 검증된 image digest만 사용할 수 있습니다."
+            exit 1
+          fi
 
           missing=0
           for var_name in "${required_vars[@]}"; do
@@ -212,6 +223,7 @@ jobs:
 
       # Docker Hub 이미지 push 인증
       - name: Docker Hub 로그인
+        if: inputs.image_digest == ''
         uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
@@ -219,10 +231,13 @@ jobs:
 
       # ARM64 Docker 이미지 빌드 도구
       - name: Docker Buildx 준비
+        if: inputs.image_digest == ''
         uses: docker/setup-buildx-action@v3
 
       # ARM64 Docker 이미지 빌드와 push
       - name: ARM64 Docker 이미지 빌드와 푸시
+        id: build-image
+        if: inputs.image_digest == ''
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -232,6 +247,24 @@ jobs:
           tags: ${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # 자동 배포는 CI build job의 digest를, 긴급 수동 배포는 바로 위 build 결과를 사용
+      - name: Docker 이미지 digest 고정
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          PREBUILT_IMAGE_DIGEST: ${{ inputs.image_digest }}
+          BUILT_IMAGE_DIGEST: ${{ steps.build-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          image_digest="${PREBUILT_IMAGE_DIGEST:-$BUILT_IMAGE_DIGEST}"
+          if [[ ! "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error title=이미지 digest 확인 실패::CI build 결과 또는 수동 build 결과의 digest가 없습니다."
+            exit 1
+          fi
+          printf 'IMAGE_DIGEST=%s\n' "$image_digest" >> "$GITHUB_ENV"
+          printf 'IMAGE_REF=%s:dev-%s@%s\n' \
+            "$DOCKERHUB_IMAGE" "$DEPLOY_SHA" "$image_digest" >> "$GITHUB_ENV"
 
       # EC2 SSH 접속 준비
       - name: EC2 SSH 접속 준비
@@ -306,24 +339,22 @@ jobs:
           echo "::notice title=Firebase 서비스 계정 키 복원 완료::키를 EC2 런타임 파일로만 복원했습니다."
           echo "::endgroup::"
 
-      # 실패한 reset의 파일과 DB 상태를 보존하기 위해 EC2 파일을 덮어쓰기 전에 차단
-      - name: 미완료 dev DB reset 사전 차단
+      # marker가 있으면 앱은 계속 막되 최신 main의 전체 초기화로 복구를 시도
+      - name: 미완료 dev DB 작업 확인
         env:
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
         run: |
           set -euo pipefail
 
-          echo "::group::미완료 dev DB reset 사전 차단"
+          echo "::group::미완료 dev DB 작업 확인"
           SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
-          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-            "test ! -e '$DEPLOY_DIR/.dev-db-reset-incomplete'"; then
-            echo "::error title=미완료 dev DB reset 감지::부분 DB와 기존 배포 설정을 보존하기 위해 파일 업로드와 앱 재기동을 시작하지 않습니다. 원인을 수정한 뒤 같은 commit의 reset을 처음부터 완료하세요."
-            echo "::endgroup::"
-            exit 1
+          if ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "test -e '$DEPLOY_DIR/.dev-db-reset-incomplete'"; then
+            echo "::warning title=미완료 dev DB 작업 감지::앱 재기동은 계속 차단한 채 최신 main의 clean·migration·base seed를 처음부터 다시 실행합니다."
+          else
+            echo "::notice title=dev DB 작업 상태 확인 완료::미완료 marker가 없습니다."
           fi
-
-          echo "::notice title=dev DB reset 상태 확인 완료::미완료 marker가 없어 배포 파일 준비를 진행합니다."
           echo "::endgroup::"
 
       # EC2 배포 파일 업로드
@@ -347,6 +378,7 @@ jobs:
           echo "Docker Compose, Caddyfile, 고정 Flyway 실행기 업로드"
           tar -czf .deploy-db-tooling.tgz \
             scripts/db \
+            db/seed \
             src/main/resources/db/migration
           if ! scp -i ~/.ssh/ssing-dev-key \
             deploy/docker-compose.dev.yml \
@@ -374,7 +406,7 @@ jobs:
       # EC2 런타임 환경변수 파일 생성
       - name: EC2 런타임 환경변수 생성
         env:
-          SSING_IMAGE: ${{ env.IMAGE_TAG }}
+          SSING_IMAGE: ${{ env.IMAGE_REF }}
           SPRING_PROFILES_ACTIVE: dev
           SSING_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
           SSING_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
@@ -484,8 +516,21 @@ jobs:
           echo "::notice title=EC2 런타임 환경변수 후보 준비 완료::migration·컨테이너 재기동·health가 통과하면 .env.next를 현재 .env로 원자적으로 전환합니다."
           echo "::endgroup::"
 
-      # 새 앱을 재기동하기 전에 고정 Flyway 실행기로 DB를 비파괴 검증
-      - name: dev DB migration과 validate
+      # 파일 준비 사이 main이 바뀌면 파괴 작업 직전에 중단
+      - name: dev DB 초기화 직전 현재 main SHA 재확인
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          if [ "$DEPLOY_SHA" != "$current_main_sha" ]; then
+            echo "::error title=오래된 DB 초기화 차단::현재 main이 아닌 ${DEPLOY_SHA}의 migration과 seed를 차단했습니다."
+            exit 1
+          fi
+
+      # 새 앱을 재기동하기 전에 dev 데이터 폐기 후 최신 schema와 base seed를 준비
+      - name: dev DB clean·migration·base seed
         env:
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
@@ -499,7 +544,7 @@ jobs:
           SSING_DEV_DB_MIGRATION_PASSWORD: ${{ secrets.SSING_DEV_DB_MIGRATION_PASSWORD }}
         run: |
           set -euo pipefail
-          echo "::group::dev DB migration과 validate"
+          echo "::group::dev DB clean·migration·base seed"
           SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
           remote_env_path="$DEPLOY_DIR/.migration.env"
           trap 'rm -f .migration.env' EXIT
@@ -515,6 +560,7 @@ jobs:
             printf 'SSING_DEV_RUNTIME_DB_USERNAME=%q\n' "$SSING_DEV_RUNTIME_DB_USERNAME"
             printf 'SSING_DEV_DB_MIGRATION_USERNAME=%q\n' "$SSING_DEV_DB_MIGRATION_USERNAME"
             printf 'SSING_DEV_DB_MIGRATION_PASSWORD=%q\n' "$SSING_DEV_DB_MIGRATION_PASSWORD"
+            printf 'SSING_DEPLOY_COMMIT_SHA=%q\n' "$DEPLOY_SHA"
           } > .migration.env
 
           scp -i ~/.ssh/ssing-dev-key .migration.env "$SSH_TARGET:$remote_env_path"
@@ -530,20 +576,33 @@ jobs:
           set -a
           source .migration.env
           set +a
-          ./scripts/db/migrate-dev.sh
+          ./scripts/db/prepare-dev-deploy-db.sh --confirm-dev-deploy-reset main
           EOF
           migration_exit_code=$?
           set -e
 
           ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "rm -f '$remote_env_path'" || true
           if [ "$migration_exit_code" -ne 0 ]; then
-            echo "::error title=dev DB migration 실패::기존 앱은 재기동하지 않았습니다. migration 계정·대상·Flyway 오류를 확인하세요."
+            echo "::error title=dev DB 준비 실패::앱은 재기동하지 않았습니다. incomplete marker와 clean·migration·seed 로그를 확인하세요."
             echo "::endgroup::"
             exit "$migration_exit_code"
           fi
 
-          echo "::notice title=dev DB migration 완료::migrate와 validate가 통과해 앱 재기동을 진행합니다."
+          echo "::notice title=dev DB 준비 완료::clean, migrate, validate, base seed 검증이 통과했습니다."
           echo "::endgroup::"
+
+      # DB 준비 중 main이 바뀐 경우 오래된 이미지의 재기동을 차단
+      - name: Compose 재시작 직전 현재 main SHA 재확인
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          if [ "$DEPLOY_SHA" != "$current_main_sha" ]; then
+            echo "::error title=오래된 앱 재기동 차단::DB는 최신 main 배포가 다시 준비하도록 두고 ${DEPLOY_SHA} 앱은 시작하지 않습니다."
+            exit 1
+          fi
 
       # EC2 Docker Compose 재시작
       - name: EC2 Docker Compose 재시작

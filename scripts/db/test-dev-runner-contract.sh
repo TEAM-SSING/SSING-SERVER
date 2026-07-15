@@ -134,6 +134,8 @@ sudo() {
       printf ' SQL_STAGE=base\n' >> "$FAKE_COMMAND_LOG"
     elif [[ "$sql_payload" == *"Local/CI SNAPSHOT only"* ]]; then
       printf ' SQL_STAGE=scenario\n' >> "$FAKE_COMMAND_LOG"
+    elif [[ "$sql_payload" == *"base_seed_contract_assertion"* ]]; then
+      printf ' SQL_STAGE=base-verify\n' >> "$FAKE_COMMAND_LOG"
     elif [[ "$sql_payload" == *"seed_utf8_contract_assertion"* ]]; then
       printf ' SQL_STAGE=utf8\n' >> "$FAKE_COMMAND_LOG"
     elif [[ "$sql_payload" == *"seed_contract_assertion"* ]]; then
@@ -146,6 +148,9 @@ sudo() {
     case "${FAKE_FAIL_STAGE:-}" in
       base)
         [[ "$sql_payload" != *"INSERT INTO resorts"* ]] || return 44
+        ;;
+      base-verify)
+        [[ "$sql_payload" != *"base_seed_contract_assertion"* ]] || return 54
         ;;
       scenario)
         [[ "$sql_payload" != *"Local/CI SNAPSHOT only"* ]] || return 45
@@ -257,6 +262,27 @@ persona|/dev/auth/personas|1
 EOF
 }
 
+assert_deploy_prepare_success_order() {
+  local command_log="$1"
+  local previous_position=0
+  local label pattern occurrence position
+  while IFS='|' read -r label pattern occurrence; do
+    position="$(command_position "$command_log" "$pattern" "$occurrence")"
+    [[ -n "$position" ]] || fail_test "자동 배포 DB 준비 순서에서 $label 단계가 없습니다."
+    [[ "$position" -gt "$previous_position" ]] \
+      || fail_test "자동 배포 DB 준비 순서가 잘못됐습니다: $label"
+    previous_position="$position"
+  done <<'EOF'
+app-stop| compose .* stop app |1
+flyway-clean| flyway/flyway:.* clean[[:space:]]*$|1
+migrate| flyway/flyway:.* migrate[[:space:]]*$|1
+validate| flyway/flyway:.* validate[[:space:]]*$|1
+base|SQL_STAGE=base|1
+base-verify|SQL_STAGE=base-verify|1
+utf8-verify|SQL_STAGE=utf8|1
+EOF
+}
+
 run_case() {
   local case_name="$1"
   local fail_stage="$2"
@@ -298,7 +324,7 @@ run_case() {
   if [[ -n "${RUN_CASE_EXTRA_ENV_LINES:-}" ]]; then
     printf '%s\n' "$RUN_CASE_EXTRA_ENV_LINES" >> "$deploy_dir/.env"
   fi
-  : > "$deploy_dir/docker-compose.dev.yml"
+  printf 'services: {}\n' > "$deploy_dir/docker-compose.dev.yml"
   if [[ "$preexisting_marker" == true ]]; then
     printf 'RESET_INCOMPLETE\n' > "$deploy_dir/.dev-db-reset-incomplete"
   fi
@@ -408,6 +434,81 @@ run_migrate_case() {
   assert_secret_safe "$output_file" "$case_dir/missing-report.md" "$command_log"
 }
 
+run_deploy_prepare_case() {
+  local case_name="$1"
+  local fail_stage="$2"
+  local marker_present="$3"
+  local expected_success="$4"
+  local confirmation="${5:---confirm-dev-deploy-reset}"
+  local ref_name="${6:-main}"
+  local candidate_image="${7:-$EXPECTED_DIGEST_IMAGE}"
+  local current_env_present="${8:-true}"
+  local case_dir="$TEST_TMP/$case_name"
+  local deploy_dir="$case_dir/deploy"
+  local output_file="$case_dir/output.log"
+  local command_log="$case_dir/commands.log"
+  mkdir -p "$deploy_dir"
+  : > "$command_log"
+  printf 'services: {}\n' > "$deploy_dir/docker-compose.dev.yml"
+  if [[ "$current_env_present" == true ]]; then
+    {
+      printf 'SSING_IMAGE=%s\n' "$EXPECTED_DIGEST_IMAGE"
+      printf 'SSING_DATASOURCE_URL=jdbc:mysql://%s?useUnicode=true\n' "$TEST_TARGET"
+      printf 'SSING_DATASOURCE_USERNAME=ssing_runtime\n'
+      printf 'SPRING_PROFILES_ACTIVE=dev\n'
+      printf 'SSING_JPA_DDL_AUTO=validate\n'
+    } > "$deploy_dir/.env"
+  fi
+  {
+    printf 'SSING_IMAGE=%s\n' "$candidate_image"
+    printf 'SSING_DATASOURCE_URL=jdbc:mysql://%s?useUnicode=true\n' "$TEST_TARGET"
+    printf 'SSING_DATASOURCE_USERNAME=ssing_runtime\n'
+    printf 'SPRING_PROFILES_ACTIVE=dev\n'
+    printf 'SSING_JPA_DDL_AUTO=validate\n'
+  } > "$deploy_dir/.env.next"
+  if [[ "$marker_present" == true ]]; then
+    printf 'RESET_INCOMPLETE\n' > "$deploy_dir/.dev-db-reset-incomplete"
+  fi
+
+  export FAKE_COMMAND_LOG="$command_log"
+  export FAKE_FAIL_STAGE="$fail_stage"
+  export FAKE_RUNNING_IMAGE="$EXPECTED_DIGEST_IMAGE"
+  export SSING_SEED_TARGET_ENV="dev"
+  export SSING_DEV_DEPLOY_DIR="$deploy_dir"
+  export SSING_DEV_COMPOSE_FILE="docker-compose.dev.yml"
+  export SSING_DEV_DB_HOST="$TEST_HOST"
+  export SSING_DEV_DB_PORT="3306"
+  export SSING_DEV_DB_NAME="ssing"
+  export SSING_DEV_DB_ALLOWED_TARGET_SHA256="$TEST_TARGET_SHA256"
+  export SSING_DEV_RUNTIME_DATASOURCE_URL="jdbc:mysql://${TEST_TARGET}?useUnicode=true"
+  export SSING_DEV_RUNTIME_DB_USERNAME="ssing_runtime"
+  export SSING_DEV_DB_MIGRATION_USERNAME="ssing_migration"
+  export SSING_DEV_DB_MIGRATION_PASSWORD="migration-secret#42"
+  export SSING_DEPLOY_COMMIT_SHA="$TEST_SHA"
+
+  set +e
+  bash "$PROJECT_ROOT/scripts/db/prepare-dev-deploy-db.sh" \
+    "$confirmation" "$ref_name" > "$output_file" 2>&1
+  local exit_code=$?
+  set -e
+  printf '%s\n' "$exit_code" > "$case_dir/exit-code"
+
+  if [[ "$expected_success" == true ]]; then
+    [[ "$exit_code" -eq 0 ]] \
+      || fail_test "$case_name 자동 배포 DB 준비 성공 계약이 실패했습니다."
+    [[ ! -e "$deploy_dir/.dev-db-reset-incomplete" ]] \
+      || fail_test "$case_name 성공 뒤 incomplete marker가 남았습니다."
+    assert_deploy_prepare_success_order "$command_log"
+    ! grep -Eq ' compose .* up ' "$command_log" \
+      || fail_test "$case_name DB 준비 실행기가 앱을 직접 재기동했습니다."
+  else
+    [[ "$exit_code" -ne 0 ]] \
+      || fail_test "$case_name 자동 배포 DB 준비 실패 계약이 성공했습니다."
+  fi
+
+  assert_secret_safe "$output_file" "$case_dir/missing-report.md" "$command_log"
+}
+
 TEST_TMP="$(mktemp -d /tmp/ssing-dev-runner-test.XXXXXX)"
 cleanup_test_tmp() {
   if [[ "${KEEP_SSING_DEV_RUNNER_TEST_TMP:-false}" == true ]]; then
@@ -418,8 +519,9 @@ cleanup_test_tmp() {
 }
 trap cleanup_test_tmp EXIT
 EXPECTED_IMAGE="teamssing/server:dev-${TEST_SHA}"
+EXPECTED_DIGEST_IMAGE="${EXPECTED_IMAGE}@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 TEST_TARGET_SHA256="$(target_sha256 "$TEST_TARGET")"
-export TEST_TMP EXPECTED_IMAGE TEST_TARGET_SHA256
+export TEST_TMP EXPECTED_IMAGE EXPECTED_DIGEST_IMAGE TEST_TARGET_SHA256
 
 missing_artifact_root="$TEST_TMP/missing-artifact-project"
 mkdir -p \
@@ -668,6 +770,13 @@ for success_scenario in \
     --confirm-dev-reset main "$success_scenario" true
 done
 
+(
+  RUN_CASE_DEPLOYED_IMAGE="$EXPECTED_DIGEST_IMAGE" \
+  RUN_CASE_RUNNING_IMAGE="$EXPECTED_DIGEST_IMAGE" \
+    run_case success-digest-image "" \
+      --confirm-dev-reset main matching-price-vivaldi true
+)
+
 for non_pm_scenario in \
   matching-price-vivaldi \
   matching-no-candidate-alpensia \
@@ -715,5 +824,43 @@ run_migrate_case migration-success "" false true
 [[ "$(grep -Fc 'character_set_client' \
     "$TEST_TMP/migration-success/commands.log")" == "2" ]] \
   || fail_test "일반 migration 성공 전에 최종 schema UTF-8 계약을 다시 확인하지 않았습니다."
+
+run_deploy_prepare_case deploy-prepare-invalid-confirm "" false false wrong-confirm
+assert_no_mutation_command "$TEST_TMP/deploy-prepare-invalid-confirm/commands.log"
+run_deploy_prepare_case deploy-prepare-invalid-ref "" false false \
+  --confirm-dev-deploy-reset feature
+assert_no_mutation_command "$TEST_TMP/deploy-prepare-invalid-ref/commands.log"
+stale_digest_image="teamssing/server:dev-1111111111111111111111111111111111111111@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+run_deploy_prepare_case deploy-prepare-stale-image "" false false \
+  --confirm-dev-deploy-reset main "$stale_digest_image"
+assert_no_mutation_command "$TEST_TMP/deploy-prepare-stale-image/commands.log"
+
+run_deploy_prepare_case deploy-prepare-app-stop app-stop false false
+[[ ! -e "$TEST_TMP/deploy-prepare-app-stop/deploy/.dev-db-reset-incomplete" ]] \
+  || fail_test "자동 배포 clean 전 app-stop 실패는 새 marker를 정리해야 합니다."
+
+for failure_stage in flyway-clean flyway-migrate flyway-validate base base-verify utf8; do
+  run_deploy_prepare_case "deploy-prepare-${failure_stage}" "$failure_stage" false false
+  [[ -e "$TEST_TMP/deploy-prepare-${failure_stage}/deploy/.dev-db-reset-incomplete" ]] \
+    || fail_test "자동 배포 ${failure_stage} 실패는 marker를 유지해야 합니다."
+  ! grep -Eq ' compose .* up ' \
+      "$TEST_TMP/deploy-prepare-${failure_stage}/commands.log" \
+    || fail_test "자동 배포 ${failure_stage} 실패 뒤 앱을 재기동했습니다."
+done
+
+run_deploy_prepare_case deploy-prepare-success "" false true
+run_deploy_prepare_case deploy-prepare-first-deploy "" false true \
+  --confirm-dev-deploy-reset main "$EXPECTED_DIGEST_IMAGE" false
+grep -Eq 'SSING_RUNTIME_ENV_FILE=\.env\.next .* compose .* stop app ' \
+  "$TEST_TMP/deploy-prepare-first-deploy/commands.log" \
+  || fail_test "첫 배포에서 .env.next를 Compose runtime env로 사용하지 않았습니다."
+run_deploy_prepare_case deploy-prepare-recovers-marker "" true true
+grep -Fq '최신 main 기준 전체 초기화로 복구합니다' \
+  "$TEST_TMP/deploy-prepare-recovers-marker/output.log" \
+  || fail_test "기존 marker를 최신 main 전체 초기화로 복구한다는 안내가 없습니다."
+
+run_deploy_prepare_case deploy-prepare-preexisting-app-stop app-stop true false
+[[ -e "$TEST_TMP/deploy-prepare-preexisting-app-stop/deploy/.dev-db-reset-incomplete" ]] \
+  || fail_test "기존 marker를 clean 전 실패가 삭제했습니다."
 
 printf 'dev runner contract test passed\n'

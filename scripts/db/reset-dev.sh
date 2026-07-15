@@ -190,7 +190,7 @@ deployed_image_line_count="$(grep -c '^SSING_IMAGE=' "$DEPLOY_DIR/.env" || true)
 [[ "$deployed_image_line_count" == "1" ]] \
   || dev_fail "배포된 앱 이미지 설정을 하나로 확정할 수 없습니다."
 deployed_image="$(sed -n 's/^SSING_IMAGE=//p' "$DEPLOY_DIR/.env")"
-[[ "$deployed_image" == *":dev-${SSING_RESET_COMMIT_SHA}" ]] \
+[[ "$deployed_image" =~ :dev-${SSING_RESET_COMMIT_SHA}(@sha256:[0-9a-f]{64})?$ ]] \
   || dev_fail "reset commit과 마지막 배포 설정의 commit이 다릅니다. 먼저 같은 commit을 dev에 배포하세요."
 deployed_datasource_line_count="$(grep -c '^SSING_DATASOURCE_URL=' "$DEPLOY_DIR/.env" || true)"
 [[ "$deployed_datasource_line_count" == "1" ]] \

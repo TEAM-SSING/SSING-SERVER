@@ -8,13 +8,16 @@ RESET_WORKFLOW = ROOT / ".github/workflows/reset-dev-db.yml"
 CI_WORKFLOW = ROOT / ".github/workflows/ci.yml"
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/deploy-dev.yml"
 DB_CHECK_WORKFLOW = ROOT / ".github/workflows/db-seed-check.yml"
+LEGACY_MIGRATION_WORKFLOW = ROOT / ".github/workflows/legacy-migration-test.yml"
 DEV_COMPOSE = ROOT / "deploy/docker-compose.dev.yml"
 BUILD_GRADLE = ROOT / "build.gradle"
 DEV_ENV_EXAMPLE = ROOT / "deploy/env.dev.example"
+INTEGRATION_SOURCE_ROOT = ROOT / "src/integrationTest/java"
 DEV_RUNNERS = (
     ROOT / "scripts/db/dev-common.sh",
     ROOT / "scripts/db/reset-dev.sh",
     ROOT / "scripts/db/migrate-dev.sh",
+    ROOT / "scripts/db/prepare-dev-deploy-db.sh",
 )
 
 
@@ -46,11 +49,13 @@ class DevWorkflowContractTest(unittest.TestCase):
         cls.ci = CI_WORKFLOW.read_text(encoding="utf-8")
         cls.deploy = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
         cls.db_check = DB_CHECK_WORKFLOW.read_text(encoding="utf-8")
+        cls.legacy_migration = LEGACY_MIGRATION_WORKFLOW.read_text(encoding="utf-8")
         cls.dev_compose = DEV_COMPOSE.read_text(encoding="utf-8")
         cls.build_gradle = BUILD_GRADLE.read_text(encoding="utf-8")
         cls.dev_env_example = DEV_ENV_EXAMPLE.read_text(encoding="utf-8")
         cls.reset_job = indented_block(cls.reset, "reset:", 2)
         cls.ci_verify_job = indented_block(cls.ci, "verify:", 2)
+        cls.ci_build_job = indented_block(cls.ci, "build-dev-image:", 2)
         cls.ci_deploy_job = indented_block(cls.ci, "deploy-dev:", 2)
         cls.deploy_job = indented_block(cls.deploy, "build-and-deploy:", 2)
 
@@ -119,32 +124,86 @@ class DevWorkflowContractTest(unittest.TestCase):
 
         seed_shard = shard_block("seed-migration")
         application_shard = shard_block("application")
-        seed_contract = (
-            "includeTestsMatching "
-            "'org.sopt.ssingserver.database.DatabaseSeedContractTest'"
+        required_seed_classes = (
+            "DatabaseBootstrapContractTest",
+            "DatabaseSeedContractTest",
+            "MatchingRequestV4ConstraintIntegrationTest",
         )
         migration_contract = "includeTestsMatching '*MigrationTest'"
-        seed_exclusion = seed_contract.replace("includeTestsMatching", "excludeTestsMatching")
         migration_exclusion = migration_contract.replace(
             "includeTestsMatching",
             "excludeTestsMatching",
         )
 
-        for contract in (seed_contract, migration_contract):
+        for class_name in required_seed_classes:
+            contract = (
+                "includeTestsMatching "
+                f"'org.sopt.ssingserver.database.{class_name}'"
+            )
+            exclusion = contract.replace("includeTestsMatching", "excludeTestsMatching")
             self.assertIn(contract, seed_shard)
             self.assertNotIn(contract, application_shard)
-        for exclusion in (seed_exclusion, migration_exclusion):
             self.assertIn(exclusion, application_shard)
             self.assertNotIn(exclusion, seed_shard)
+        self.assertIn(migration_contract, seed_shard)
+        self.assertNotIn(migration_contract, application_shard)
+        self.assertIn(migration_exclusion, application_shard)
+        self.assertNotIn(migration_exclusion, seed_shard)
 
         self.assertIn("setFailOnNoMatchingTests(true)", self.build_gradle)
+        self.assertIn("maxParallelForks = 1", self.build_gradle)
+        self.assertIn("forkEvery = 0", self.build_gradle)
+        self.assertEqual(
+            2,
+            self.build_gradle.count(
+                "systemProperty 'junit.jupiter.execution.parallel.enabled', 'false'"
+            ),
+        )
+        self.assertIn("excludeTags 'legacy-migration'", self.build_gradle)
+        self.assertIn("tasks.register('legacyMigrationTest', Test)", self.build_gradle)
+        self.assertIn("includeTags 'legacy-migration'", self.build_gradle)
         self.assertRegex(self.build_gradle, r"(?m)^\s+case null:$")
         self.assertIn(
             'throw new GradleException("Unsupported integrationTestShard: ${shard}")',
             self.build_gradle,
         )
 
+    def test_integration_tests_share_one_sequential_mysql_container(self):
+        sources = sorted(INTEGRATION_SOURCE_ROOT.rglob("*.java"))
+        source_text = {
+            source: source.read_text(encoding="utf-8")
+            for source in sources
+        }
+        combined = "\n".join(source_text.values())
+
+        self.assertEqual(1, combined.count("new MySQLContainer"))
+        self.assertEqual(1, combined.count("MYSQL.start()"))
+        self.assertNotIn("MYSQL.stop()", combined)
+        self.assertNotIn("withReuse(true)", combined)
+
+        container_owners = [
+            source.name
+            for source, text in source_text.items()
+            if "new MySQLContainer" in text
+        ]
+        self.assertEqual(["SharedMySqlDatabase.java"], container_owners)
+
+        flyway_clean_owners = [
+            source.name
+            for source, text in source_text.items()
+            if "flyway().clean()" in text
+        ]
+        self.assertEqual(
+            ["MatchingRequestV4MigrationTest.java", "NotificationV5MigrationTest.java"],
+            flyway_clean_owners,
+        )
+        for source, text in source_text.items():
+            if source.name in flyway_clean_owners:
+                self.assertIn('@Tag("legacy-migration")', text)
+
     def test_ci_uses_two_complementary_runners_before_exact_sha_deploy(self):
+        self.assertNotIn("publish-unit-test-result-action", self.ci)
+        self.assertNotIn("checks: write", self.ci)
         self.assertIn("max-parallel: 2", self.ci_verify_job)
         matrix_pairs = re.findall(
             r"(?m)^            shard: ([a-z-]+)\n"
@@ -173,18 +232,40 @@ class DevWorkflowContractTest(unittest.TestCase):
 
         self.assertIn(
             "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+            self.ci_build_job,
+        )
+        self.assertRegex(self.ci_build_job, r"(?m)^    environment: dev$")
+        self.assertNotRegex(self.ci_build_job, r"(?m)^    needs:")
+        self.assertIn("image_digest: ${{ steps.build.outputs.digest }}", self.ci_build_job)
+        self.assertIn("id: build", self.ci_build_job)
+        self.assertIn("push: true", self.ci_build_job)
+        self.assertIn(
+            "tags: ${{ vars.DOCKERHUB_IMAGE }}:dev-${{ github.sha }}",
+            self.ci_build_job,
+        )
+
+        self.assertIn(
+            "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
             self.ci_deploy_job,
         )
         for bypass in ("always()", "failure()", "cancelled()"):
             self.assertNotIn(bypass, self.ci_deploy_job)
-        self.assertIn("needs: verify", self.ci_deploy_job)
+        self.assertRegex(
+            self.ci_deploy_job,
+            r"(?m)^    needs:\n      - verify\n      - build-dev-image$",
+        )
         self.assertIn("uses: ./.github/workflows/deploy-dev.yml", self.ci_deploy_job)
         self.assertIn("deploy_sha: ${{ github.sha }}", self.ci_deploy_job)
+        self.assertIn(
+            "image_digest: ${{ needs.build-dev-image.outputs.image_digest }}",
+            self.ci_deploy_job,
+        )
         self.assertIn("workflow_call:", self.deploy)
         self.assertIn("workflow_dispatch:", self.deploy)
         self.assertNotRegex(self.deploy, r"(?m)^  push:$")
 
         self.assertIn("DEPLOY_SHA: ${{ inputs.deploy_sha || github.sha }}", self.deploy)
+        self.assertIn("image_digest:", self.deploy)
         self.assertNotIn("./gradlew", self.deploy_job)
         self.assertIn("ref: ${{ env.DEPLOY_SHA }}", self.deploy_job)
         self.assertIn(
@@ -197,6 +278,8 @@ class DevWorkflowContractTest(unittest.TestCase):
             self.deploy_job,
         )
         self.assertIn("dev-${DEPLOY_SHA}", self.deploy_job)
+        self.assertIn("IMAGE_REF=%s:dev-%s@%s", self.deploy_job)
+        self.assertIn("PREBUILT_IMAGE_DIGEST: ${{ inputs.image_digest }}", self.deploy_job)
         self.assertIn("ssing-server@dev-${{ env.DEPLOY_SHA }}", self.deploy_job)
         self.assertNotIn("dev-latest", self.deploy_job)
         self.assertNotIn("dev-latest", self.dev_env_example)
@@ -224,7 +307,7 @@ class DevWorkflowContractTest(unittest.TestCase):
     def test_db_targets_are_masked_before_remote_db_commands(self):
         for job, runner_command in (
             (self.reset_job, "./scripts/db/reset-dev.sh --confirm-dev-reset"),
-            (self.deploy_job, "./scripts/db/migrate-dev.sh"),
+            (self.deploy_job, "./scripts/db/prepare-dev-deploy-db.sh"),
         ):
             mask_step = indented_block(
                 job,
@@ -259,11 +342,13 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertIn("먼저 실패한 첫 Actions step의 한글 로그", report_step)
         self.assertIn("${{ github.run_id }}-${{ github.run_attempt }}", self.reset_job)
 
-    def test_incomplete_reset_blocks_deploy_and_migration_precedes_restart(self):
-        marker_position = self.deploy_job.index("미완료 dev DB reset 사전 차단")
+    def test_latest_deploy_recovers_incomplete_db_before_restart(self):
+        marker_position = self.deploy_job.index("미완료 dev DB 작업 확인")
         upload_position = self.deploy_job.index("EC2 배포 파일 업로드")
         runtime_env_position = self.deploy_job.index("EC2 런타임 환경변수 생성")
-        migration_position = self.deploy_job.index("./scripts/db/migrate-dev.sh")
+        db_guard_position = self.deploy_job.index("dev DB 초기화 직전 현재 main SHA 재확인")
+        migration_position = self.deploy_job.index("./scripts/db/prepare-dev-deploy-db.sh")
+        restart_guard_position = self.deploy_job.index("Compose 재시작 직전 현재 main SHA 재확인")
         activate_env_position = self.deploy_job.index("mv -f .env.next .env")
         restart_position = self.deploy_job.index("up -d --remove-orphans")
         health_position = self.deploy_job.index('/actuator/health | grep -q')
@@ -281,8 +366,12 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertLess(marker_position, upload_position)
         self.assertLess(marker_position, runtime_env_position)
         self.assertLess(upload_position, runtime_env_position)
+        self.assertLess(runtime_env_position, db_guard_position)
+        self.assertLess(db_guard_position, migration_position)
         self.assertLess(runtime_env_position, migration_position)
         self.assertLess(migration_position, restart_position)
+        self.assertLess(migration_position, restart_guard_position)
+        self.assertLess(restart_guard_position, restart_position)
         self.assertLess(migration_position, activate_env_position)
         self.assertLess(restart_position, activate_env_position)
         self.assertLess(health_position, activate_env_position)
@@ -305,15 +394,59 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertIn("기존 .env는 교체하지 않았습니다", restart_step)
         marker_step = indented_block(
             self.deploy_job,
-            "- name: 미완료 dev DB reset 사전 차단",
+            "- name: 미완료 dev DB 작업 확인",
             6,
         )
-        self.assertIn("test ! -e '$DEPLOY_DIR/.dev-db-reset-incomplete'", marker_step)
+        self.assertIn("test -e '$DEPLOY_DIR/.dev-db-reset-incomplete'", marker_step)
+        self.assertIn("최신 main의 clean·migration·base seed", marker_step)
+        self.assertNotIn("exit 1", marker_step)
         self.assertGreaterEqual(self.deploy_job.count(".dev-db-reset-incomplete"), 2)
         self.assertIn("--env-file .env.next", self.deploy_job)
         self.assertIn("SSING_RUNTIME_ENV_FILE=.env.next", self.deploy_job)
         self.assertIn("${SSING_RUNTIME_ENV_FILE:-.env}", self.dev_compose)
         self.assertIn("SSING_JPA_DDL_AUTO: validate", self.deploy_job)
+
+        prepare_runner = (ROOT / "scripts/db/prepare-dev-deploy-db.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("assert_no_incomplete_dev_reset", prepare_runner)
+        self.assertIn("MARKER_PREEXISTED", prepare_runner)
+        self.assertLess(prepare_runner.index("run_dev_flyway -cleanDisabled=false clean"),
+                        prepare_runner.index("run_dev_flyway migrate"))
+        self.assertLess(prepare_runner.index("run_dev_flyway migrate"),
+                        prepare_runner.index("run_dev_flyway validate"))
+        self.assertLess(prepare_runner.index("run_dev_flyway validate"),
+                        prepare_runner.index("apply_dev_sql_directory"))
+
+    def test_main_sha_is_rechecked_before_db_mutation_and_restart(self):
+        sha_check = (
+            'current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" '
+            "--jq '.sha')\""
+        )
+        self.assertGreaterEqual(self.deploy_job.count(sha_check), 3)
+        first_check = self.deploy_job.index("- name: 현재 main SHA 확인")
+        db_guard = self.deploy_job.index("- name: dev DB 초기화 직전 현재 main SHA 재확인")
+        db_reset = self.deploy_job.index("./scripts/db/prepare-dev-deploy-db.sh")
+        restart_guard = self.deploy_job.index("- name: Compose 재시작 직전 현재 main SHA 재확인")
+        restart = self.deploy_job.index("up -d --remove-orphans")
+        self.assertLess(first_check, db_guard)
+        self.assertLess(db_guard, db_reset)
+        self.assertLess(db_reset, restart_guard)
+        self.assertLess(restart_guard, restart)
+
+    def test_legacy_migrations_are_manual_nightly_and_retained(self):
+        self.assertIn("workflow_dispatch:", self.legacy_migration)
+        self.assertIn("schedule:", self.legacy_migration)
+        self.assertIn("./gradlew legacyMigrationTest --no-daemon", self.legacy_migration)
+        self.assertIn("운영 데이터가 생기기 전", self.legacy_migration)
+        for source_name in (
+            "MatchingRequestV4MigrationTest.java",
+            "NotificationV5MigrationTest.java",
+        ):
+            source = (
+                ROOT / "src/integrationTest/java/org/sopt/ssingserver/database" / source_name
+            ).read_text(encoding="utf-8")
+            self.assertIn('@Tag("legacy-migration")', source)
 
     def test_disposable_db_check_does_not_reference_shared_dev_credentials(self):
         forbidden = (

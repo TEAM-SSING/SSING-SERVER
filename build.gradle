@@ -67,12 +67,17 @@ tasks.named('test') {
 }
 
 tasks.register('integrationTest', Test) {
-	description = 'Runs MySQL migration and seed contract tests.'
+	description = 'Runs sequential MySQL-backed integration tests.'
 	group = 'verification'
 	testClassesDirs = sourceSets.integrationTest.output.classesDirs
 	classpath = sourceSets.integrationTest.runtimeClasspath
 	shouldRunAfter tasks.named('test')
-	useJUnitPlatform()
+	maxParallelForks = 1
+	forkEvery = 0
+	systemProperty 'junit.jupiter.execution.parallel.enabled', 'false'
+	useJUnitPlatform {
+		excludeTags 'legacy-migration'
+	}
 
 	def shard = providers.gradleProperty('integrationTestShard').orNull
 	filter {
@@ -80,11 +85,15 @@ tasks.register('integrationTest', Test) {
 
 		switch (shard) {
 			case 'seed-migration':
+				includeTestsMatching 'org.sopt.ssingserver.database.DatabaseBootstrapContractTest'
 				includeTestsMatching 'org.sopt.ssingserver.database.DatabaseSeedContractTest'
+				includeTestsMatching 'org.sopt.ssingserver.database.MatchingRequestV4ConstraintIntegrationTest'
 				includeTestsMatching '*MigrationTest'
 				break
 			case 'application':
+				excludeTestsMatching 'org.sopt.ssingserver.database.DatabaseBootstrapContractTest'
 				excludeTestsMatching 'org.sopt.ssingserver.database.DatabaseSeedContractTest'
+				excludeTestsMatching 'org.sopt.ssingserver.database.MatchingRequestV4ConstraintIntegrationTest'
 				excludeTestsMatching '*MigrationTest'
 				break
 			case null:
@@ -92,6 +101,20 @@ tasks.register('integrationTest', Test) {
 			default:
 				throw new GradleException("Unsupported integrationTestShard: ${shard}")
 		}
+	}
+}
+
+tasks.register('legacyMigrationTest', Test) {
+	description = 'Runs historical V3→V4 and V4→V5 data-preservation contracts.'
+	group = 'verification'
+	testClassesDirs = sourceSets.integrationTest.output.classesDirs
+	classpath = sourceSets.integrationTest.runtimeClasspath
+	shouldRunAfter tasks.named('integrationTest')
+	maxParallelForks = 1
+	forkEvery = 0
+	systemProperty 'junit.jupiter.execution.parallel.enabled', 'false'
+	useJUnitPlatform {
+		includeTags 'legacy-migration'
 	}
 }
 

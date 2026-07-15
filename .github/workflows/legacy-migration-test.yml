@@ -1,0 +1,42 @@
+name: Legacy Migration Compatibility
+
+# Dev 데이터를 폐기할 수 있는 동안 PR 필수 경로에서는 제외한다.
+# 운영 데이터가 생기기 전에는 이 검증을 다시 PR 필수 CI로 올려야 한다.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 18 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legacy-migration-compatibility
+  cancel-in-progress: false
+
+jobs:
+  verify-legacy-migrations:
+    name: V3→V4·V4→V5 기존 데이터 보존
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+
+    steps:
+      - name: 저장소 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Java 21 실행 환경 준비
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Gradle 캐시와 실행 환경 준비
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 기존 데이터 보존 migration 계약 실행
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew legacyMigrationTest --no-daemon

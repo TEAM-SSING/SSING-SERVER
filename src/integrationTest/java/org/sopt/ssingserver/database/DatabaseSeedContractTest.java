@@ -1,7 +1,6 @@
 package org.sopt.ssingserver.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -23,31 +22,27 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.sopt.ssingserver.database.support.BaseSeedLoader;
+import org.sopt.ssingserver.database.support.DatabaseCleaner;
+import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
-import org.sopt.ssingserver.domain.matching.config.MatchingSearchSchedulerConfig;
 import org.sopt.ssingserver.domain.matching.service.MatchingEventDispatcher;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchScheduler;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.scheduling.config.TaskManagementConfigUtils;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -55,8 +50,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -74,38 +67,9 @@ import tools.jackson.databind.ObjectMapper;
 @Execution(ExecutionMode.SAME_THREAD)
 class DatabaseSeedContractTest {
 
-    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
-            .withDatabaseName("ssing_seed_contract")
-            .withUsername("ssing")
-            .withPassword("ssing");
-
-    private static final Flyway FLYWAY;
-
-    static {
-        MYSQL.start();
-        FLYWAY = Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
-                .validateMigrationNaming(true)
-                .failOnMissingLocations(true)
-                .validateOnMigrate(true)
-                .baselineOnMigrate(false)
-                .cleanDisabled(false)
-                .load();
-        FLYWAY.migrate();
-    }
-
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.datasource.driver-class-name", MYSQL::getDriverClassName);
-    }
-
-    @AfterAll
-    static void stopMysql() {
-        MYSQL.stop();
+        SharedMySqlDatabase.configureDatasource(registry);
     }
 
     @Autowired
@@ -126,37 +90,21 @@ class DatabaseSeedContractTest {
     @Autowired
     private MatchingSearchScheduler matchingSearchScheduler;
 
-    @Autowired
-    private ApplicationContext applicationContext;
-
     // 외부 실시간 전달만 후속 검증으로 분리하고, 요청부터 결제·강습 저장까지는 실제 빈으로 검증한다.
     @MockitoBean
     private MatchingEventDispatcher matchingEventDispatcher;
 
     @BeforeEach
     void resetDatabaseAndApplyBaseSeed() {
-        FLYWAY.clean();
-        FLYWAY.migrate();
-        runSql("db/seed/base/001_reference_data.sql");
-        runSql("db/seed/base/010_dev_personas.sql");
+        DatabaseCleaner.clean(dataSource);
+        BaseSeedLoader.apply(dataSource);
     }
 
     @ParameterizedTest(name = "{0} seed 계약")
     @MethodSource("scenarioKeys")
-    void 모든_scenario를_깨끗한_MySQL에서_독립적으로_검증한다(String scenarioKey) throws Exception {
+    void 모든_scenario를_초기화된_최신_schema에서_독립적으로_검증한다(String scenarioKey) throws Exception {
         assertScenarioContractFiles(scenarioKey);
         applyScenario(scenarioKey);
-    }
-
-    @Test
-    void integration_test에서는_예약_작업_자동_등록을_끄고_실제_매칭_scheduler_빈은_유지한다() {
-        assertThat(applicationContext.containsBean(
-                TaskManagementConfigUtils.SCHEDULED_ANNOTATION_PROCESSOR_BEAN_NAME
-        )).isFalse();
-        assertThat(applicationContext.getBeansOfType(MatchingSearchScheduler.class)).hasSize(1);
-        assertThat(applicationContext.containsBean(
-                MatchingSearchSchedulerConfig.MATCHING_SEARCH_TASK_SCHEDULER
-        )).isTrue();
     }
 
     @Test
@@ -216,49 +164,6 @@ class DatabaseSeedContractTest {
                 memberId
         )).isZero();
         assertNoActiveMatchingRequest(consumerToken);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"REQUESTED", "GROUPED", "MATCHED"})
-    void V4는_활성_상태마다_같은_소비자의_두번째_활성_요청을_DB에서_차단한다(String activeStatus) {
-        Long memberId = personaMemberId("consumer-default");
-        insertMatchingRequest(memberId, activeStatus);
-
-        assertThatThrownBy(() -> insertMatchingRequest(memberId, "REQUESTED"))
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("uk_matching_requests_active_negotiation_member");
-
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT active_negotiation_member_id FROM matching_requests WHERE member_id = ?",
-                Long.class,
-                memberId
-        )).isEqualTo(memberId);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"CONFIRMED", "COMPLETED", "CANCELED", "EXPIRED", "FAILED"})
-    void V4는_확정과_종료_이력을_여러건_허용하고_새_활성_요청도_허용한다(String historicalStatus) {
-        Long memberId = personaMemberId("consumer-default");
-        insertMatchingRequest(memberId, historicalStatus);
-        insertMatchingRequest(memberId, historicalStatus);
-        insertMatchingRequest(memberId, "REQUESTED");
-
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM matching_requests WHERE member_id = ?",
-                Integer.class,
-                memberId
-        )).isEqualTo(3);
-        assertThat(jdbcTemplate.queryForObject(
-                """
-                SELECT COUNT(*)
-                FROM matching_requests
-                WHERE member_id = ?
-                  AND active_negotiation_member_id = ?
-                """,
-                Integer.class,
-                memberId,
-                memberId
-        )).isEqualTo(1);
     }
 
     @Test
@@ -946,49 +851,6 @@ class DatabaseSeedContractTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.requestStatus").value("CANCELED"));
-    }
-
-    private void insertMatchingRequest(Long memberId, String status) {
-        Long resortId = jdbcTemplate.queryForObject(
-                "SELECT id FROM resorts WHERE code = 'HIGH1'",
-                Long.class
-        );
-        jdbcTemplate.update(
-                """
-                INSERT INTO matching_requests (
-                    headcount,
-                    is_equipment_ready,
-                    canceled_at,
-                    created_at,
-                    expires_at,
-                    matching_offer_id,
-                    member_id,
-                    resort_id,
-                    updated_at,
-                    lesson_level,
-                    sport,
-                    status,
-                    status_reason
-                ) VALUES (
-                    1,
-                    b'1',
-                    NULL,
-                    UTC_TIMESTAMP(6),
-                    NULL,
-                    NULL,
-                    ?,
-                    ?,
-                    UTC_TIMESTAMP(6),
-                    'BEGINNER',
-                    'SKI',
-                    ?,
-                    NULL
-                )
-                """,
-                memberId,
-                resortId,
-                status
-        );
     }
 
     private static Stream<String> scenarioKeys() throws Exception {

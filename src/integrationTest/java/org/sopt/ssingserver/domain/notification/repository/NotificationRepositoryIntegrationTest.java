@@ -6,12 +6,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.sopt.ssingserver.database.support.DatabaseCleaner;
+import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
 import org.sopt.ssingserver.domain.notification.entity.Notification;
 import org.sopt.ssingserver.domain.notification.enums.ClientApp;
 import org.sopt.ssingserver.global.config.JpaAuditingConfig;
@@ -23,8 +23,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
+import org.springframework.test.context.transaction.BeforeTransaction;
 
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=validate")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -35,32 +34,10 @@ class NotificationRepositoryIntegrationTest {
     private static final long MEMBER_ID = 101L;
     private static final long OTHER_MEMBER_ID = 102L;
     private static final Instant SINCE = Instant.parse("2026-07-08T00:00:00Z");
-    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
-            .withDatabaseName("ssing_notification_repository")
-            .withUsername("ssing")
-            .withPassword("ssing");
-    private static final Flyway FLYWAY;
-
-    static {
-        MYSQL.start();
-        FLYWAY = Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
-                .validateMigrationNaming(true)
-                .failOnMissingLocations(true)
-                .validateOnMigrate(true)
-                .baselineOnMigrate(false)
-                .cleanDisabled(false)
-                .load();
-        FLYWAY.migrate();
-    }
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.datasource.driver-class-name", MYSQL::getDriverClassName);
+        SharedMySqlDatabase.configureDatasource(registry);
     }
 
     @Autowired
@@ -69,23 +46,12 @@ class NotificationRepositoryIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @AfterEach
-    void cleanUp() {
-        jdbcTemplate.update(
-                "DELETE FROM notifications WHERE member_id IN (?, ?)",
-                MEMBER_ID,
-                OTHER_MEMBER_ID
-        );
-        jdbcTemplate.update(
-                "DELETE FROM members WHERE id IN (?, ?)",
-                MEMBER_ID,
-                OTHER_MEMBER_ID
-        );
-    }
+    @Autowired
+    private DataSource dataSource;
 
-    @AfterAll
-    static void stopMysql() {
-        MYSQL.stop();
+    @BeforeTransaction
+    void cleanDatabaseBeforeTransaction() {
+        DatabaseCleaner.clean(dataSource);
     }
 
     @Test

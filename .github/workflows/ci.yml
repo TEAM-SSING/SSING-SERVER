@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 # PR 검증과 main 반영 후 재검증 트리거
 on:
@@ -14,10 +14,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# 테스트 결과를 GitHub Check로 게시하는 최소 권한
+# 검증과 image build에 필요한 저장소 읽기 권한만 사용
 permissions:
   contents: read
-  checks: write
 
 jobs:
   verify:
@@ -31,10 +30,10 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - name: 애플리케이션·단위 테스트
+          - name: 애플리케이션·통합 테스트
             shard: application
             gradle-tasks: build
-          - name: Seed·Migration 테스트
+          - name: DB·Seed 테스트
             shard: seed-migration
             gradle-tasks: integrationTest
 
@@ -76,19 +75,64 @@ jobs:
           ./gradlew ${{ matrix.gradle-tasks }} \
             -PintegrationTestShard=${{ matrix.shard }}
 
-      - name: ${{ matrix.name }} 결과 게시
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: (!cancelled())
+  # main에서만 두 테스트와 독립적으로 ARM64 이미지를 미리 만든다.
+  build-dev-image:
+    name: Dev ARM64 이미지 빌드
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: dev
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: 저장소 코드 체크아웃
+        uses: actions/checkout@v4
         with:
-          check_name: ${{ matrix.name }} 결과
-          comment_mode: off
-          files: build/test-results/**/TEST-*.xml
+          persist-credentials: false
+
+      - name: Docker Hub 설정 확인
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for variable_name in DOCKERHUB_IMAGE DOCKERHUB_USERNAME DOCKERHUB_TOKEN; do
+            if [ -z "${!variable_name}" ]; then
+              echo "::error title=Docker Hub 설정 누락::${variable_name} 값이 없습니다."
+              exit 1
+            fi
+          done
+
+      - name: Docker Hub 로그인
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker Buildx 준비
+        uses: docker/setup-buildx-action@v3
+
+      - name: ARM64 Docker 이미지 빌드와 푸시
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ${{ vars.DOCKERHUB_IMAGE }}:dev-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy-dev:
     name: Dev 배포
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: verify
+    needs:
+      - verify
+      - build-dev-image
     uses: ./.github/workflows/deploy-dev.yml
     with:
       deploy_sha: ${{ github.sha }}
+      image_digest: ${{ needs.build-dev-image.outputs.image_digest }}
     secrets: inherit

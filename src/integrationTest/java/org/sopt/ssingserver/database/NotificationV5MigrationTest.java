@@ -6,31 +6,16 @@ import java.sql.Timestamp;
 import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
-import org.flywaydb.core.api.configuration.FluentConfiguration;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
+@Tag("legacy-migration")
 class NotificationV5MigrationTest {
 
-    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
-            .withDatabaseName("ssing_notification_v5_migration")
-            .withUsername("ssing")
-            .withPassword("ssing");
-    private static final JdbcTemplate JDBC_TEMPLATE;
-
-    static {
-        MYSQL.start();
-        JDBC_TEMPLATE = new JdbcTemplate(new DriverManagerDataSource(
-                MYSQL.getJdbcUrl(),
-                MYSQL.getUsername(),
-                MYSQL.getPassword()
-        ));
-    }
+    private static final JdbcTemplate JDBC_TEMPLATE = SharedMySqlDatabase.jdbcTemplate();
 
     @BeforeEach
     void migrateToV4() {
@@ -39,11 +24,6 @@ class NotificationV5MigrationTest {
         insertMember(1L, "CONSUMER");
         insertMember(2L, "INSTRUCTOR");
         insertMember(3L, "ADMIN");
-    }
-
-    @AfterAll
-    static void stopMysql() {
-        MYSQL.stop();
     }
 
     @Test
@@ -112,18 +92,7 @@ class NotificationV5MigrationTest {
     }
 
     private static Flyway flyway(MigrationVersion... targetVersion) {
-        FluentConfiguration configuration = Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
-                .validateMigrationNaming(true)
-                .failOnMissingLocations(true)
-                .validateOnMigrate(true)
-                .baselineOnMigrate(false)
-                .cleanDisabled(false);
-        if (targetVersion.length == 1) {
-            configuration.target(targetVersion[0]);
-        }
-        return configuration.load();
+        return SharedMySqlDatabase.newHistoricalMigrationFlyway(targetVersion);
     }
 
     private static void insertMember(long id, String role) {
