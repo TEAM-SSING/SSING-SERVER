@@ -6,14 +6,11 @@ on:
       - main
     paths:
       - "src/main/resources/db/migration/**"
-      - "src/main/java/org/sopt/ssingserver/domain/**/entity/**"
-      - "src/main/java/org/sopt/ssingserver/domain/**/enums/**"
-      - "src/main/java/org/sopt/ssingserver/global/entity/**"
       - "db/seed/**"
       - "scripts/db/**"
-      - "src/integrationTest/**"
       - "docker-compose.local.yml"
-      - "build.gradle"
+      - "deploy/docker-compose.dev.yml"
+      - ".github/workflows/ci.yml"
       - ".github/workflows/db-seed-check.yml"
       - ".github/workflows/deploy-dev.yml"
       - ".github/workflows/reset-dev-db.yml"
@@ -23,22 +20,22 @@ on:
       - main
     paths:
       - "src/main/resources/db/migration/**"
-      - "src/main/java/org/sopt/ssingserver/domain/**/entity/**"
-      - "src/main/java/org/sopt/ssingserver/domain/**/enums/**"
-      - "src/main/java/org/sopt/ssingserver/global/entity/**"
       - "db/seed/**"
       - "scripts/db/**"
-      - "src/integrationTest/**"
       - "docker-compose.local.yml"
-      - "build.gradle"
+      - "deploy/docker-compose.dev.yml"
+      - ".github/workflows/ci.yml"
       - ".github/workflows/db-seed-check.yml"
       - ".github/workflows/deploy-dev.yml"
       - ".github/workflows/reset-dev-db.yml"
       - "src/main/resources/application-dev.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
-  checks: write
 
 jobs:
   migration-and-seed:
@@ -49,27 +46,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-
-      - name: Java 21 실행 환경 준비
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Gradle 캐시와 실행 환경 준비
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: DB script 문법 검증
-        run: bash -n scripts/db/*.sh
-
-      - name: MySQL client 인증 파일 계약 검증
-        run: bash scripts/db/test-mysql-client-auth.sh
-
-      - name: dev DB 실행기 실패 상태 계약 검증
-        run: bash scripts/db/test-dev-runner-contract.sh
-
-      - name: dev DB workflow 보호장치 계약 검증
-        run: python3 scripts/db/test_dev_workflow_contract.py
 
       - name: 내부 reset 직접 실행 차단 검증
         run: |
@@ -94,18 +70,7 @@ jobs:
       - name: 모든 seed scenario local reset 검증
         env:
           SSING_LOCAL_DB_ROOT_PASSWORD: 'local seed #42;"quoted"=value'
-        run: |
-          ./scripts/db/reset-all-local.sh --confirm-local-reset
-          ./scripts/db/reset-all-local.sh --confirm-local-reset
-
-      - name: MySQL migration과 seed 계약 검증
-        run: ./gradlew integrationTest --no-daemon
-
-      - name: DB 테스트 결과 게시
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: (!cancelled())
-        with:
-          files: build/test-results/integrationTest/TEST-*.xml
+        run: ./scripts/db/reset-all-local.sh --confirm-local-reset
 
       - name: CI MySQL 정리
         if: always()

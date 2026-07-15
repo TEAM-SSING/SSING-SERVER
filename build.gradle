@@ -72,6 +72,26 @@ tasks.register('integrationTest', Test) {
 	classpath = sourceSets.integrationTest.runtimeClasspath
 	shouldRunAfter tasks.named('test')
 	useJUnitPlatform()
+
+	def shard = providers.gradleProperty('integrationTestShard').orNull
+	filter {
+		setFailOnNoMatchingTests(true)
+
+		switch (shard) {
+			case 'seed-migration':
+				includeTestsMatching 'org.sopt.ssingserver.database.DatabaseSeedContractTest'
+				includeTestsMatching '*MigrationTest'
+				break
+			case 'application':
+				excludeTestsMatching 'org.sopt.ssingserver.database.DatabaseSeedContractTest'
+				excludeTestsMatching '*MigrationTest'
+				break
+			case null:
+				break
+			default:
+				throw new GradleException("Unsupported integrationTestShard: ${shard}")
+		}
+	}
 }
 
 tasks.named('check') {
