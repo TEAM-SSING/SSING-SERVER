@@ -346,6 +346,40 @@ class InstructorMatchingRecoveryIntegrationTest {
                 .andExpect(jsonPath("$.data.offerStatus").doesNotExist());
     }
 
+    @Test
+    void ID없는_재확인API는_OFFERED여도_EXPOSED가_아닌_그룹의_제안을_제외한다() throws Exception {
+        Long consumerMemberId = personaMemberId("consumer-default");
+        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
+        String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
+
+        long matchingRequestId = createMatchingRequest(consumerToken);
+        Long groupId = jdbcTemplate.queryForObject(
+                "SELECT matching_request_group_id FROM matching_request_group_items WHERE matching_request_id = ?",
+                Long.class,
+                matchingRequestId
+        );
+        jdbcTemplate.update(
+                "UPDATE matching_request_groups SET status = 'CANCELED' WHERE id = ?",
+                groupId
+        );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM matching_offers WHERE matching_request_group_id = ?",
+                String.class,
+                groupId
+        )).isEqualTo("OFFERED");
+
+        MvcResult result = mockMvc.perform(get("/api/v1/instructor/matching-offers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode data = objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("data");
+
+        assertThat(data.has("offerId")).isTrue();
+        assertThat(data.path("offerId").isNull()).isTrue();
+        assertThat(data.path("matchingSetting").path("isExposed").asBoolean()).isTrue();
+    }
+
     private EventSubscription subscribe(String token, String destination) throws Exception {
         StompHeaders connectHeaders = new StompHeaders();
         connectHeaders.add(HttpHeaders.AUTHORIZATION, bearer(token));
