@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -50,10 +51,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class InstructorMatchingOfferService {
 
     private static final String IMMEDIATE_START_TYPE = "IMMEDIATE";
-    private static final List<MatchingRequestGroupStatus> RECOVERABLE_ACCEPTED_GROUP_STATUSES = List.of(
-            MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
-            MatchingRequestGroupStatus.PAYMENT_PENDING
-    );
 
     private final InstructorProfileRepository instructorProfileRepository;
     private final MatchingOfferRepository matchingOfferRepository;
@@ -101,7 +98,7 @@ public class InstructorMatchingOfferService {
         );
     }
 
-    // 홈의 offerId로 I07/I08 화면을 다시 열 때 현재 활성 협상 snapshot을 제공한다.
+    // 제안 존재·소유권을 먼저 확인한 뒤 복구 가능하면 상세를, 종료됐으면 STALE만 반환한다.
     @Transactional(readOnly = true)
     public InstructorMatchingOfferDetailResult getOfferDetail(
             Long memberId,
@@ -111,7 +108,10 @@ public class InstructorMatchingOfferService {
         MatchingOffer matchingOffer = matchingOfferRepository.findDetailById(offerId)
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND));
         validateOfferOwner(instructorProfile, matchingOffer);
-        validateRecoverableOffer(matchingOffer);
+        Optional<MatchingStatus> matchingStatus = resolveRecoveryMatchingStatus(matchingOffer);
+        if (matchingStatus.isEmpty()) {
+            return InstructorMatchingOfferDetailResult.stale(matchingOffer.getId());
+        }
 
         List<MatchingRequestGroupItem> groupItems = matchingRequestGroupItemRepository
                 .findByMatchingRequestGroupIdOrderByIdAsc(matchingOffer.getMatchingRequestGroup().getId());
@@ -125,12 +125,12 @@ public class InstructorMatchingOfferService {
         );
         List<InstructorMatchingOfferDetailResult.ParticipantResult> participants = findParticipants(groupItems);
 
-        return new InstructorMatchingOfferDetailResult(
+        return InstructorMatchingOfferDetailResult.available(
                 item.offerId(),
                 item.groupId(),
                 item.offerStatus(),
                 matchingOffer.getMatchingRequestGroup().getStatus(),
-                resolveDetailMatchingStatus(matchingOffer),
+                matchingStatus.get(),
                 item.requestSummary(),
                 item.lessonSummary(),
                 item.priceSummary(),
@@ -386,26 +386,23 @@ public class InstructorMatchingOfferService {
         }
     }
 
-    private void validateRecoverableOffer(MatchingOffer matchingOffer) {
+    // offer/group 상태 조합을 한곳에서 매핑해 복구 가능 여부와 화면 상태가 어긋나지 않게 한다.
+    private Optional<MatchingStatus> resolveRecoveryMatchingStatus(MatchingOffer matchingOffer) {
+        MatchingOfferStatus offerStatus = matchingOffer.getStatus();
         MatchingRequestGroupStatus groupStatus = matchingOffer.getMatchingRequestGroup().getStatus();
-        boolean recoverable = (matchingOffer.getStatus() == MatchingOfferStatus.OFFERED
-                && groupStatus == MatchingRequestGroupStatus.EXPOSED)
-                || (matchingOffer.getStatus() == MatchingOfferStatus.ACCEPTED
-                && RECOVERABLE_ACCEPTED_GROUP_STATUSES.contains(groupStatus));
-        if (!recoverable) {
-            // 홈 조회가 확정 강습의 lessonId 또는 종료 상태를 최종 기준으로 다시 결정한다.
-            throw new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND);
-        }
-    }
 
-    private MatchingStatus resolveDetailMatchingStatus(
-            MatchingOffer matchingOffer
-    ) {
-        return switch (matchingOffer.getMatchingRequestGroup().getStatus()) {
-            case EXPOSED -> MatchingStatus.WAITING_FOR_INSTRUCTOR;
-            case INSTRUCTOR_ACCEPTED -> MatchingStatus.WAITING_FOR_CONFIRMATION;
-            case PAYMENT_PENDING -> MatchingStatus.PAYMENT_PENDING;
-            default -> throw new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND);
+        if (offerStatus == MatchingOfferStatus.OFFERED
+                && groupStatus == MatchingRequestGroupStatus.EXPOSED) {
+            return Optional.of(MatchingStatus.WAITING_FOR_INSTRUCTOR);
+        }
+        if (offerStatus != MatchingOfferStatus.ACCEPTED) {
+            return Optional.empty();
+        }
+
+        return switch (groupStatus) {
+            case INSTRUCTOR_ACCEPTED -> Optional.of(MatchingStatus.WAITING_FOR_CONFIRMATION);
+            case PAYMENT_PENDING -> Optional.of(MatchingStatus.PAYMENT_PENDING);
+            default -> Optional.empty();
         };
     }
 

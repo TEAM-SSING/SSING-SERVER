@@ -482,7 +482,8 @@ class DatabaseSeedContractTest {
                 .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
                 .andExpect(jsonPath("$.data.matchingStatus").value("WAITING_FOR_INSTRUCTOR"))
                 .andExpect(jsonPath("$.data.requestStatus").value("GROUPED"))
-                .andExpect(jsonPath("$.data.offerStatus").value("OFFERED"));
+                .andExpect(jsonPath("$.data.offerStatus").value("OFFERED"))
+                .andExpect(jsonPath("$.data.recoveryState").doesNotExist());
     }
 
     private void assertActiveMatchingReadback(
@@ -494,6 +495,7 @@ class DatabaseSeedContractTest {
         mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
                 .andExpect(jsonPath("$.data.matchingStatus").value(matchingStatus))
                 .andExpect(jsonPath("$.data.requestStatus").value(requestStatus));
@@ -508,6 +510,7 @@ class DatabaseSeedContractTest {
         mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
                 .andExpect(jsonPath("$.data.matchingStatus").value("WAITING_FOR_CONFIRMATION"))
                 .andExpect(jsonPath("$.data.requestStatus").value("MATCHED"))
@@ -527,6 +530,7 @@ class DatabaseSeedContractTest {
         mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.matchingRequestId").value(matchingRequestId))
                 .andExpect(jsonPath("$.data.matchingStatus").value("PAYMENT_PENDING"))
                 .andExpect(jsonPath("$.data.requestStatus").value("MATCHED"))
@@ -540,8 +544,12 @@ class DatabaseSeedContractTest {
     private void assertNoActiveMatchingRequest(String consumerToken) throws Exception {
         mockMvc.perform(get("/api/v1/consumer/matching-requests/active")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
-                .andExpect(status().isNoContent())
-                .andExpect(result -> assertThat(result.getResponse().getContentAsByteArray()).isEmpty());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.recoveryState").value("NONE"))
+                .andExpect(jsonPath("$.data.matchingRequestId").doesNotExist())
+                .andExpect(jsonPath("$.data.matchingStatus").doesNotExist());
     }
 
     private void assertConsumerHomeLessonReadback(String consumerToken, long lessonId) throws Exception {

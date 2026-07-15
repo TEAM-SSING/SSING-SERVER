@@ -28,6 +28,40 @@ class ConsumerMatchingStatusResponseTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
+    void activeRecovery는_ACTIVE와_기존_flat필드를_반환하고_ID조회전용필드는_제외한다() throws Exception {
+        MatchingStatusQueryResult result = new MatchingStatusQueryResult(
+                10L,
+                MatchingStatus.WAITING_FOR_CONFIRMATION,
+                MatchingRequestStatus.MATCHED,
+                null,
+                20L,
+                MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
+                MatchingRequestGroupItemStatus.PENDING,
+                MatchingOfferStatus.ACCEPTED,
+                null,
+                MatchingProgressSummaryResult.confirmation(1, 2),
+                Instant.parse("2026-07-07T00:10:00Z"),
+                null,
+                30L,
+                priceSummary()
+        );
+
+        String json = objectMapper.writeValueAsString(ConsumerActiveMatchingResponse.active(result));
+
+        assertThat(json).contains("\"recoveryState\":\"ACTIVE\"");
+        assertThat(json).contains("\"matchingRequestId\":10");
+        assertThat(json).contains("\"matchingStatus\":\"WAITING_FOR_CONFIRMATION\"");
+        assertThat(json).doesNotContain("payload", "expiresAt", "lessonId");
+    }
+
+    @Test
+    void activeRecovery는_활성요청이_없으면_NONE만_반환한다() throws Exception {
+        String json = objectMapper.writeValueAsString(ConsumerActiveMatchingResponse.none());
+
+        assertThat(json).isEqualTo("{\"recoveryState\":\"NONE\"}");
+    }
+
+    @Test
     void from은_SEARCHING_응답에서_null_선택필드를_JSON에서_제외한다() throws Exception {
         MatchingStatusQueryResult result = new MatchingStatusQueryResult(
                 10L,

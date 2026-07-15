@@ -2,17 +2,18 @@ package org.sopt.ssingserver.domain.matching.controller.docs;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
+import org.sopt.ssingserver.domain.matching.dto.response.ConsumerActiveMatchingResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.ConsumerMatchingStatusResponse;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.sopt.ssingserver.global.swagger.error.ApiErrorCodes;
+import org.sopt.ssingserver.global.swagger.success.ApiSuccessExamples;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 
@@ -24,12 +25,8 @@ public interface MatchingApiDocs {
             description = "앱 재진입 또는 WebSocket 이벤트 유실 시 인증된 소비자의 활성 매칭을 서버 기준으로 다시 찾습니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
-    @ApiResponse(responseCode = "200", description = "활성 매칭 현재 상태 조회 성공")
-    @ApiResponse(
-            responseCode = "204",
-            description = "활성 매칭 요청 없음",
-            content = @Content
-    )
+    @ApiResponse(responseCode = "200", description = "활성 매칭 복구 상태 조회 성공(ACTIVE 또는 NONE)")
+    @ApiSuccessExamples(MatchingApiExamples.ConsumerActive.class)
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {"UNAUTHENTICATED", "FORBIDDEN", "INTERNAL_ERROR"}
@@ -38,7 +35,7 @@ public interface MatchingApiDocs {
             type = AuthErrorCode.class,
             names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
     )
-    ResponseEntity<BaseResponse<ConsumerMatchingStatusResponse>> getActiveStatus(
+    ResponseEntity<BaseResponse<ConsumerActiveMatchingResponse>> getActiveStatus(
             @Parameter(hidden = true)
             CurrentMember currentMember
     );

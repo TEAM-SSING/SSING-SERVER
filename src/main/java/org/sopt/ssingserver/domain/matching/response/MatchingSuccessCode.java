@@ -10,7 +10,6 @@ import org.springframework.http.HttpStatus;
 public enum MatchingSuccessCode implements SuccessCode {
 
     MATCHING_REQUEST_CREATED(HttpStatus.CREATED, "매칭 요청이 생성되었습니다."),
-    NO_ACTIVE_MATCHING_REQUEST(HttpStatus.NO_CONTENT, "진행 중인 매칭 요청이 없습니다."),
     MATCHING_REQUEST_CANCELED(HttpStatus.OK, "매칭 요청이 취소되었습니다."),
     MATCHING_OFFER_RESPONDED(HttpStatus.OK, "매칭 제안 응답이 반영되었습니다."),
     MATCHING_CONFIRMATION_UPDATED(HttpStatus.OK, "매칭 응답이 반영되었습니다."),

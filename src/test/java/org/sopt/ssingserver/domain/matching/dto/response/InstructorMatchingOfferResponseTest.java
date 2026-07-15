@@ -85,7 +85,7 @@ class InstructorMatchingOfferResponseTest {
 
     @Test
     void offerDetail은_현재활성협상의_화면상태를_반환하고_무기한대기만료필드는_포함하지_않는다() throws Exception {
-        InstructorMatchingOfferDetailResult result = new InstructorMatchingOfferDetailResult(
+        InstructorMatchingOfferDetailResult result = InstructorMatchingOfferDetailResult.available(
                 21L,
                 3L,
                 MatchingOfferStatus.ACCEPTED,
@@ -102,6 +102,7 @@ class InstructorMatchingOfferResponseTest {
 
         String json = objectMapper.writeValueAsString(InstructorMatchingOfferDetailResponse.from(result));
 
+        assertThat(json).contains("\"recoveryState\":\"AVAILABLE\"");
         assertThat(json).contains("\"offerStatus\":\"ACCEPTED\"");
         assertThat(json).contains("\"groupStatus\":\"INSTRUCTOR_ACCEPTED\"");
         assertThat(json).contains("\"matchingStatus\":\"WAITING_FOR_CONFIRMATION\"");
@@ -109,6 +110,16 @@ class InstructorMatchingOfferResponseTest {
         assertThat(json).contains("\"participants\":[{\"age\":10,\"gender\":\"MALE\"},{\"age\":12,\"gender\":\"FEMALE\"}]");
         assertThat(json).doesNotContain("participantId");
         assertThat(json).doesNotContain("expiresAt");
+    }
+
+    @Test
+    void offerDetail은_STALE이면_recoveryState와_offerId만_반환한다() throws Exception {
+        InstructorMatchingOfferDetailResult result = InstructorMatchingOfferDetailResult.stale(21L);
+
+        String json = objectMapper.writeValueAsString(InstructorMatchingOfferDetailResponse.from(result));
+
+        assertThat(json).isEqualTo("{\"recoveryState\":\"STALE\",\"offerId\":21}");
+        assertThat(json).doesNotContain("matchingStatus", "groupStatus", "participants", "priceSummary");
     }
 
     @Test

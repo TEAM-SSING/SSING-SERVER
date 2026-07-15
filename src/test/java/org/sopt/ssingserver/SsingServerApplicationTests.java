@@ -410,8 +410,116 @@ class SsingServerApplicationTests {
 	}
 
 	@Test
-	void generatedOpenApiDocumentsInstructorMatchingRecoveryContract() throws Exception {
+	void generatedOpenApiDocumentsMatchingRecoveryContracts() throws Exception {
 		JsonNode openApi = generatedOpenApi();
+		JsonNode schemas = openApi.path("components").path("schemas");
+
+		assertThat(schemaReferences(schemas.path("ConsumerActiveMatchingResponse").path("oneOf")))
+				.containsExactlyInAnyOrder(
+						"#/components/schemas/ConsumerActiveMatchingActive",
+						"#/components/schemas/ConsumerActiveMatchingNone"
+				);
+		assertRecoveryDiscriminatorMapping(
+				schemas,
+				"ConsumerActiveMatchingResponse",
+				"ACTIVE",
+				"#/components/schemas/ConsumerActiveMatchingActive"
+		);
+		assertRecoveryDiscriminatorMapping(
+				schemas,
+				"ConsumerActiveMatchingResponse",
+				"NONE",
+				"#/components/schemas/ConsumerActiveMatchingNone"
+		);
+		JsonNode consumerBaseSchema = schemas.path("ConsumerActiveMatchingResponse");
+		assertThat(consumerBaseSchema.path("properties").has("recoveryState")).isTrue();
+		assertThat(textValues(consumerBaseSchema.path("required"))).contains("recoveryState");
+		assertThat(textValues(consumerBaseSchema.path("properties").path("recoveryState").path("enum")))
+				.containsExactlyInAnyOrder("ACTIVE", "NONE");
+
+		JsonNode consumerActiveProperties = schemas.path("ConsumerActiveMatchingActive").path("properties");
+		assertThat(consumerActiveProperties.has("recoveryState")).isTrue();
+		assertThat(consumerActiveProperties.has("matchingRequestId")).isTrue();
+		assertThat(consumerActiveProperties.has("matchingStatus")).isTrue();
+		assertThat(consumerActiveProperties.has("requestStatus")).isTrue();
+		assertThat(consumerActiveProperties.has("expiresAt")).isFalse();
+		assertThat(consumerActiveProperties.has("lessonId")).isFalse();
+		assertThat(consumerActiveProperties.has("payload")).isFalse();
+		assertThat(textValues(schemas.path("ConsumerActiveMatchingActive").path("required")))
+				.contains("recoveryState", "matchingRequestId");
+		assertThat(textValues(consumerActiveProperties.path("recoveryState").path("enum")))
+				.containsExactly("ACTIVE");
+		assertThat(textValues(consumerActiveProperties.path("requestStatus").path("enum")))
+				.containsExactlyInAnyOrder("REQUESTED", "GROUPED", "MATCHED");
+		JsonNode consumerNoneProperties = schemas.path("ConsumerActiveMatchingNone").path("properties");
+		assertThat(consumerNoneProperties.has("recoveryState")).isTrue();
+		assertThat(consumerNoneProperties.size()).isEqualTo(1);
+		assertThat(textValues(schemas.path("ConsumerActiveMatchingNone").path("required")))
+				.contains("recoveryState");
+		assertThat(textValues(consumerNoneProperties.path("recoveryState").path("enum")))
+				.containsExactly("NONE");
+
+		JsonNode consumerOperation = findOperation(
+				openApi,
+				"GET /api/v1/consumer/matching-requests/active"
+		);
+		JsonNode consumerResponses = consumerOperation.path("responses");
+		assertThat(consumerResponses.has("200")).isTrue();
+		assertThat(consumerResponses.has("204")).isFalse();
+		assertThat(consumerResponses.path("200")
+				.path("content")
+				.path("application/json")
+				.path("schema")
+				.path("properties")
+				.path("data")
+				.path("$ref")
+				.asString()).isEqualTo("#/components/schemas/ConsumerActiveMatchingResponse");
+		JsonNode consumerExamples = consumerResponses.path("200")
+				.path("content")
+				.path("application/json")
+				.path("examples");
+		assertThat(consumerExamples.has("ACTIVE")).isTrue();
+		assertThat(consumerExamples.has("NONE")).isTrue();
+		assertThat(consumerExamples.path("ACTIVE").path("value").path("data")
+				.path("recoveryState").asString()).isEqualTo("ACTIVE");
+		assertThat(consumerExamples.path("ACTIVE").path("value").path("data").has("payload")).isFalse();
+		assertThat(consumerExamples.path("NONE").path("value").path("data")
+				.path("recoveryState").asString()).isEqualTo("NONE");
+		assertThat(consumerExamples.path("NONE").path("value").path("data").size()).isEqualTo(1);
+		assertThat(findOperation(openApi, "GET /api/v1/consumer/matching-requests/{matchingRequestId}")
+				.path("responses")
+				.path("200")
+				.path("content")
+				.path("application/json")
+				.path("schema")
+				.path("properties")
+				.path("data")
+				.path("$ref")
+				.asString()).isEqualTo("#/components/schemas/ConsumerMatchingStatusResponse");
+
+		assertThat(schemaReferences(schemas.path("InstructorMatchingOfferDetailResponse").path("oneOf")))
+				.containsExactlyInAnyOrder(
+						"#/components/schemas/InstructorMatchingOfferDetailAvailable",
+						"#/components/schemas/InstructorMatchingOfferDetailStale"
+				);
+		assertRecoveryDiscriminatorMapping(
+				schemas,
+				"InstructorMatchingOfferDetailResponse",
+				"AVAILABLE",
+				"#/components/schemas/InstructorMatchingOfferDetailAvailable"
+		);
+		assertRecoveryDiscriminatorMapping(
+				schemas,
+				"InstructorMatchingOfferDetailResponse",
+				"STALE",
+				"#/components/schemas/InstructorMatchingOfferDetailStale"
+		);
+		JsonNode instructorBaseSchema = schemas.path("InstructorMatchingOfferDetailResponse");
+		assertThat(instructorBaseSchema.path("properties").has("recoveryState")).isTrue();
+		assertThat(textValues(instructorBaseSchema.path("required"))).contains("recoveryState");
+		assertThat(textValues(instructorBaseSchema.path("properties").path("recoveryState").path("enum")))
+				.containsExactlyInAnyOrder("AVAILABLE", "STALE");
+
 		JsonNode detailOperation = findOperation(
 				openApi,
 				"GET /api/v1/instructor/matching-offers/{offerId}"
@@ -429,10 +537,35 @@ class SsingServerApplicationTests {
 				.path("examples")
 				.has("MATCHING_OFFER_NOT_FOUND")).isTrue();
 
-		JsonNode detailProperties = openApi.path("components")
-				.path("schemas")
-				.path("InstructorMatchingOfferDetailResponse")
-				.path("properties");
+		assertThat(detailResponses.path("200")
+				.path("content")
+				.path("application/json")
+				.path("schema")
+				.path("properties")
+				.path("data")
+				.path("$ref")
+				.asString()).isEqualTo("#/components/schemas/InstructorMatchingOfferDetailResponse");
+		JsonNode detailExamples = detailResponses.path("200")
+				.path("content")
+				.path("application/json")
+				.path("examples");
+		assertThat(detailExamples.has("AVAILABLE")).isTrue();
+		assertThat(detailExamples.has("STALE")).isTrue();
+		assertThat(detailExamples.path("AVAILABLE").path("value").path("data")
+				.path("recoveryState").asString()).isEqualTo("AVAILABLE");
+		assertThat(detailExamples.path("STALE").path("value").path("data")
+				.path("recoveryState").asString()).isEqualTo("STALE");
+		assertThat(detailExamples.path("STALE").path("value").path("data").has("matchingStatus")).isFalse();
+
+		JsonNode instructorAvailableSchema = schemas.path("InstructorMatchingOfferDetailAvailable");
+		assertThat(instructorAvailableSchema.path("description").asString())
+				.contains(
+						"OFFERED + EXPOSED + WAITING_FOR_INSTRUCTOR",
+						"ACCEPTED + INSTRUCTOR_ACCEPTED + WAITING_FOR_CONFIRMATION",
+						"ACCEPTED + PAYMENT_PENDING + PAYMENT_PENDING"
+				);
+		JsonNode detailProperties = instructorAvailableSchema.path("properties");
+		assertThat(detailProperties.has("recoveryState")).isTrue();
 		assertThat(detailProperties.has("offerId")).isTrue();
 		assertThat(detailProperties.has("groupId")).isTrue();
 		assertThat(detailProperties.has("matchingStatus")).isTrue();
@@ -440,17 +573,36 @@ class SsingServerApplicationTests {
 		assertThat(detailProperties.has("lessonSummary")).isTrue();
 		assertThat(detailProperties.has("priceSummary")).isTrue();
 		assertThat(detailProperties.has("participants")).isTrue();
+		assertThat(textValues(schemas.path("InstructorMatchingOfferDetailAvailable").path("required")))
+				.contains("recoveryState", "offerId");
+		assertThat(textValues(detailProperties.path("recoveryState").path("enum")))
+				.containsExactly("AVAILABLE");
+		assertThat(textValues(detailProperties.path("offerStatus").path("enum")))
+				.containsExactlyInAnyOrder("OFFERED", "ACCEPTED");
+		assertThat(textValues(detailProperties.path("groupStatus").path("enum")))
+				.containsExactlyInAnyOrder("EXPOSED", "INSTRUCTOR_ACCEPTED", "PAYMENT_PENDING");
+		assertThat(textValues(detailProperties.path("matchingStatus").path("enum")))
+				.containsExactlyInAnyOrder(
+						"WAITING_FOR_INSTRUCTOR",
+						"WAITING_FOR_CONFIRMATION",
+						"PAYMENT_PENDING"
+				);
 		JsonNode participantItems = detailProperties.path("participants").path("items");
 		assertThat(participantItems.path("$ref").asString())
 				.isEqualTo("#/components/schemas/InstructorMatchingOfferParticipant");
-		JsonNode participantProperties = openApi.path("components")
-				.path("schemas")
-				.path("InstructorMatchingOfferParticipant")
-				.path("properties");
+		JsonNode participantProperties = schemas.path("InstructorMatchingOfferParticipant").path("properties");
 		assertThat(participantProperties.has("age")).isTrue();
 		assertThat(participantProperties.has("gender")).isTrue();
 		assertThat(participantProperties.size()).isEqualTo(2);
 		assertThat(detailProperties.has("expiresAt")).isFalse();
+		JsonNode staleProperties = schemas.path("InstructorMatchingOfferDetailStale").path("properties");
+		assertThat(staleProperties.has("recoveryState")).isTrue();
+		assertThat(staleProperties.has("offerId")).isTrue();
+		assertThat(staleProperties.size()).isEqualTo(2);
+		assertThat(textValues(schemas.path("InstructorMatchingOfferDetailStale").path("required")))
+				.contains("recoveryState", "offerId");
+		assertThat(textValues(staleProperties.path("recoveryState").path("enum")))
+				.containsExactly("STALE");
 	}
 
 	@Test
@@ -478,7 +630,6 @@ class SsingServerApplicationTests {
 		assertNoContentResponse(openApi, "POST /api/v1/auth/logout");
 		assertNoContentResponse(openApi, "PUT /api/v1/fcm-tokens");
 		assertNoContentResponse(openApi, "POST /api/v1/fcm-tokens/unregister");
-		assertNoContentResponse(openApi, "GET /api/v1/consumer/matching-requests/active");
 		assertThat(findOperation(openApi, "POST /api/v1/consumer/matching-requests")
 				.path("responses").has("201")).isTrue();
 		assertThat(findOperation(openApi, "POST /api/v1/consumer/matching-requests")
@@ -516,6 +667,12 @@ class SsingServerApplicationTests {
 		return references;
 	}
 
+	private Set<String> textValues(JsonNode values) {
+		Set<String> texts = new TreeSet<>();
+		values.forEach(value -> texts.add(value.asString()));
+		return texts;
+	}
+
 	private void assertDiscriminatorMapping(
 			JsonNode schemas,
 			String schemaName,
@@ -525,6 +682,18 @@ class SsingServerApplicationTests {
 		assertThat(schemas.path(schemaName).path("discriminator").path("propertyName").asString())
 				.isEqualTo("lessonStatus");
 		assertThat(schemas.path(schemaName).path("discriminator").path("mapping").path(lessonStatus).asString())
+				.isEqualTo(expectedSchemaReference);
+	}
+
+	private void assertRecoveryDiscriminatorMapping(
+			JsonNode schemas,
+			String schemaName,
+			String recoveryState,
+			String expectedSchemaReference
+	) {
+		assertThat(schemas.path(schemaName).path("discriminator").path("propertyName").asString())
+				.isEqualTo("recoveryState");
+		assertThat(schemas.path(schemaName).path("discriminator").path("mapping").path(recoveryState).asString())
 				.isEqualTo(expectedSchemaReference);
 	}
 

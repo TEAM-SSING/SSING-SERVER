@@ -226,6 +226,7 @@ class InstructorMatchingRecoveryIntegrationTest {
         mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("AVAILABLE"))
                 .andExpect(jsonPath("$.data.offerId").value(offerId))
                 .andExpect(jsonPath("$.data.groupId").value(groupId))
                 .andExpect(jsonPath("$.data.offerStatus").value("ACCEPTED"))
@@ -274,6 +275,7 @@ class InstructorMatchingRecoveryIntegrationTest {
         mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("AVAILABLE"))
                 .andExpect(jsonPath("$.data.offerId").value(offerId))
                 .andExpect(jsonPath("$.data.groupId").value(groupId))
                 .andExpect(jsonPath("$.data.offerStatus").value("ACCEPTED"))
@@ -285,12 +287,14 @@ class InstructorMatchingRecoveryIntegrationTest {
 
         mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value("MATCHING_OFFER_NOT_FOUND"))
-                .andExpect(jsonPath("$.errors").doesNotExist())
-                .andExpect(jsonPath("$.data").doesNotExist())
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.recoveryState").value("STALE"))
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.groupId").doesNotExist())
+                .andExpect(jsonPath("$.data.matchingStatus").doesNotExist())
+                .andExpect(jsonPath("$.data.participants").doesNotExist());
 
         MvcResult homeResult = mockMvc.perform(get("/api/v1/instructor/home")
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
@@ -305,7 +309,7 @@ class InstructorMatchingRecoveryIntegrationTest {
     }
 
     @Test
-    void 다른승인강사와_종료된제안의_상세조회는_MATCHING_OFFER_NOT_FOUND를_반환한다() throws Exception {
+    void 다른강사와_없는제안은_404이고_본인종료제안은_STALE을_반환한다() throws Exception {
         Long consumerMemberId = personaMemberId("consumer-default");
         Long instructorMemberId = personaMemberId("instructor-approved-default");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
@@ -327,10 +331,18 @@ class InstructorMatchingRecoveryIntegrationTest {
         );
 
         assertOfferDetailNotFound(otherInstructorToken, offerId);
+        assertOfferDetailNotFound(instructorToken, Long.MAX_VALUE);
 
         respondInstructorOffer(instructorToken, offerId, MatchingOfferDecision.REJECTED);
 
-        assertOfferDetailNotFound(instructorToken, offerId);
+        assertOfferDetailNotFound(otherInstructorToken, offerId);
+
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("STALE"))
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.offerStatus").doesNotExist());
     }
 
     private EventSubscription subscribe(String token, String destination) throws Exception {
