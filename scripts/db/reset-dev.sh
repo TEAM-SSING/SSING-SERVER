@@ -177,7 +177,8 @@ dev_require_command docker
 dev_require_command curl
 assert_dev_reset_artifacts "$SAFE_SCENARIO"
 assert_dev_target
-assert_dev_account_separation true
+assert_dev_account_separation
+select_dev_migration_account
 
 require_dev_value SSING_RESET_COMMIT_SHA
 [[ "$SSING_RESET_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] \
@@ -213,9 +214,6 @@ running_image="$(sudo docker inspect --format '{{.Config.Image}}' ssing-dev-app 
 [[ "$running_image" == "$deployed_image" ]] \
   || dev_fail "실행 중인 앱 이미지와 마지막 배포 설정이 다릅니다. 먼저 dev 배포 상태를 복구하세요."
 
-select_dev_db_account reset
-assert_dev_connection_contract
-select_dev_db_account migration
 assert_dev_connection_contract
 LAST_SUCCESS_STAGE="대상·권한·UTF-8 사전 검사"
 
@@ -233,18 +231,14 @@ LAST_SUCCESS_STAGE="앱 중지"
 CURRENT_STAGE="Flyway clean"
 CLEAN_STARTED=true
 DB_STATE="초기화 진행 중 또는 부분 상태"
-select_dev_db_account reset
 run_dev_flyway -cleanDisabled=false clean
 LAST_SUCCESS_STAGE="Flyway clean"
 
-CURRENT_STAGE="Flyway migrate와 validate"
-select_dev_db_account migration
+CURRENT_STAGE="Flyway migrate"
 run_dev_flyway migrate
-run_dev_flyway validate
-LAST_SUCCESS_STAGE="Flyway migrate와 validate"
+LAST_SUCCESS_STAGE="Flyway migrate"
 
 CURRENT_STAGE="Base Seed 적용"
-select_dev_db_account reset
 apply_dev_sql_directory "$PROJECT_ROOT/db/seed/base"
 LAST_SUCCESS_STAGE="Base Seed 적용"
 
@@ -264,15 +258,13 @@ if [[ "$SAFE_SCENARIO" == "pm-full-requested-catalog" ]]; then
   LAST_SUCCESS_STAGE="PM dev playground 적용과 검증"
 fi
 
-CURRENT_STAGE="최종 Flyway migrate와 validate"
-select_dev_db_account migration
-run_dev_flyway migrate
+CURRENT_STAGE="최종 Flyway validate와 연결 검증"
 run_dev_flyway validate
 assert_dev_connection_contract
 DB_VERIFIED=true
 DB_STATE="Seed와 migration 검증 완료"
 clear_dev_reset_marker
-LAST_SUCCESS_STAGE="DB 최종 검증"
+LAST_SUCCESS_STAGE="Flyway와 DB 최종 검증"
 
 CURRENT_STAGE="앱 정상 재기동"
 APP_STOPPED=false
