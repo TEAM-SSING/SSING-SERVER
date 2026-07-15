@@ -77,16 +77,13 @@ public class InstructorMatchingOfferService {
         if (activeOfferIds.size() > 1) {
             throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
         }
-        Optional<InstructorMatchingSetting> matchingSettingOptional = instructorMatchingSettingRepository
-                .findByInstructorProfileId(instructorProfile.getId());
-        if (matchingSettingOptional.isEmpty()) {
-            if (!activeOfferIds.isEmpty()) {
-                throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
-            }
-            throw new BusinessException(MatchingErrorCode.MATCHING_NOT_ACTIVE);
-        }
-
-        InstructorMatchingSetting matchingSetting = matchingSettingOptional.get();
+        InstructorMatchingSetting matchingSetting = instructorMatchingSettingRepository
+                .findByInstructorProfileId(instructorProfile.getId())
+                .orElseThrow(() -> new BusinessException(
+                        activeOfferIds.isEmpty()
+                                ? MatchingErrorCode.MATCHING_NOT_ACTIVE
+                                : CommonErrorCode.INTERNAL_ERROR
+                ));
         if (activeOfferIds.isEmpty() && !matchingSetting.isExposed()) {
             throw new BusinessException(MatchingErrorCode.MATCHING_NOT_ACTIVE);
         }
@@ -133,13 +130,12 @@ public class InstructorMatchingOfferService {
         MatchingOffer matchingOffer = matchingOfferRepository.findDetailById(offerId)
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_OFFER_NOT_FOUND));
         validateOfferOwner(instructorProfile, matchingOffer);
-        Optional<MatchingStatus> matchingStatus = resolveRecoveryMatchingStatus(matchingOffer);
-        if (matchingStatus.isEmpty()) {
-            if (isClosedMatching(matchingOffer)) {
-                throw new BusinessException(MatchingErrorCode.MATCHING_NOT_ACTIVE);
-            }
-            throw new BusinessException(CommonErrorCode.INTERNAL_ERROR);
-        }
+        MatchingStatus matchingStatus = resolveRecoveryMatchingStatus(matchingOffer)
+                .orElseThrow(() -> new BusinessException(
+                        isClosedMatching(matchingOffer)
+                                ? MatchingErrorCode.MATCHING_NOT_ACTIVE
+                                : CommonErrorCode.INTERNAL_ERROR
+                ));
 
         List<MatchingRequestGroupItem> groupItems = matchingRequestGroupItemRepository
                 .findByMatchingRequestGroupIdOrderByIdAsc(matchingOffer.getMatchingRequestGroup().getId());
@@ -158,7 +154,7 @@ public class InstructorMatchingOfferService {
                 item.groupId(),
                 item.offerStatus(),
                 matchingOffer.getMatchingRequestGroup().getStatus(),
-                matchingStatus.get(),
+                matchingStatus,
                 item.requestSummary(),
                 item.lessonSummary(),
                 item.priceSummary(),

@@ -803,7 +803,18 @@ class SsingServerApplicationTests {
 		assertThat(detailProperties.has("priceSummary")).isTrue();
 		assertThat(detailProperties.has("participants")).isTrue();
 		assertThat(textValues(schemas.path("InstructorMatchingOfferDetailResponse").path("required")))
-				.contains("recoveryState", "offerId");
+				.containsExactlyInAnyOrder(
+						"recoveryState",
+						"offerId",
+						"groupId",
+						"offerStatus",
+						"groupStatus",
+						"matchingStatus",
+						"requestSummary",
+						"lessonSummary",
+						"priceSummary",
+						"participants"
+				);
 		assertThat(textValues(detailProperties.path("recoveryState").path("enum")))
 				.containsExactly("AVAILABLE");
 		assertThat(textValues(detailProperties.path("offerStatus").path("enum")))
