@@ -6,9 +6,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import org.sopt.ssingserver.domain.auth.error.AuthErrorCode;
+import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
 import org.sopt.ssingserver.domain.matching.dto.request.RespondInstructorMatchingOfferRequest;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDecisionResponse;
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOfferDetailResponse;
@@ -22,24 +21,25 @@ import org.sopt.ssingserver.global.swagger.success.ApiSuccessExamples;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 
 @Tag(name = "Instructor Matching", description = "강사 매칭 API")
 public interface InstructorMatchingOfferApiDocs {
 
     @Operation(
-            summary = "강사 현재 노출 매칭 제안 조회",
-            description = "현재 로그인한 강사에게 노출된 활성 매칭 제안과 제안 생성 시점에 고정된 강습비, 리조트 패스비, 최종 결제 금액을 조회합니다.",
+            summary = "강사 매칭 대기 화면 및 새 제안 재확인",
+            description = "홈의 MATCHING 카드에 offerId가 없을 때 호출합니다. 홈 조회 뒤 생긴 활성 실시간 제안이 있으면 "
+                    + "상세 조회용 offerId를, 없으면 null을 반환합니다. matchingSetting으로 저장된 매칭 대기 조건을 복구하며, "
+                    + "제안 상세와 예상 가격은 이 응답에 포함하지 않습니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
-    @ApiResponse(responseCode = "200", description = "현재 노출 매칭 제안 조회 성공")
+    @ApiResponse(responseCode = "200", description = "매칭 대기 조건 및 현재 제안 조회 성공")
+    @ApiSuccessExamples(MatchingApiExamples.InstructorCurrentOffers.class)
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {
-                    "VALIDATION_FAILED",
-                    "BAD_REQUEST",
                     "UNAUTHENTICATED",
                     "FORBIDDEN",
+                    "NOT_FOUND",
                     "INTERNAL_ERROR"
             }
     )
@@ -47,23 +47,27 @@ public interface InstructorMatchingOfferApiDocs {
             type = AuthErrorCode.class,
             names = {"AUTH_INVALID_TOKEN", "AUTH_TOKEN_EXPIRED"}
     )
+    @ApiErrorCodes(
+            type = InstructorErrorCode.class,
+            names = {"INSTRUCTOR_RESORT_NOT_SET"}
+    )
+    @ApiErrorCodes(
+            type = MatchingErrorCode.class,
+            names = {"MATCHING_NOT_ACTIVE"}
+    )
     ResponseEntity<BaseResponse<InstructorMatchingOffersResponse>> getCurrentOffers(
             @Parameter(hidden = true)
-            CurrentMember currentMember,
-            @Parameter(description = "페이지 번호. 0부터 시작")
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @Parameter(description = "페이지 크기")
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+            CurrentMember currentMember
     );
 
     @Operation(
             summary = "강사 매칭 제안 상세 복구 조회",
-            description = "강사 홈의 offerId로 제안 상세를 복구합니다. 복구 가능하면 AVAILABLE과 상세를, "
-                    + "본인 소유지만 이미 종료된 제안이면 STALE과 offerId만 반환합니다. "
+            description = "강사 홈 또는 ID 없는 매칭 재확인 API에서 받은 offerId로 제안 상세를 복구합니다. "
+                    + "복구 가능하면 AVAILABLE과 상세를 반환하고, 본인 소유지만 이미 종료된 제안이면 409를 반환합니다. "
                     + "제안이 없거나 다른 강사 소유이면 404를 반환합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
-    @ApiResponse(responseCode = "200", description = "강사 매칭 제안 상세 복구 조회 성공(AVAILABLE 또는 STALE)")
+    @ApiResponse(responseCode = "200", description = "강사 매칭 제안 상세 복구 조회 성공(AVAILABLE)")
     @ApiSuccessExamples(MatchingApiExamples.InstructorOfferDetail.class)
     @ApiErrorCodes(
             type = CommonErrorCode.class,
@@ -80,7 +84,7 @@ public interface InstructorMatchingOfferApiDocs {
     )
     @ApiErrorCodes(
             type = MatchingErrorCode.class,
-            names = {"MATCHING_OFFER_NOT_FOUND"}
+            names = {"MATCHING_OFFER_NOT_FOUND", "MATCHING_NOT_ACTIVE"}
     )
     ResponseEntity<BaseResponse<InstructorMatchingOfferDetailResponse>> getOfferDetail(
             @Parameter(hidden = true)

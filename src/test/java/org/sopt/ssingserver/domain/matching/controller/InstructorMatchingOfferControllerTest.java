@@ -1,5 +1,7 @@
 package org.sopt.ssingserver.domain.matching.controller;
 
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -8,15 +10,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenClaims;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
+import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
+import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
+import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.service.InstructorMatchingOfferService;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
+import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.ErrorResponseFactory;
 import org.sopt.ssingserver.global.logging.RequestIdFilter;
 import org.sopt.ssingserver.global.security.AuthTokenExtractor;
@@ -101,21 +109,55 @@ class InstructorMatchingOfferControllerTest {
     }
 
     @Test
-    void getOfferDetail은_본인_종료_제안을_STALE_body로_200_반환한다() throws Exception {
-        when(instructorMatchingOfferService.getOfferDetail(MEMBER_ID, 21L))
-                .thenReturn(InstructorMatchingOfferDetailResult.stale(21L));
+    void getCurrentOffers는_제안이_없으면_offerId_null과_대기조건을_반환한다() throws Exception {
+        InstructorMatchingOffersResult result = new InstructorMatchingOffersResult(
+                null,
+                new InstructorMatchingOffersResult.MatchingSettingResult(
+                        true,
+                        new InstructorMatchingOffersResult.ResortResult("HIGH1", "하이원"),
+                        Sport.SNOWBOARD,
+                        List.of(LessonLevel.FIRST_TIME, LessonLevel.INTERMEDIATE),
+                        List.of(120, 240),
+                        3,
+                        true
+                )
+        );
+        when(instructorMatchingOfferService.getCurrentOffers(MEMBER_ID)).thenReturn(result);
 
-        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", 21L)
+        mockMvc.perform(get("/api/v1/instructor/matching-offers")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.recoveryState").value("STALE"))
-                .andExpect(jsonPath("$.data.offerId").value(21L))
-                .andExpect(jsonPath("$.data.groupId").doesNotExist())
-                .andExpect(jsonPath("$.data.matchingStatus").doesNotExist())
-                .andExpect(jsonPath("$.data.participants").doesNotExist())
-                .andExpect(jsonPath("$.data.payload").doesNotExist());
+                .andExpect(jsonPath("$.data").value(hasKey("offerId")))
+                .andExpect(jsonPath("$.data.offerId").value(nullValue()))
+                .andExpect(jsonPath("$.data.matchingSetting.isExposed").value(true))
+                .andExpect(jsonPath("$.data.matchingSetting.resort.code").value("HIGH1"))
+                .andExpect(jsonPath("$.data.matchingSetting.resort.displayName").value("하이원"))
+                .andExpect(jsonPath("$.data.matchingSetting.sport").value("SNOWBOARD"))
+                .andExpect(jsonPath("$.data.matchingSetting.lessonLevels[0]").value("FIRST_TIME"))
+                .andExpect(jsonPath("$.data.matchingSetting.availableDurationMinutes[0]").value(120))
+                .andExpect(jsonPath("$.data.matchingSetting.maxHeadcount").value(3))
+                .andExpect(jsonPath("$.data.matchingSetting.equipmentReady").value(true))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.currentPage").doesNotExist())
+                .andExpect(jsonPath("$.data.size").doesNotExist())
+                .andExpect(jsonPath("$.data.hasNext").doesNotExist())
+                .andExpect(jsonPath("$.data.activeOffer").doesNotExist());
+
+        verify(instructorMatchingOfferService).getCurrentOffers(MEMBER_ID);
+    }
+
+    @Test
+    void getOfferDetail은_본인_종료_제안을_MATCHING_NOT_ACTIVE_409로_반환한다() throws Exception {
+        when(instructorMatchingOfferService.getOfferDetail(MEMBER_ID, 21L))
+                .thenThrow(new BusinessException(MatchingErrorCode.MATCHING_NOT_ACTIVE));
+
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", 21L)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("MATCHING_NOT_ACTIVE"))
+                .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(instructorMatchingOfferService).getOfferDetail(MEMBER_ID, 21L);
     }

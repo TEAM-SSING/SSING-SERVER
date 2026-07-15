@@ -2,6 +2,8 @@ package org.sopt.ssingserver.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -260,6 +262,35 @@ class DatabaseSeedContractTest {
     }
 
     @Test
+    void 저장된_강사조건은_제안이_없어도_매칭대기_복구응답으로_조회된다() throws Exception {
+        applyScenario("matching-price-vivaldi");
+        String instructorToken = accessTokenProvider.createAccessToken(
+                personaMemberId("instructor-approved-default"),
+                MemberRole.INSTRUCTOR
+        );
+
+        mockMvc.perform(get("/api/v1/instructor/matching-offers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(hasKey("offerId")))
+                .andExpect(jsonPath("$.data.offerId").value(nullValue()))
+                .andExpect(jsonPath("$.data.matchingSetting.isExposed").value(true))
+                .andExpect(jsonPath("$.data.matchingSetting.resort.code").value("VIVALDI_PARK"))
+                .andExpect(jsonPath("$.data.matchingSetting.resort.displayName").value("비발디파크"))
+                .andExpect(jsonPath("$.data.matchingSetting.sport").value("SKI"))
+                .andExpect(jsonPath("$.data.matchingSetting.lessonLevels[0]").value("FIRST_TIME"))
+                .andExpect(jsonPath("$.data.matchingSetting.lessonLevels[1]").value("BEGINNER"))
+                .andExpect(jsonPath("$.data.matchingSetting.availableDurationMinutes[0]").value(120))
+                .andExpect(jsonPath("$.data.matchingSetting.maxHeadcount").value(3))
+                .andExpect(jsonPath("$.data.matchingSetting.equipmentReady").value(true))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.currentPage").doesNotExist())
+                .andExpect(jsonPath("$.data.size").doesNotExist())
+                .andExpect(jsonPath("$.data.hasNext").doesNotExist())
+                .andExpect(jsonPath("$.data.activeOffer").doesNotExist());
+    }
+
+    @Test
     void 단건_매칭은_scheduler_재실행_후에도_85000원으로_결제되고_강습까지_확정된다() throws Exception {
         applyScenario("matching-price-vivaldi");
         assertMandatoryAndSeedInvariants();
@@ -288,15 +319,16 @@ class DatabaseSeedContractTest {
                 "WAITING_FOR_INSTRUCTOR",
                 "GROUPED"
         );
-        assertPriceReadback(offerBeforeScheduler);
+        long offerIdBeforeScheduler = offerBeforeScheduler.at("/data/offerId").asLong();
+        assertOfferDetailPriceReadback(instructorToken, offerIdBeforeScheduler);
 
         matchingSearchScheduler.runScheduledSearch();
 
         JsonNode offerAfterScheduler = readInstructorOffer(instructorToken);
         assertConsumerReadback(consumerToken, matchingRequestId);
-        assertPriceReadback(offerAfterScheduler);
-        long offerId = offerAfterScheduler.at("/data/items/0/offerId").asLong();
-        assertThat(offerId).isEqualTo(offerBeforeScheduler.at("/data/items/0/offerId").asLong());
+        long offerId = offerAfterScheduler.at("/data/offerId").asLong();
+        assertOfferDetailPriceReadback(instructorToken, offerId);
+        assertThat(offerId).isEqualTo(offerIdBeforeScheduler);
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM matching_offers", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
@@ -381,7 +413,7 @@ class DatabaseSeedContractTest {
                 .andExpect(status().isCreated())
                 .andReturn();
         long matchingRequestId = responseJson(creation).at("/data/matchingRequestId").asLong();
-        long offerId = readInstructorOffer(instructorToken).at("/data/items/0/offerId").asLong();
+        long offerId = readInstructorOffer(instructorToken).at("/data/offerId").asLong();
         acceptInstructorOffer(instructorToken, offerId);
         acceptConsumerConfirmation(consumerToken, matchingRequestId);
 
@@ -549,6 +581,9 @@ class DatabaseSeedContractTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.offerId").isNumber())
+                .andExpect(jsonPath("$.data.matchingSetting").exists())
+                .andExpect(jsonPath("$.data.items").doesNotExist())
                 .andReturn();
         return responseJson(result);
     }
@@ -732,15 +767,17 @@ class DatabaseSeedContractTest {
                 .andExpect(jsonPath("$.data.lessonCards[0].displayStatus").value("CONFIRMED"));
     }
 
-    private void assertPriceReadback(JsonNode response) {
-        JsonNode items = response.at("/data/items");
-        assertThat(items.size()).isEqualTo(1);
-        JsonNode offer = items.get(0);
-        assertThat(offer.path("offerStatus").asText()).isEqualTo("OFFERED");
-        assertThat(offer.at("/lessonSummary/resort/code").asText()).isEqualTo("VIVALDI_PARK");
-        assertThat(offer.at("/priceSummary/lessonPriceAmount").asInt()).isEqualTo(60_000);
-        assertThat(offer.at("/priceSummary/resortPassFeeAmount").asInt()).isEqualTo(25_000);
-        assertThat(offer.at("/priceSummary/totalPaymentAmount").asInt()).isEqualTo(85_000);
+    private void assertOfferDetailPriceReadback(String instructorToken, long offerId) throws Exception {
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("AVAILABLE"))
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.offerStatus").value("OFFERED"))
+                .andExpect(jsonPath("$.data.lessonSummary.resort.code").value("VIVALDI_PARK"))
+                .andExpect(jsonPath("$.data.priceSummary.lessonPriceAmount").value(60_000))
+                .andExpect(jsonPath("$.data.priceSummary.resortPassFeeAmount").value(25_000))
+                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000));
     }
 
     private void acceptInstructorOffer(String instructorToken, long offerId) throws Exception {

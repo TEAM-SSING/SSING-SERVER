@@ -7,11 +7,20 @@ import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 
 public record InstructorMatchingOffersResult(
-        List<ItemResult> items,
-        int currentPage,
-        int size,
-        boolean hasNext
+        Long offerId,
+        MatchingSettingResult matchingSetting
 ) {
+
+    public record MatchingSettingResult(
+            boolean isExposed,
+            ResortResult resort,
+            Sport sport,
+            List<LessonLevel> lessonLevels,
+            List<Integer> availableDurationMinutes,
+            int maxHeadcount,
+            boolean equipmentReady
+    ) {
+    }
 
     public record ItemResult(
             Long offerId,

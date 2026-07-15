@@ -8,8 +8,7 @@ import org.sopt.ssingserver.domain.member.enums.Gender;
 
 // 강사 홈의 offerId로 매칭 화면을 복구할 수 있는지까지 판정한 상세 조회 결과
 public sealed interface InstructorMatchingOfferDetailResult permits
-        InstructorMatchingOfferDetailResult.Available,
-        InstructorMatchingOfferDetailResult.Stale {
+        InstructorMatchingOfferDetailResult.Available {
 
     static InstructorMatchingOfferDetailResult available(
             Long offerId,
@@ -35,10 +34,6 @@ public sealed interface InstructorMatchingOfferDetailResult permits
         );
     }
 
-    static InstructorMatchingOfferDetailResult stale(Long offerId) {
-        return new Stale(offerId);
-    }
-
     record Available(
             Long offerId,
             Long groupId,
@@ -49,11 +44,6 @@ public sealed interface InstructorMatchingOfferDetailResult permits
             InstructorMatchingOffersResult.LessonSummaryResult lessonSummary,
             MatchingPriceSummaryResult priceSummary,
             List<ParticipantResult> participants
-    ) implements InstructorMatchingOfferDetailResult {
-    }
-
-    record Stale(
-            Long offerId
     ) implements InstructorMatchingOfferDetailResult {
     }
 

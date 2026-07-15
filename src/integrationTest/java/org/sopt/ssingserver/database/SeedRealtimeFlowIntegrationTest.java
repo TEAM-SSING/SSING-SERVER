@@ -327,9 +327,17 @@ class SeedRealtimeFlowIntegrationTest {
         mockMvc.perform(get("/api/v1/instructor/matching-offers")
                         .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].offerId").value(offerId))
-                .andExpect(jsonPath("$.data.items[0].groupId").value(groupId))
-                .andExpect(jsonPath("$.data.items[0].priceSummary.totalPaymentAmount").value(85_000));
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.matchingSetting").exists())
+                .andExpect(jsonPath("$.data.items").doesNotExist());
+
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("AVAILABLE"))
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.groupId").value(groupId))
+                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000));
     }
 
     private void acceptInstructorOffer(String instructorToken, long offerId) throws Exception {
