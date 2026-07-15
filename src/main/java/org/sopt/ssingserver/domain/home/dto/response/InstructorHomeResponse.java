@@ -15,6 +15,9 @@ public record InstructorHomeResponse(
         @Schema(description = "전체 서비스에서 매칭 중인 사람 수", example = "99")
         long matchingPeopleCount,
 
+        @Schema(description = "로그인한 강사의 본명", example = "김씽씽")
+        String instructorName,
+
         @Schema(description = "강습 후기/평점/Grade 요약")
         ReviewSummaryResponse reviewSummary,
 
@@ -25,12 +28,14 @@ public record InstructorHomeResponse(
     public static InstructorHomeResponse from(
             List<LessonCardResponse> lessonCards,
             long matchingPeopleCount,
+            String instructorName,
             ReviewSummaryResponse reviewSummary,
             boolean hasUnreadNotification
     ) {
         return new InstructorHomeResponse(
                 lessonCards,
                 matchingPeopleCount,
+                instructorName,
                 reviewSummary,
                 hasUnreadNotification
         );

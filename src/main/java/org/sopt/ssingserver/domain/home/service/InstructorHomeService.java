@@ -134,6 +134,7 @@ public class InstructorHomeService {
         return InstructorHomeResponse.from(
                 homeCards,
                 matchingPeopleCount,
+                instructorProfile.getRealName(),
                 resolveReviewSummary(instructorProfile),
                 hasUnreadNotification
         );
