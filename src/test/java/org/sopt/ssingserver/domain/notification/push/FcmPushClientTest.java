@@ -14,6 +14,7 @@ import com.google.firebase.messaging.MessagingErrorCode;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.sopt.ssingserver.domain.notification.service.FcmTokenService;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
@@ -26,9 +27,12 @@ class FcmPushClientTest {
     @Mock
     private FirebaseMessaging firebaseMessaging;
 
+    @Mock
+    private FcmTokenService fcmTokenService;
+
     @Test
     void send은_토큰과_DATA_only_메시지를_Firebase에_전달한다() throws Exception {
-        FcmPushClient fcmPushClient = new FcmPushClient(firebaseMessaging);
+        FcmPushClient fcmPushClient = new FcmPushClient(firebaseMessaging, fcmTokenService);
         PushMessage pushMessage = new PushMessage(
                 "fcm-token",
                 Map.of("type", "FCM_TEST", "title", "SSING FCM 테스트")
@@ -48,7 +52,7 @@ class FcmPushClientTest {
         logger.addAppender(appender);
 
         try {
-            FcmPushClient fcmPushClient = new FcmPushClient(firebaseMessaging);
+            FcmPushClient fcmPushClient = new FcmPushClient(firebaseMessaging, fcmTokenService);
             FirebaseMessagingException exception = org.mockito.Mockito.mock(FirebaseMessagingException.class);
             when(exception.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNAVAILABLE);
             when(firebaseMessaging.send(any(Message.class))).thenThrow(exception);
@@ -62,5 +66,17 @@ class FcmPushClientTest {
             logger.detachAppender(appender);
             appender.stop();
         }
+    }
+
+    @Test
+    void UNREGISTERED_응답이면_무효_토큰을_삭제한다() throws Exception {
+        FcmPushClient fcmPushClient = new FcmPushClient(firebaseMessaging, fcmTokenService);
+        FirebaseMessagingException exception = org.mockito.Mockito.mock(FirebaseMessagingException.class);
+        when(exception.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNREGISTERED);
+        when(firebaseMessaging.send(any(Message.class))).thenThrow(exception);
+
+        fcmPushClient.send(new PushMessage("invalid-token", Map.of("type", "FCM_TEST")));
+
+        verify(fcmTokenService).removeInvalidToken("invalid-token");
     }
 }

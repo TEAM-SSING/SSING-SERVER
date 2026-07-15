@@ -34,6 +34,7 @@ public class FcmTokenService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
+    // 같은 토큰의 중복 등록 경쟁까지 고려해 생성 또는 최신 등록 정보 갱신을 수행한다.
     public void registerOrUpdate(Long memberId, RegisterFcmTokenRequest request) {
         try {
             transactionTemplate.executeWithoutResult(
@@ -44,9 +45,16 @@ public class FcmTokenService {
         }
     }
 
+    // 로그아웃한 현재 회원이 등록했던 토큰만 삭제해 다른 회원 토큰을 건드리지 않는다.
     @Transactional
     public void unregister(Long memberId, DeleteFcmTokenRequest request) {
         fcmTokenRepository.deleteByMemberIdAndToken(memberId, request.fcmToken());
+    }
+
+    // Firebase가 더 이상 유효하지 않다고 확인한 토큰(UNREGISTERED) 제거
+    @Transactional
+    public void removeInvalidToken(String token) {
+        fcmTokenRepository.deleteByToken(token);
     }
 
     // 단일 트랜잭션에서 토큰 존재 여부에 따라 등록 정보를 생성하거나 수정
