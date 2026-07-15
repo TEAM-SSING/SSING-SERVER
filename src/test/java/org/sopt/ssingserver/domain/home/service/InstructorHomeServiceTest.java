@@ -112,6 +112,7 @@ class InstructorHomeServiceTest {
 
         assertThat(response.lessonCards()).isEmpty();
         assertThat(response.matchingPeopleCount()).isZero();
+        assertThat(response.instructorName()).isEqualTo("김씽씽");
         assertThat(response.reviewSummary().averageRating()).isNull();
         assertThat(response.reviewSummary().grade()).isNull();
         assertThat(response.reviewSummary().achievementRate()).isNull();
@@ -444,10 +445,10 @@ class InstructorHomeServiceTest {
             int level,
             int experience
     ) {
-        Member member = Member.create("강사", null, MemberRole.INSTRUCTOR, MemberStatus.ACTIVE);
+        Member member = Member.create("강사닉네임", null, MemberRole.INSTRUCTOR, MemberStatus.ACTIVE);
         InstructorProfile instructorProfile = InstructorProfile.create(
                 member,
-                "강사",
+                "김씽씽",
                 "01012345678",
                 Gender.FEMALE,
                 java.time.LocalDate.of(1998, 1, 1),
