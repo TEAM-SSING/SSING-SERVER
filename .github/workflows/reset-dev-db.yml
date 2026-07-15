@@ -26,11 +26,22 @@ permissions:
   contents: read
 
 jobs:
-  preflight:
-    name: 입력과 main ref 확인
+  reset:
+    name: dev DB reset
+    environment: dev-reset
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 5
+    timeout-minutes: 30
+    env:
+      DEPLOY_DIR: /home/ubuntu/ssing
+      REMOTE_WORK_DIR: /home/ubuntu/ssing/.dev-reset-work/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: 실행 시작 시각 기록
+        run: |
+          {
+            printf 'RESET_STARTED_AT=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            printf 'RESET_STARTED_EPOCH=%s\n' "$(date +%s)"
+          } >> "$GITHUB_ENV"
+
       - name: 파괴 작업 입력 재검증
         env:
           CONFIRM_RESET: ${{ inputs.confirmReset }}
@@ -58,23 +69,6 @@ jobs:
           esac
 
           echo "::notice title=입력 검증 완료::main ref, 초기화 확인, 시나리오 allowlist를 확인했습니다."
-
-  reset:
-    name: 승인 후 dev DB reset
-    needs: preflight
-    environment: dev-reset
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    env:
-      DEPLOY_DIR: /home/ubuntu/ssing
-      REMOTE_WORK_DIR: /home/ubuntu/ssing/.dev-reset-work/${{ github.run_id }}-${{ github.run_attempt }}
-    steps:
-      - name: 실행 시작 시각 기록
-        run: |
-          {
-            printf 'RESET_STARTED_AT=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            printf 'RESET_STARTED_EPOCH=%s\n' "$(date +%s)"
-          } >> "$GITHUB_ENV"
 
       - name: 저장소 코드 체크아웃
         uses: actions/checkout@v4
@@ -104,9 +98,8 @@ jobs:
             fi
           done
 
-      - name: dev-reset Environment 활성화와 설정 확인
+      - name: dev-reset Environment 설정 확인
         env:
-          RESET_ENABLED: ${{ vars.SSING_DEV_RESET_ENABLED }}
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
@@ -119,15 +112,8 @@ jobs:
           SSING_DEV_RUNTIME_DB_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
           SSING_DEV_DB_MIGRATION_USERNAME: ${{ vars.SSING_DEV_DB_MIGRATION_USERNAME }}
           SSING_DEV_DB_MIGRATION_PASSWORD: ${{ secrets.SSING_DEV_DB_MIGRATION_PASSWORD }}
-          SSING_DEV_DB_RESET_USERNAME: ${{ vars.SSING_DEV_DB_RESET_USERNAME }}
-          SSING_DEV_DB_RESET_PASSWORD: ${{ secrets.SSING_DEV_DB_RESET_PASSWORD }}
         run: |
           set -euo pipefail
-
-          if [ "$RESET_ENABLED" != "true" ]; then
-            echo "::error title=dev reset 비활성화::dev-reset Environment 보호 규칙과 전용 계정을 확인한 뒤 SSING_DEV_RESET_ENABLED=true로 설정하세요. DB는 변경되지 않았습니다."
-            exit 1
-          fi
 
           required_values=(
             EC2_HOST
@@ -142,8 +128,6 @@ jobs:
             SSING_DEV_RUNTIME_DB_USERNAME
             SSING_DEV_DB_MIGRATION_USERNAME
             SSING_DEV_DB_MIGRATION_PASSWORD
-            SSING_DEV_DB_RESET_USERNAME
-            SSING_DEV_DB_RESET_PASSWORD
           )
           for variable_name in "${required_values[@]}"; do
             if [ -z "${!variable_name}" ]; then
@@ -152,7 +136,7 @@ jobs:
             fi
           done
 
-          echo "::notice title=dev-reset 설정 확인 완료::보호 Environment 활성화 값과 필수 설정이 준비되었습니다."
+          echo "::notice title=dev-reset 설정 확인 완료::main 제한 Environment와 migration/reset 공용 계정 설정이 준비되었습니다."
 
       - name: 고정된 EC2 SSH host key 준비
         env:
@@ -200,8 +184,6 @@ jobs:
           SSING_DEV_RUNTIME_DB_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
           SSING_DEV_DB_MIGRATION_USERNAME: ${{ vars.SSING_DEV_DB_MIGRATION_USERNAME }}
           SSING_DEV_DB_MIGRATION_PASSWORD: ${{ secrets.SSING_DEV_DB_MIGRATION_PASSWORD }}
-          SSING_DEV_DB_RESET_USERNAME: ${{ vars.SSING_DEV_DB_RESET_USERNAME }}
-          SSING_DEV_DB_RESET_PASSWORD: ${{ secrets.SSING_DEV_DB_RESET_PASSWORD }}
         run: |
           set -euo pipefail
           trap 'rm -f .dev-reset.env' EXIT
@@ -217,8 +199,6 @@ jobs:
             printf 'SSING_DEV_RUNTIME_DB_USERNAME=%q\n' "$SSING_DEV_RUNTIME_DB_USERNAME"
             printf 'SSING_DEV_DB_MIGRATION_USERNAME=%q\n' "$SSING_DEV_DB_MIGRATION_USERNAME"
             printf 'SSING_DEV_DB_MIGRATION_PASSWORD=%q\n' "$SSING_DEV_DB_MIGRATION_PASSWORD"
-            printf 'SSING_DEV_DB_RESET_USERNAME=%q\n' "$SSING_DEV_DB_RESET_USERNAME"
-            printf 'SSING_DEV_DB_RESET_PASSWORD=%q\n' "$SSING_DEV_DB_RESET_PASSWORD"
             printf 'SSING_RESET_COMMIT_SHA=%q\n' "$GITHUB_SHA"
             printf 'SSING_DEV_RESET_REPORT_PATH=%q\n' "$REMOTE_WORK_DIR/.dev-reset-report.md"
           } > .dev-reset.env

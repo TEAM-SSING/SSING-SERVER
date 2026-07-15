@@ -8,6 +8,11 @@ RESET_WORKFLOW = ROOT / ".github/workflows/reset-dev-db.yml"
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/deploy-dev.yml"
 DB_CHECK_WORKFLOW = ROOT / ".github/workflows/db-seed-check.yml"
 DEV_COMPOSE = ROOT / "deploy/docker-compose.dev.yml"
+DEV_RUNNERS = (
+    ROOT / "scripts/db/dev-common.sh",
+    ROOT / "scripts/db/reset-dev.sh",
+    ROOT / "scripts/db/migrate-dev.sh",
+)
 
 
 def indented_block(text, header, indent):
@@ -39,7 +44,6 @@ class DevWorkflowContractTest(unittest.TestCase):
         cls.db_check = DB_CHECK_WORKFLOW.read_text(encoding="utf-8")
         cls.dev_compose = DEV_COMPOSE.read_text(encoding="utf-8")
         cls.reset_job = indented_block(cls.reset, "reset:", 2)
-        cls.preflight_job = indented_block(cls.reset, "preflight:", 2)
         cls.deploy_job = indented_block(cls.deploy, "build-and-deploy:", 2)
 
     def test_reset_has_only_scenario_and_boolean_confirmation_inputs(self):
@@ -68,7 +72,7 @@ class DevWorkflowContractTest(unittest.TestCase):
 
     def test_reset_is_main_only_allowlisted_and_fail_closed(self):
         preflight_step = indented_block(
-            self.preflight_job,
+            self.reset_job,
             "- name: 파괴 작업 입력 재검증",
             6,
         )
@@ -85,10 +89,8 @@ class DevWorkflowContractTest(unittest.TestCase):
             self.assertIn(scenario, preflight_step)
 
         self.assertRegex(self.reset_job, r"(?m)^    environment: dev-reset$")
-        self.assertNotIn("environment:", self.preflight_job)
+        self.assertNotRegex(self.reset, r"(?m)^  preflight:$")
         self.assertIn("./scripts/db/reset-dev.sh --confirm-dev-reset", self.reset_job)
-        self.assertIn("SSING_DEV_RESET_ENABLED", self.reset_job)
-        self.assertIn('RESET_ENABLED" != "true"', self.reset_job)
 
     def test_reset_and_deploy_share_one_max_queue(self):
         for workflow in (self.reset, self.deploy):
@@ -97,9 +99,12 @@ class DevWorkflowContractTest(unittest.TestCase):
             self.assertIn("queue: max", concurrency)
             self.assertNotIn("cancel-in-progress: true", concurrency)
 
-    def test_credentials_and_ssh_trust_are_separated(self):
+    def test_runtime_and_migration_credentials_and_ssh_trust_are_separated(self):
         self.assertIn("SSING_DEV_DB_MIGRATION_PASSWORD", self.reset)
-        self.assertIn("SSING_DEV_DB_RESET_PASSWORD", self.reset)
+        for source in (RESET_WORKFLOW, *DEV_RUNNERS):
+            source_text = source.read_text(encoding="utf-8")
+            self.assertNotIn("SSING_DEV_DB_RESET_PASSWORD", source_text)
+            self.assertNotIn("SSING_DEV_DB_RESET_USERNAME", source_text)
         self.assertIn("SSING_DEV_RUNTIME_DB_USERNAME", self.reset)
         self.assertIn("SSING_DEV_RUNTIME_DB_USERNAME", self.deploy)
         self.assertNotIn("SSING_DEV_DATASOURCE_PASSWORD", self.reset)

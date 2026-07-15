@@ -12,8 +12,8 @@ dev_require_command sudo
 dev_require_command docker
 assert_dev_target
 assert_no_incomplete_dev_reset
-assert_dev_account_separation false
-select_dev_db_account migration
+assert_dev_account_separation
+select_dev_migration_account
 assert_dev_connection_contract
 
 printf 'Flyway migrate와 validate를 실행합니다.\n'

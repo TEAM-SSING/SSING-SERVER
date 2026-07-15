@@ -77,41 +77,17 @@ assert_dev_target() {
 }
 
 assert_dev_account_separation() {
-  local require_reset_account="${1:-false}"
-
   require_dev_value SSING_DEV_RUNTIME_DB_USERNAME
   require_dev_value SSING_DEV_DB_MIGRATION_USERNAME
   [[ "$SSING_DEV_RUNTIME_DB_USERNAME" != "$SSING_DEV_DB_MIGRATION_USERNAME" ]] \
     || dev_fail "runtime 계정과 migration 계정은 서로 달라야 합니다."
-
-  if [[ "$require_reset_account" == true ]]; then
-    require_dev_value SSING_DEV_DB_RESET_USERNAME
-    [[ "$SSING_DEV_DB_RESET_USERNAME" != "$SSING_DEV_RUNTIME_DB_USERNAME" \
-        && "$SSING_DEV_DB_RESET_USERNAME" != "$SSING_DEV_DB_MIGRATION_USERNAME" ]] \
-      || dev_fail "reset 계정은 runtime·migration 계정과 서로 달라야 합니다."
-  fi
 }
 
-select_dev_db_account() {
-  local account_type="$1"
-
-  case "$account_type" in
-    migration)
-      require_dev_value SSING_DEV_DB_MIGRATION_USERNAME
-      require_dev_value SSING_DEV_DB_MIGRATION_PASSWORD
-      SSING_DEV_DB_USERNAME="$SSING_DEV_DB_MIGRATION_USERNAME"
-      SSING_DEV_DB_PASSWORD="$SSING_DEV_DB_MIGRATION_PASSWORD"
-      ;;
-    reset)
-      require_dev_value SSING_DEV_DB_RESET_USERNAME
-      require_dev_value SSING_DEV_DB_RESET_PASSWORD
-      SSING_DEV_DB_USERNAME="$SSING_DEV_DB_RESET_USERNAME"
-      SSING_DEV_DB_PASSWORD="$SSING_DEV_DB_RESET_PASSWORD"
-      ;;
-    *)
-      dev_fail "알 수 없는 DB 계정 종류입니다."
-      ;;
-  esac
+select_dev_migration_account() {
+  require_dev_value SSING_DEV_DB_MIGRATION_USERNAME
+  require_dev_value SSING_DEV_DB_MIGRATION_PASSWORD
+  SSING_DEV_DB_USERNAME="$SSING_DEV_DB_MIGRATION_USERNAME"
+  SSING_DEV_DB_PASSWORD="$SSING_DEV_DB_MIGRATION_PASSWORD"
 
   [[ "$SSING_DEV_DB_USERNAME" =~ ^[A-Za-z0-9_@.-]+$ ]] \
     || dev_fail "DB 사용자 이름 형식이 올바르지 않습니다."
@@ -171,7 +147,6 @@ _run_dev_mysql_client() (
   unset MYSQL_PWD \
     SSING_DEV_DB_PASSWORD \
     SSING_DEV_DB_MIGRATION_PASSWORD \
-    SSING_DEV_DB_RESET_PASSWORD \
     SSING_DEV_RUNTIME_DATASOURCE_URL
 
   {
@@ -269,7 +244,6 @@ _run_dev_flyway() (
 
   unset SSING_DEV_DB_PASSWORD \
     SSING_DEV_DB_MIGRATION_PASSWORD \
-    SSING_DEV_DB_RESET_PASSWORD \
     SSING_DEV_RUNTIME_DATASOURCE_URL
 
   if sudo docker run --rm \
@@ -323,21 +297,20 @@ apply_dev_sql_directory() {
 }
 
 assert_dev_connection_contract() {
-  local charset_contract
+  local charset_client
+  local charset_connection
+  local charset_results
+  local connection_contract
   local database_contract
   local non_utf8mb4_table_count
   local query_exit_code
   local saved_err_trap
 
-  # command substitution 내부의 ERR trap 중복을 막고 세 query의 첫 실패 코드를 그대로 반환한다.
+  # 연결·schema·테이블 문자셋을 한 번의 client 실행으로 확인해 원격 reset 대기 시간을 줄인다.
   saved_err_trap="$(trap -p ERR)"
   trap - ERR
-  if charset_contract="$(run_dev_mysql_query \
-        "SELECT CONCAT(@@character_set_client, '|', @@character_set_connection, '|', @@character_set_results);")" \
-      && database_contract="$(run_dev_mysql_query \
-        "SELECT IF(DATABASE() = '${DEV_DB_SCHEMA_ALLOWLIST}', 'OK', 'WRONG');")" \
-      && non_utf8mb4_table_count="$(run_dev_mysql_query \
-        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_collation NOT LIKE 'utf8mb4%';")"; then
+  if connection_contract="$(run_dev_mysql_query \
+        "SELECT CONCAT(@@character_set_client, '|', @@character_set_connection, '|', @@character_set_results, '|', IF(DATABASE() = '${DEV_DB_SCHEMA_ALLOWLIST}', 'OK', 'WRONG'), '|', (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_collation NOT LIKE 'utf8mb4%'));")"; then
     query_exit_code=0
   else
     query_exit_code=$?
@@ -349,7 +322,15 @@ assert_dev_connection_contract() {
     return "$query_exit_code"
   fi
 
-  [[ "$charset_contract" == "utf8mb4|utf8mb4|utf8mb4" ]] \
+  IFS='|' read -r \
+    charset_client \
+    charset_connection \
+    charset_results \
+    database_contract \
+    non_utf8mb4_table_count <<< "$connection_contract"
+
+  [[ "$charset_client|$charset_connection|$charset_results" == \
+      "utf8mb4|utf8mb4|utf8mb4" ]] \
     || dev_fail "MySQL client/connection/results 문자셋이 모두 utf8mb4가 아닙니다."
   [[ "$database_contract" == "OK" ]] \
     || dev_fail "연결된 schema가 dev allowlist와 다릅니다."

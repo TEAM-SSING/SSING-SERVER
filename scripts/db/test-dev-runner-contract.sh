@@ -47,32 +47,22 @@ sudo() {
   fi
 
   if [[ "$joined" == *" flyway/flyway:"* ]]; then
+    local argument argument_index flyway_env_file=""
+    for argument_index in "${!arguments[@]}"; do
+      if [[ "${arguments[$argument_index]}" == "--env-file" ]]; then
+        flyway_env_file="${arguments[$((argument_index + 1))]:-}"
+        break
+      fi
+    done
+    [[ -n "$flyway_env_file" && -f "$flyway_env_file" ]] || return 52
+    grep -Fxq 'FLYWAY_USER=ssing_migration' "$flyway_env_file" || return 52
+
     local flyway_action="${arguments[$((${#arguments[@]} - 1))]}"
-    local flyway_occurrence
     local flyway_should_fail=false
-    flyway_occurrence="$(grep -Ec " flyway/flyway:.* ${flyway_action}[[:space:]]*$" "$FAKE_COMMAND_LOG" || true)"
     printf 'Database: jdbc:mysql://%s:%s/%s (MySQL 8.4)\n' \
       "$SSING_DEV_DB_HOST" "$SSING_DEV_DB_PORT" "$SSING_DEV_DB_NAME"
     [[ "${FAKE_FAIL_STAGE:-}" != "flyway-${flyway_action}" ]] \
       || flyway_should_fail=true
-    case "${FAKE_FAIL_STAGE:-}" in
-      flyway-first-migrate)
-        [[ "$flyway_action" != "migrate" || "$flyway_occurrence" -ne 1 ]] \
-          || flyway_should_fail=true
-        ;;
-      flyway-first-validate)
-        [[ "$flyway_action" != "validate" || "$flyway_occurrence" -ne 1 ]] \
-          || flyway_should_fail=true
-        ;;
-      flyway-final-migrate)
-        [[ "$flyway_action" != "migrate" || "$flyway_occurrence" -ne 2 ]] \
-          || flyway_should_fail=true
-        ;;
-      flyway-final-validate)
-        [[ "$flyway_action" != "validate" || "$flyway_occurrence" -ne 2 ]] \
-          || flyway_should_fail=true
-        ;;
-    esac
     if [[ "$flyway_should_fail" == true ]]; then
       printf 'ERROR: Unable to obtain connection from database (jdbc:mysql://%s:%s/%s)\n' \
         "$SSING_DEV_DB_HOST" "$SSING_DEV_DB_PORT" "$SSING_DEV_DB_NAME" >&2
@@ -82,7 +72,7 @@ sudo() {
   fi
 
   if [[ "$joined" == *" mysql "* ]]; then
-    local argument argument_index mysql_command_index=-1
+    local argument argument_index mysql_command_index=-1 mysql_defaults_file=""
     for argument_index in "${!arguments[@]}"; do
       if [[ "${arguments[$argument_index]}" == "mysql" ]]; then
         mysql_command_index="$argument_index"
@@ -95,6 +85,16 @@ sudo() {
     [[ "${arguments[$((mysql_command_index + 2))]:-}" == \
         "--default-character-set=utf8mb4" ]] || return 51
 
+    for argument in "${arguments[@]}"; do
+      if [[ "$argument" == type=bind,src=*,dst="${MYSQL_CLIENT_DEFAULTS_PATH}",readonly ]]; then
+        mysql_defaults_file="${argument#type=bind,src=}"
+        mysql_defaults_file="${mysql_defaults_file%%,dst=*}"
+        break
+      fi
+    done
+    [[ -n "$mysql_defaults_file" && -f "$mysql_defaults_file" ]] || return 51
+    grep -Fxq 'user=ssing_migration' "$mysql_defaults_file" || return 51
+
     if [[ "${FAKE_FAIL_STAGE:-}" == "mysql-connect" ]]; then
       printf "ERROR 2003 (HY000): Can't connect to MySQL server on '%s:%s'\n" \
         "$SSING_DEV_DB_HOST" "$SSING_DEV_DB_PORT" >&2
@@ -105,14 +105,16 @@ sudo() {
       case "$argument" in
         --execute=*character_set_client*)
           local charset_occurrence
+          local charset_contract="utf8mb4|utf8mb4|utf8mb4"
+          local table_charset_count=0
           charset_occurrence="$(grep -Fc 'character_set_client' "$FAKE_COMMAND_LOG")"
           if [[ "${FAKE_FAIL_STAGE:-}" == "charset" \
-              || ( "${FAKE_FAIL_STAGE:-}" == "final-charset" && "$charset_occurrence" -eq 3 ) \
+              || ( "${FAKE_FAIL_STAGE:-}" == "final-charset" && "$charset_occurrence" -eq 2 ) \
               || ( "${FAKE_FAIL_STAGE:-}" == "migration-final-charset" && "$charset_occurrence" -eq 2 ) ]]; then
-            printf 'latin1|latin1|latin1\n'
-          else
-            printf 'utf8mb4|utf8mb4|utf8mb4\n'
+            charset_contract="latin1|latin1|latin1"
           fi
+          [[ "${FAKE_FAIL_STAGE:-}" != "table-charset" ]] || table_charset_count=1
+          printf '%s|OK|%s\n' "$charset_contract" "$table_charset_count"
           return 0
           ;;
         --execute=*"DATABASE() ="*)
@@ -211,7 +213,6 @@ assert_secret_safe() {
 
   for secret_text in \
     "migration-secret#42" \
-    "reset-secret#42" \
     "$SSING_DEV_DB_HOST" \
     "jdbc:mysql://"; do
     ! grep -Fq "$secret_text" "$output_file" "$report_file" "$command_log" 2>/dev/null \
@@ -242,16 +243,14 @@ assert_pm_success_order() {
   done <<'EOF'
 app-stop| compose .* stop app |1
 flyway-clean| flyway/flyway:.* clean[[:space:]]*$|1
-first-migrate| flyway/flyway:.* migrate[[:space:]]*$|1
-first-validate| flyway/flyway:.* validate[[:space:]]*$|1
+migrate| flyway/flyway:.* migrate[[:space:]]*$|1
 base|SQL_STAGE=base|1
 scenario|SQL_STAGE=scenario|1
 scenario-verify|SQL_STAGE=verify|1
 utf8-verify|SQL_STAGE=utf8|1
 playground|SQL_STAGE=playground$|1
 playground-verify|SQL_STAGE=playground-verify|1
-final-migrate| flyway/flyway:.* migrate[[:space:]]*$|2
-final-validate| flyway/flyway:.* validate[[:space:]]*$|2
+final-validate| flyway/flyway:.* validate[[:space:]]*$|1
 app-start| compose .* up --detach app |1
 health|/actuator/health|1
 persona|/dev/auth/personas|1
@@ -272,7 +271,6 @@ run_case() {
   local deployed_username_override="${11:-}"
   local deployed_profile="${12:-dev}"
   local deployed_ddl_auto="${13:-validate}"
-  local reset_username="${14:-ssing_reset}"
   local db_host="${RUN_CASE_DB_HOST:-$TEST_HOST}"
   local db_port="${RUN_CASE_DB_PORT:-3306}"
   local db_name="${RUN_CASE_DB_NAME:-ssing}"
@@ -320,8 +318,6 @@ run_case() {
   export SSING_DEV_RUNTIME_DB_USERNAME="$runtime_username"
   export SSING_DEV_DB_MIGRATION_USERNAME="ssing_migration"
   export SSING_DEV_DB_MIGRATION_PASSWORD="migration-secret#42"
-  export SSING_DEV_DB_RESET_USERNAME="$reset_username"
-  export SSING_DEV_DB_RESET_PASSWORD="reset-secret#42"
   export SSING_RESET_COMMIT_SHA="$TEST_SHA"
 
   set +e
@@ -500,14 +496,6 @@ run_case account-separation "" --confirm-dev-reset main \
   pm-full-requested-catalog false "" false "" ssing_migration
 assert_no_mutation_command "$TEST_TMP/account-separation/commands.log"
 
-run_case reset-runtime-account-collision "" --confirm-dev-reset main \
-  pm-full-requested-catalog false "" false "" ssing_runtime "" dev validate ssing_runtime
-assert_no_mutation_command "$TEST_TMP/reset-runtime-account-collision/commands.log"
-
-run_case reset-migration-account-collision "" --confirm-dev-reset main \
-  pm-full-requested-catalog false "" false "" ssing_runtime "" dev validate ssing_migration
-assert_no_mutation_command "$TEST_TMP/reset-migration-account-collision/commands.log"
-
 run_case deployed-username-mismatch "" --confirm-dev-reset main \
   pm-full-requested-catalog false "" false "" ssing_runtime stale_runtime
 assert_no_mutation_command "$TEST_TMP/deployed-username-mismatch/commands.log"
@@ -573,6 +561,13 @@ assert_no_mutation_command "$TEST_TMP/wrong-port-target/commands.log"
 run_case invalid-charset charset --confirm-dev-reset main pm-full-requested-catalog false
 assert_no_mutation_command "$TEST_TMP/invalid-charset/commands.log"
 
+run_case invalid-table-charset table-charset \
+  --confirm-dev-reset main pm-full-requested-catalog false
+assert_no_mutation_command "$TEST_TMP/invalid-table-charset/commands.log"
+grep -Fq 'dev schema에 utf8mb4가 아닌 테이블이 있습니다' \
+  "$TEST_TMP/invalid-table-charset/output.log" \
+  || fail_test "테이블 문자셋 위반을 clean 전에 차단하지 않았습니다."
+
 run_case failure-mysql-connect mysql-connect \
   --confirm-dev-reset main pm-full-requested-catalog false
 assert_no_mutation_command "$TEST_TMP/failure-mysql-connect/commands.log"
@@ -608,17 +603,15 @@ while IFS='|' read -r failure_stage expected_report_stage; do
     || fail_test "$failure_stage 실패 report의 단계 안내가 정확하지 않습니다."
 done <<'EOF'
 flyway-clean|Flyway clean
-flyway-first-migrate|Flyway migrate와 validate
-flyway-first-validate|Flyway migrate와 validate
+flyway-migrate|Flyway migrate
 base|Base Seed 적용
 scenario|Scenario Seed 적용
 verify|Scenario와 UTF-8 검증
 utf8|Scenario와 UTF-8 검증
 playground|PM dev playground 적용과 검증
 playground-verify|PM dev playground 적용과 검증
-flyway-final-migrate|최종 Flyway migrate와 validate
-flyway-final-validate|최종 Flyway migrate와 validate
-final-charset|최종 Flyway migrate와 validate
+flyway-validate|최종 Flyway validate와 연결 검증
+final-charset|최종 Flyway validate와 연결 검증
 EOF
 
 [[ "$(< "$TEST_TMP/failure-flyway-clean/exit-code")" == "43" ]] \
@@ -689,7 +682,7 @@ grep -Fq 'SQL_STAGE=playground' \
 assert_pm_success_order \
   "$TEST_TMP/success-pm-full-requested-catalog/commands.log"
 [[ "$(grep -Fc 'character_set_client' \
-    "$TEST_TMP/success-pm-full-requested-catalog/commands.log")" == "3" ]] \
+    "$TEST_TMP/success-pm-full-requested-catalog/commands.log")" == "2" ]] \
   || fail_test "reset 성공 전에 최종 schema UTF-8 계약을 다시 확인하지 않았습니다."
 
 run_migrate_case migration-blocked-by-marker "" true false

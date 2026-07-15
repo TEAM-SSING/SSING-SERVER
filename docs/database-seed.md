@@ -13,7 +13,7 @@
 로컬 DB를 초기화할 때는 SQL 파일을 직접 하나씩 실행하지 말고 reset 스크립트를 사용한다.
 스크립트가 `clean → migrate → base → scenario → verify` 순서를 보장한다.
 
-로컬 reset 스크립트는 로컬 DB에만 사용한다. 공유 dev DB는 `main`의 보호된
+로컬 reset 스크립트는 로컬 DB에만 사용한다. 공유 dev DB는 `main`으로 제한된
 `Reset Dev DB` GitHub Actions workflow로만 초기화한다. 운영 DB에는 로컬·dev reset
 스크립트와 workflow를 모두 사용할 수 없다.
 
@@ -80,9 +80,13 @@
 
 1. `main` ref에서 실행할 시나리오를 고른다.
 2. 기존 dev 데이터를 지우는 `confirmReset`을 체크한다.
-3. `dev-reset` Environment 승인을 거친다.
-4. workflow가 앱 중지 → clean → migrate → base → scenario → verify → 앱 재기동을 실행한다.
-5. 결과 요약이 성공인지 확인한 뒤 새로 로그인해 QA를 시작한다.
+3. workflow가 별도 승인 없이 앱 중지 → clean → migrate → base → scenario → verify → 앱 재기동을 실행한다.
+4. 결과 요약이 성공인지 확인한 뒤 새로 로그인해 QA를 시작한다.
+
+실행 권한은 저장소에 write 권한이 있는 사람으로 제한한다. `dev-reset` Environment는 사람
+승인 단계가 아니라 `main` 제한과 reset용 인프라 설정 경계로 사용한다. 앱 runtime 계정은
+일반 DML 용도로 분리하고, migration 계정 하나가 Flyway migration과 dev clean/seed를
+함께 수행한다.
 
 reset은 dev DB 전체를 다시 만들기 때문에 기존 access token과 resource ID를 계속 사용하면
 안 된다. `pm-full-requested-catalog`를 골랐다면 새 QA는 요청이 없는
@@ -228,7 +232,7 @@ WebSocket 통합 테스트는 통과하므로 STOMP heartbeat와 업무 `@Schedu
 - 100건을 넘는 재탐색 공정성: [#123](https://github.com/TEAM-SSING/SSING-SERVER/issues/123)
 - 다중 요청 그룹 결제와 강습비 분담/반올림 정책: 현재 MVP 범위 밖
 
-공유 dev의 첫 실제 reset 전에는 Environment 승인 규칙, 전용 DB 계정 권한, 대상
+공유 dev의 첫 실제 reset 전에는 Environment의 `main` 제한, migration/reset 공용 계정 권한, 대상
 fingerprint, 백업 또는 snapshot 정책을 운영자가 별도로 확인해야 한다. 이 문서와 자동
 계약 테스트만으로 실제 RDS rollout이 검증됐다고 보지 않으며, `baselineOnMigrate`도 자동
 활성화하지 않는다.
