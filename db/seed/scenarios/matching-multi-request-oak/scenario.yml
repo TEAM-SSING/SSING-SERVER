@@ -6,6 +6,7 @@ scheduler_type: STABLE
 execution_scope:
   - local
   - ci
+  - dev
 base_dependencies:
   - db/seed/base/001_reference_data.sql
   - db/seed/base/010_dev_personas.sql

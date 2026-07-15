@@ -9,7 +9,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: ${SSING_JPA_DDL_AUTO:update}
+      ddl-auto: ${SSING_JPA_DDL_AUTO:validate}
     properties:
       hibernate:
         format_sql: false

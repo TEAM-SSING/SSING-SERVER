@@ -1,0 +1,667 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly PROJECT_ROOT="$(cd "$TEST_DIR/../.." && pwd)"
+readonly TEST_SHA="0123456789abcdef0123456789abcdef01234567"
+readonly TEST_HOST="ssing-dev.cluster-example.ap-northeast-2.rds.amazonaws.com"
+readonly TEST_TARGET="${TEST_HOST}:3306/ssing"
+
+fail_test() {
+  printf 'dev runner contract test failed: %s\n' "$*" >&2
+  exit 1
+}
+
+target_sha256() {
+  printf '%s' "$1" \
+    | { if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi; } \
+    | awk '{print $1}'
+}
+
+docker() {
+  return 0
+}
+
+sudo() {
+  local arguments=("$@")
+  local joined=" ${arguments[*]} "
+  printf '%s\n' "$joined" >> "$FAKE_COMMAND_LOG"
+
+  if [[ "$joined" == *" docker inspect "*" {{.Config.Image}} "* ]]; then
+    printf '%s\n' "$FAKE_RUNNING_IMAGE"
+    return 0
+  fi
+  if [[ "$joined" == *" docker inspect "*" {{.State.Status}} "* ]]; then
+    printf 'running\n'
+    return 0
+  fi
+
+  if [[ "$joined" == *" docker compose "*" stop app "* ]]; then
+    [[ "${FAKE_FAIL_STAGE:-}" != "app-stop" ]] || return 41
+    return 0
+  fi
+  if [[ "$joined" == *" docker compose "*" up --detach app "* ]]; then
+    [[ "${FAKE_FAIL_STAGE:-}" != "app-start" ]] || return 42
+    return 0
+  fi
+
+  if [[ "$joined" == *" flyway/flyway:"* ]]; then
+    local flyway_action="${arguments[$((${#arguments[@]} - 1))]}"
+    local flyway_occurrence
+    local flyway_should_fail=false
+    flyway_occurrence="$(grep -Ec " flyway/flyway:.* ${flyway_action}[[:space:]]*$" "$FAKE_COMMAND_LOG" || true)"
+    printf 'Database: jdbc:mysql://%s:%s/%s (MySQL 8.4)\n' \
+      "$SSING_DEV_DB_HOST" "$SSING_DEV_DB_PORT" "$SSING_DEV_DB_NAME"
+    [[ "${FAKE_FAIL_STAGE:-}" != "flyway-${flyway_action}" ]] \
+      || flyway_should_fail=true
+    case "${FAKE_FAIL_STAGE:-}" in
+      flyway-first-migrate)
+        [[ "$flyway_action" != "migrate" || "$flyway_occurrence" -ne 1 ]] \
+          || flyway_should_fail=true
+        ;;
+      flyway-first-validate)
+        [[ "$flyway_action" != "validate" || "$flyway_occurrence" -ne 1 ]] \
+          || flyway_should_fail=true
+        ;;
+      flyway-final-migrate)
+        [[ "$flyway_action" != "migrate" || "$flyway_occurrence" -ne 2 ]] \
+          || flyway_should_fail=true
+        ;;
+      flyway-final-validate)
+        [[ "$flyway_action" != "validate" || "$flyway_occurrence" -ne 2 ]] \
+          || flyway_should_fail=true
+        ;;
+    esac
+    if [[ "$flyway_should_fail" == true ]]; then
+      printf 'ERROR: Unable to obtain connection from database (jdbc:mysql://%s:%s/%s)\n' \
+        "$SSING_DEV_DB_HOST" "$SSING_DEV_DB_PORT" "$SSING_DEV_DB_NAME" >&2
+      return 43
+    fi
+    return 0
+  fi
+
+  if [[ "$joined" == *" mysql "* ]]; then
+    local argument argument_index mysql_command_index=-1
+    for argument_index in "${!arguments[@]}"; do
+      if [[ "${arguments[$argument_index]}" == "mysql" ]]; then
+        mysql_command_index="$argument_index"
+        break
+      fi
+    done
+    [[ "$mysql_command_index" -ge 0 ]] || return 51
+    [[ "${arguments[$((mysql_command_index + 1))]:-}" == \
+        "--defaults-extra-file=${MYSQL_CLIENT_DEFAULTS_PATH}" ]] || return 51
+    [[ "${arguments[$((mysql_command_index + 2))]:-}" == \
+        "--default-character-set=utf8mb4" ]] || return 51
+
+    if [[ "${FAKE_FAIL_STAGE:-}" == "mysql-connect" ]]; then
+      printf "ERROR 2003 (HY000): Can't connect to MySQL server on '%s:%s'\n" \
+        "$SSING_DEV_DB_HOST" "$SSING_DEV_DB_PORT" >&2
+      return 50
+    fi
+
+    for argument in "${arguments[@]}"; do
+      case "$argument" in
+        --execute=*character_set_client*)
+          if [[ "${FAKE_FAIL_STAGE:-}" == "charset" ]]; then
+            printf 'latin1|latin1|latin1\n'
+          else
+            printf 'utf8mb4|utf8mb4|utf8mb4\n'
+          fi
+          return 0
+          ;;
+        --execute=*"DATABASE() ="*)
+          printf 'OK\n'
+          return 0
+          ;;
+        --execute=*information_schema.tables*)
+          printf '0\n'
+          return 0
+          ;;
+      esac
+    done
+
+    local sql_payload
+    sql_payload="$(command cat)"
+    if [[ "$sql_payload" == *"INSERT INTO resorts"* ]]; then
+      printf ' SQL_STAGE=base\n' >> "$FAKE_COMMAND_LOG"
+    elif [[ "$sql_payload" == *"Local/CI SNAPSHOT only"* ]]; then
+      printf ' SQL_STAGE=scenario\n' >> "$FAKE_COMMAND_LOG"
+    elif [[ "$sql_payload" == *"seed_utf8_contract_assertion"* ]]; then
+      printf ' SQL_STAGE=utf8\n' >> "$FAKE_COMMAND_LOG"
+    elif [[ "$sql_payload" == *"seed_contract_assertion"* ]]; then
+      printf ' SQL_STAGE=verify\n' >> "$FAKE_COMMAND_LOG"
+    elif [[ "$sql_payload" == *"Dev QA playground overlay"* ]]; then
+      printf ' SQL_STAGE=playground\n' >> "$FAKE_COMMAND_LOG"
+    elif [[ "$sql_payload" == *"dev_playground_contract_assertion"* ]]; then
+      printf ' SQL_STAGE=playground-verify\n' >> "$FAKE_COMMAND_LOG"
+    fi
+    case "${FAKE_FAIL_STAGE:-}" in
+      base)
+        [[ "$sql_payload" != *"INSERT INTO resorts"* ]] || return 44
+        ;;
+      scenario)
+        [[ "$sql_payload" != *"Local/CI SNAPSHOT only"* ]] || return 45
+        ;;
+      verify)
+        [[ "$sql_payload" != *"seed_contract_assertion"* ]] || return 46
+        ;;
+      utf8)
+        [[ "$sql_payload" != *"seed_utf8_contract_assertion"* ]] || return 47
+        ;;
+      playground)
+        [[ "$sql_payload" != *"Dev QA playground overlay"* ]] || return 48
+        ;;
+      playground-verify)
+        [[ "$sql_payload" != *"dev_playground_contract_assertion"* ]] || return 49
+        ;;
+    esac
+    return 0
+  fi
+
+  return 0
+}
+
+curl() {
+  local joined=" $* "
+  printf ' curl%s\n' "$joined" >> "$FAKE_COMMAND_LOG"
+  if [[ "$joined" == *"/actuator/health"* ]]; then
+    [[ "${FAKE_FAIL_STAGE:-}" != "health" ]] || return 22
+    printf '{"status":"UP"}\n'
+    return 0
+  fi
+  if [[ "$joined" == *"/dev/auth/personas"* ]]; then
+    [[ "${FAKE_FAIL_STAGE:-}" != "persona" ]] || return 22
+    if [[ "${FAKE_FAIL_STAGE:-}" == "persona-encoding" ]]; then
+      printf '{"data":{"personas":[{"personaKey":"qa-free-consumer","nickname":"QA 자유 소비자"},{"personaKey":"consumer-default","nickname":"ê°€ê²©ê²€ì¦ì†œë¹„ìž"}]}}\n'
+    else
+      printf '{"data":{"personas":[{"personaKey":"qa-free-consumer","nickname":"QA 자유 소비자"},{"personaKey":"consumer-default","nickname":"가격검증소비자"}]}}\n'
+    fi
+    return 0
+  fi
+  return 22
+}
+
+sleep() {
+  return 0
+}
+
+export -f docker sudo curl sleep
+
+for signal_name in HUP INT TERM; do
+  grep -Fq "trap 'on_signal ${signal_name} " "$PROJECT_ROOT/scripts/db/reset-dev.sh" \
+    || fail_test "${signal_name} 중단 시 한글 실패 report를 남기는 trap이 없습니다."
+done
+
+assert_no_mutation_command() {
+  local command_log="$1"
+  ! grep -Eq ' compose .* (stop|up) | flyway/flyway:|SQL_STAGE=' "$command_log" \
+    || fail_test "clean 전 실패가 mutation 명령을 실행했습니다."
+}
+
+assert_secret_safe() {
+  local output_file="$1"
+  local report_file="$2"
+  local command_log="$3"
+
+  for secret_text in \
+    "migration-secret#42" \
+    "reset-secret#42" \
+    "$SSING_DEV_DB_HOST" \
+    "jdbc:mysql://"; do
+    ! grep -Fq "$secret_text" "$output_file" "$report_file" "$command_log" 2>/dev/null \
+      || fail_test "민감한 대상 또는 credential이 로그에 노출됐습니다."
+  done
+}
+
+command_position() {
+  local command_log="$1"
+  local pattern="$2"
+  local occurrence="${3:-1}"
+
+  grep -nE "$pattern" "$command_log" \
+    | sed -n "${occurrence}p" \
+    | cut -d: -f1
+}
+
+assert_pm_success_order() {
+  local command_log="$1"
+  local previous_position=0
+  local label pattern occurrence position
+  while IFS='|' read -r label pattern occurrence; do
+    position="$(command_position "$command_log" "$pattern" "$occurrence")"
+    [[ -n "$position" ]] || fail_test "PM 성공 순서에서 $label 단계가 없습니다."
+    [[ "$position" -gt "$previous_position" ]] \
+      || fail_test "PM 성공 순서가 잘못됐습니다: $label"
+    previous_position="$position"
+  done <<'EOF'
+app-stop| compose .* stop app |1
+flyway-clean| flyway/flyway:.* clean[[:space:]]*$|1
+first-migrate| flyway/flyway:.* migrate[[:space:]]*$|1
+first-validate| flyway/flyway:.* validate[[:space:]]*$|1
+base|SQL_STAGE=base|1
+scenario|SQL_STAGE=scenario|1
+scenario-verify|SQL_STAGE=verify|1
+utf8-verify|SQL_STAGE=utf8|1
+playground|SQL_STAGE=playground$|1
+playground-verify|SQL_STAGE=playground-verify|1
+final-migrate| flyway/flyway:.* migrate[[:space:]]*$|2
+final-validate| flyway/flyway:.* validate[[:space:]]*$|2
+app-start| compose .* up --detach app |1
+health|/actuator/health|1
+persona|/dev/auth/personas|1
+EOF
+}
+
+run_case() {
+  local case_name="$1"
+  local fail_stage="$2"
+  local confirmation="$3"
+  local ref_name="$4"
+  local scenario="$5"
+  local expected_success="$6"
+  local target_hash_override="${7:-}"
+  local preexisting_marker="${8:-false}"
+  local deployed_datasource_override="${9:-}"
+  local runtime_username="${10:-ssing_runtime}"
+  local deployed_username_override="${11:-}"
+  local deployed_profile="${12:-dev}"
+  local deployed_ddl_auto="${13:-validate}"
+  local reset_username="${14:-ssing_reset}"
+  local db_host="${RUN_CASE_DB_HOST:-$TEST_HOST}"
+  local db_port="${RUN_CASE_DB_PORT:-3306}"
+  local db_name="${RUN_CASE_DB_NAME:-ssing}"
+  local case_target="${db_host}:${db_port}/${db_name}"
+  local deployed_image="${RUN_CASE_DEPLOYED_IMAGE:-$EXPECTED_IMAGE}"
+  local running_image="${RUN_CASE_RUNNING_IMAGE:-$deployed_image}"
+
+  local case_dir="$TEST_TMP/$case_name"
+  local deploy_dir="$case_dir/deploy"
+  local output_file="$case_dir/output.log"
+  local report_file="$case_dir/report.md"
+  local command_log="$case_dir/commands.log"
+  mkdir -p "$deploy_dir"
+  : > "$command_log"
+  {
+    printf 'SSING_IMAGE=%s\n' "$deployed_image"
+    printf 'SSING_DATASOURCE_URL=%s\n' \
+      "${deployed_datasource_override:-jdbc:mysql://${case_target}?useUnicode=true}"
+    printf 'SSING_DATASOURCE_USERNAME=%s\n' \
+      "${deployed_username_override:-$runtime_username}"
+    printf 'SPRING_PROFILES_ACTIVE=%s\n' "$deployed_profile"
+    printf 'SSING_JPA_DDL_AUTO=%s\n' "$deployed_ddl_auto"
+  } > "$deploy_dir/.env"
+  : > "$deploy_dir/docker-compose.dev.yml"
+  if [[ "$preexisting_marker" == true ]]; then
+    printf 'RESET_INCOMPLETE\n' > "$deploy_dir/.dev-db-reset-incomplete"
+  fi
+
+  export FAKE_COMMAND_LOG="$command_log"
+  export FAKE_FAIL_STAGE="$fail_stage"
+  export FAKE_RUNNING_IMAGE="$running_image"
+  export SSING_SEED_TARGET_ENV="dev"
+  export SSING_DEV_DEPLOY_DIR="$deploy_dir"
+  export SSING_DEV_COMPOSE_FILE="docker-compose.dev.yml"
+  export SSING_DEV_RESET_REPORT_PATH="$report_file"
+  export SSING_DEV_DB_HOST="$db_host"
+  export SSING_DEV_DB_PORT="$db_port"
+  export SSING_DEV_DB_NAME="$db_name"
+  export SSING_DEV_DB_ALLOWED_TARGET_SHA256="${target_hash_override:-$TEST_TARGET_SHA256}"
+  export SSING_DEV_RUNTIME_DATASOURCE_URL="jdbc:mysql://${case_target}?useUnicode=true"
+  export SSING_DEV_RUNTIME_DB_USERNAME="$runtime_username"
+  export SSING_DEV_DB_MIGRATION_USERNAME="ssing_migration"
+  export SSING_DEV_DB_MIGRATION_PASSWORD="migration-secret#42"
+  export SSING_DEV_DB_RESET_USERNAME="$reset_username"
+  export SSING_DEV_DB_RESET_PASSWORD="reset-secret#42"
+  export SSING_RESET_COMMIT_SHA="$TEST_SHA"
+
+  set +e
+  if [[ "${RUN_CASE_MISSING_COMMAND:-}" == "docker" ]]; then
+    local isolated_bin="$case_dir/isolated-bin"
+    mkdir -p "$isolated_bin"
+    ln -s "$(command -v dirname)" "$isolated_bin/dirname"
+    ln -s "$(command -v chmod)" "$isolated_bin/chmod"
+    /usr/bin/env -u 'BASH_FUNC_docker%%' PATH="$isolated_bin" /bin/bash \
+      "$PROJECT_ROOT/scripts/db/reset-dev.sh" \
+      "$confirmation" "$ref_name" "$scenario" > "$output_file" 2>&1
+  else
+    bash "$PROJECT_ROOT/scripts/db/reset-dev.sh" \
+      "$confirmation" "$ref_name" "$scenario" > "$output_file" 2>&1
+  fi
+  local exit_code=$?
+  set -e
+  printf '%s\n' "$exit_code" > "$case_dir/exit-code"
+
+  if [[ "$expected_success" == true ]]; then
+    [[ "$exit_code" -eq 0 ]] || fail_test "$case_name 성공 계약이 실패했습니다: exit=$exit_code"
+    grep -Fq '결과: `성공`' "$report_file" \
+      || fail_test "$case_name 성공 report가 없습니다."
+    [[ ! -e "$deploy_dir/.dev-db-reset-incomplete" ]] \
+      || fail_test "$case_name 성공 뒤 incomplete marker가 남았습니다."
+    grep -Eq ' compose .* stop app ' "$command_log" \
+      || fail_test "$case_name 앱 중지 명령이 없습니다."
+    grep -Eq ' flyway/flyway:.* clean ' "$command_log" \
+      || fail_test "$case_name Flyway clean 명령이 없습니다."
+    grep -Eq ' compose .* up --detach app ' "$command_log" \
+      || fail_test "$case_name 앱 재기동 명령이 없습니다."
+    ! grep -Fq 'SSING_SCHEDULED_JOBS_ENABLED' "$command_log" \
+      || fail_test "$case_name scheduler 설정을 덮어썼습니다."
+  else
+    [[ "$exit_code" -ne 0 ]] || fail_test "$case_name 실패 계약이 성공했습니다."
+  fi
+
+  assert_secret_safe "$output_file" "$report_file" "$command_log"
+}
+
+run_migrate_case() {
+  local case_name="$1"
+  local fail_stage="$2"
+  local marker_present="$3"
+  local expected_success="$4"
+  local runtime_username="${5:-ssing_runtime}"
+  local case_dir="$TEST_TMP/$case_name"
+  local deploy_dir="$case_dir/deploy"
+  local output_file="$case_dir/output.log"
+  local command_log="$case_dir/commands.log"
+  mkdir -p "$deploy_dir"
+  : > "$command_log"
+  if [[ "$marker_present" == true ]]; then
+    printf 'RESET_INCOMPLETE\n' > "$deploy_dir/.dev-db-reset-incomplete"
+  fi
+
+  export FAKE_COMMAND_LOG="$command_log"
+  export FAKE_FAIL_STAGE="$fail_stage"
+  export SSING_SEED_TARGET_ENV="dev"
+  export SSING_DEV_DEPLOY_DIR="$deploy_dir"
+  export SSING_DEV_DB_HOST="$TEST_HOST"
+  export SSING_DEV_DB_PORT="3306"
+  export SSING_DEV_DB_NAME="ssing"
+  export SSING_DEV_DB_ALLOWED_TARGET_SHA256="$TEST_TARGET_SHA256"
+  export SSING_DEV_RUNTIME_DATASOURCE_URL="jdbc:mysql://${TEST_TARGET}?useUnicode=true"
+  export SSING_DEV_RUNTIME_DB_USERNAME="$runtime_username"
+  export SSING_DEV_DB_MIGRATION_USERNAME="ssing_migration"
+  export SSING_DEV_DB_MIGRATION_PASSWORD="migration-secret#42"
+
+  set +e
+  bash "$PROJECT_ROOT/scripts/db/migrate-dev.sh" > "$output_file" 2>&1
+  local exit_code=$?
+  set -e
+  printf '%s\n' "$exit_code" > "$case_dir/exit-code"
+
+  if [[ "$expected_success" == true ]]; then
+    [[ "$exit_code" -eq 0 ]] || fail_test "$case_name migration 성공 계약이 실패했습니다."
+    grep -Eq ' flyway/flyway:.* migrate ' "$command_log" \
+      || fail_test "$case_name migrate 명령이 없습니다."
+    grep -Eq ' flyway/flyway:.* validate ' "$command_log" \
+      || fail_test "$case_name validate 명령이 없습니다."
+    ! grep -Eq ' flyway/flyway:.* clean ' "$command_log" \
+      || fail_test "$case_name 일반 배포 migration이 clean을 실행했습니다."
+  else
+    [[ "$exit_code" -ne 0 ]] || fail_test "$case_name migration 실패 계약이 성공했습니다."
+  fi
+
+  assert_secret_safe "$output_file" "$case_dir/missing-report.md" "$command_log"
+}
+
+TEST_TMP="$(mktemp -d /tmp/ssing-dev-runner-test.XXXXXX)"
+cleanup_test_tmp() {
+  if [[ "${KEEP_SSING_DEV_RUNNER_TEST_TMP:-false}" == true ]]; then
+    printf 'dev runner test fixtures kept at %s\n' "$TEST_TMP" >&2
+  else
+    rm -rf -- "$TEST_TMP"
+  fi
+}
+trap cleanup_test_tmp EXIT
+EXPECTED_IMAGE="teamssing/server:dev-${TEST_SHA}"
+TEST_TARGET_SHA256="$(target_sha256 "$TEST_TARGET")"
+export TEST_TMP EXPECTED_IMAGE TEST_TARGET_SHA256
+
+run_case invalid-confirm "" wrong-confirm main pm-full-requested-catalog false
+assert_no_mutation_command "$TEST_TMP/invalid-confirm/commands.log"
+
+run_case preexisting-marker-preserved "" wrong-confirm main \
+  pm-full-requested-catalog false "" true
+assert_no_mutation_command "$TEST_TMP/preexisting-marker-preserved/commands.log"
+[[ -e "$TEST_TMP/preexisting-marker-preserved/deploy/.dev-db-reset-incomplete" ]] \
+  || fail_test "이전 reset의 incomplete marker를 새 실행의 입력 실패가 삭제했습니다."
+grep -Fq '이전 reset의 부분 또는 미확인 상태' \
+  "$TEST_TMP/preexisting-marker-preserved/report.md" \
+  || fail_test "이전 incomplete marker가 있을 때 부분 DB 복구 안내가 없습니다."
+! grep -Fq 'DB는 변경되지 않았습니다' \
+  "$TEST_TMP/preexisting-marker-preserved/output.log" \
+  "$TEST_TMP/preexisting-marker-preserved/report.md" \
+  || fail_test "이전 incomplete marker가 있는데 DB 무변경으로 잘못 안내했습니다."
+
+run_case invalid-ref "" --confirm-dev-reset feature pm-full-requested-catalog false
+assert_no_mutation_command "$TEST_TMP/invalid-ref/commands.log"
+
+run_case invalid-scenario "" --confirm-dev-reset main not-allowed false
+assert_no_mutation_command "$TEST_TMP/invalid-scenario/commands.log"
+
+(
+  RUN_CASE_MISSING_COMMAND=docker \
+    run_case missing-docker "" --confirm-dev-reset main pm-full-requested-catalog false
+)
+assert_no_mutation_command "$TEST_TMP/missing-docker/commands.log"
+grep -Fq '필수 명령 docker' "$TEST_TMP/missing-docker/output.log" \
+  || fail_test "docker 누락 안내가 한글로 제공되지 않았습니다."
+grep -Fq '현재 DB 상태: 변경 없음' "$TEST_TMP/missing-docker/report.md" \
+  || fail_test "docker 누락 시 DB 무변경 report가 없습니다."
+
+run_case invalid-target "" --confirm-dev-reset main pm-full-requested-catalog false \
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+assert_no_mutation_command "$TEST_TMP/invalid-target/commands.log"
+
+run_case deployed-target-mismatch "" --confirm-dev-reset main \
+  pm-full-requested-catalog false "" false \
+  "jdbc:mysql://other-dev.example:3306/ssing"
+assert_no_mutation_command "$TEST_TMP/deployed-target-mismatch/commands.log"
+
+run_case account-separation "" --confirm-dev-reset main \
+  pm-full-requested-catalog false "" false "" ssing_migration
+assert_no_mutation_command "$TEST_TMP/account-separation/commands.log"
+
+run_case reset-runtime-account-collision "" --confirm-dev-reset main \
+  pm-full-requested-catalog false "" false "" ssing_runtime "" dev validate ssing_runtime
+assert_no_mutation_command "$TEST_TMP/reset-runtime-account-collision/commands.log"
+
+run_case reset-migration-account-collision "" --confirm-dev-reset main \
+  pm-full-requested-catalog false "" false "" ssing_runtime "" dev validate ssing_migration
+assert_no_mutation_command "$TEST_TMP/reset-migration-account-collision/commands.log"
+
+run_case deployed-username-mismatch "" --confirm-dev-reset main \
+  pm-full-requested-catalog false "" false "" ssing_runtime stale_runtime
+assert_no_mutation_command "$TEST_TMP/deployed-username-mismatch/commands.log"
+
+run_case deployed-profile-mismatch "" --confirm-dev-reset main \
+  pm-full-requested-catalog false "" false "" ssing_runtime "" prod
+assert_no_mutation_command "$TEST_TMP/deployed-profile-mismatch/commands.log"
+
+run_case deployed-ddl-auto-mismatch "" --confirm-dev-reset main \
+  pm-full-requested-catalog false "" false "" ssing_runtime "" dev update
+assert_no_mutation_command "$TEST_TMP/deployed-ddl-auto-mismatch/commands.log"
+
+stale_image="teamssing/server:dev-1111111111111111111111111111111111111111"
+(
+  RUN_CASE_DEPLOYED_IMAGE="$stale_image" \
+  RUN_CASE_RUNNING_IMAGE="$stale_image" \
+    run_case deployed-commit-mismatch "" --confirm-dev-reset main \
+      pm-full-requested-catalog false
+)
+assert_no_mutation_command "$TEST_TMP/deployed-commit-mismatch/commands.log"
+
+(
+  RUN_CASE_RUNNING_IMAGE="$stale_image" \
+    run_case running-image-mismatch "" --confirm-dev-reset main \
+      pm-full-requested-catalog false
+)
+assert_no_mutation_command "$TEST_TMP/running-image-mismatch/commands.log"
+
+prod_like_target="ssing-prod.cluster-example.ap-northeast-2.rds.amazonaws.com:3306/ssing"
+(
+  RUN_CASE_DB_HOST="${prod_like_target%%:*}" \
+    run_case prod-like-target "" --confirm-dev-reset main \
+      pm-full-requested-catalog false "$(target_sha256 "$prod_like_target")"
+)
+assert_no_mutation_command "$TEST_TMP/prod-like-target/commands.log"
+
+wrong_schema_target="${TEST_HOST}:3306/ssing_other"
+(
+  RUN_CASE_DB_NAME=ssing_other \
+    run_case wrong-schema-target "" --confirm-dev-reset main \
+      pm-full-requested-catalog false "$(target_sha256 "$wrong_schema_target")"
+)
+assert_no_mutation_command "$TEST_TMP/wrong-schema-target/commands.log"
+
+wrong_port_target="${TEST_HOST}:3307/ssing"
+(
+  RUN_CASE_DB_PORT=3307 \
+    run_case wrong-port-target "" --confirm-dev-reset main \
+      pm-full-requested-catalog false "$(target_sha256 "$wrong_port_target")"
+)
+assert_no_mutation_command "$TEST_TMP/wrong-port-target/commands.log"
+
+run_case invalid-charset charset --confirm-dev-reset main pm-full-requested-catalog false
+assert_no_mutation_command "$TEST_TMP/invalid-charset/commands.log"
+
+run_case failure-mysql-connect mysql-connect \
+  --confirm-dev-reset main pm-full-requested-catalog false
+assert_no_mutation_command "$TEST_TMP/failure-mysql-connect/commands.log"
+[[ "$(< "$TEST_TMP/failure-mysql-connect/exit-code")" == "50" ]] \
+  || fail_test "MySQL 연결 실패 종료 코드가 보존되지 않았습니다."
+grep -Fq 'ERROR 2003' "$TEST_TMP/failure-mysql-connect/output.log" \
+  || fail_test "MySQL 연결 실패 진단이 사라졌습니다."
+grep -Fq '[REDACTED_DEV_DB_HOST]' "$TEST_TMP/failure-mysql-connect/output.log" \
+  || fail_test "MySQL 연결 실패 로그에서 DB host가 마스킹되지 않았습니다."
+[[ "$(grep -Fc '::error title=dev DB reset 실패::' \
+    "$TEST_TMP/failure-mysql-connect/output.log")" == "1" ]] \
+  || fail_test "MySQL 연결 실패에서 reset 오류 안내가 중복 출력됐습니다."
+
+run_case failure-app-stop app-stop \
+  --confirm-dev-reset main pm-full-requested-catalog false
+grep -Eq ' compose .* stop app ' "$TEST_TMP/failure-app-stop/commands.log" \
+  || fail_test "app-stop 실패 주입이 앱 중지 단계에 도달하지 않았습니다."
+[[ ! -e "$TEST_TMP/failure-app-stop/deploy/.dev-db-reset-incomplete" ]] \
+  || fail_test "clean 전 app-stop 실패는 marker를 정리해야 합니다."
+grep -Fq '실패/종료 단계: `안전 marker 생성과 앱 중지`' \
+  "$TEST_TMP/failure-app-stop/report.md" \
+  || fail_test "app-stop 실패 report의 단계 안내가 정확하지 않습니다."
+
+while IFS='|' read -r failure_stage expected_report_stage; do
+  run_case "failure-${failure_stage}" "$failure_stage" \
+    --confirm-dev-reset main pm-full-requested-catalog false
+  [[ -e "$TEST_TMP/failure-${failure_stage}/deploy/.dev-db-reset-incomplete" ]] \
+    || fail_test "$failure_stage 실패는 incomplete marker를 유지해야 합니다."
+  ! grep -Eq ' compose .* up --detach app ' "$TEST_TMP/failure-${failure_stage}/commands.log" \
+    || fail_test "$failure_stage 실패 뒤 앱을 재기동했습니다."
+  grep -Fq "실패/종료 단계: \`${expected_report_stage}\`" \
+    "$TEST_TMP/failure-${failure_stage}/report.md" \
+    || fail_test "$failure_stage 실패 report의 단계 안내가 정확하지 않습니다."
+done <<'EOF'
+flyway-clean|Flyway clean
+flyway-first-migrate|Flyway migrate와 validate
+flyway-first-validate|Flyway migrate와 validate
+base|Base Seed 적용
+scenario|Scenario Seed 적용
+verify|Scenario와 UTF-8 검증
+utf8|Scenario와 UTF-8 검증
+playground|PM dev playground 적용과 검증
+playground-verify|PM dev playground 적용과 검증
+flyway-final-migrate|최종 Flyway migrate와 validate
+flyway-final-validate|최종 Flyway migrate와 validate
+EOF
+
+[[ "$(< "$TEST_TMP/failure-flyway-clean/exit-code")" == "43" ]] \
+  || fail_test "Flyway 실패 종료 코드가 보존되지 않았습니다."
+grep -Fq 'ERROR: Unable to obtain connection' \
+  "$TEST_TMP/failure-flyway-clean/output.log" \
+  || fail_test "Flyway 연결 실패 진단이 사라졌습니다."
+grep -Fq '[REDACTED_DEV_DB_URL]' \
+  "$TEST_TMP/failure-flyway-clean/output.log" \
+  || fail_test "Flyway 연결 실패 로그에서 JDBC URL이 마스킹되지 않았습니다."
+
+for failure_stage in app-start health persona; do
+  run_case "failure-${failure_stage}" "$failure_stage" \
+    --confirm-dev-reset main pm-full-requested-catalog false
+  [[ ! -e "$TEST_TMP/failure-${failure_stage}/deploy/.dev-db-reset-incomplete" ]] \
+    || fail_test "$failure_stage 실패는 DB 검증 뒤이므로 marker가 없어야 합니다."
+  grep -Eq 'DB를 다시 (지우지|초기화하지) 말고' \
+    "$TEST_TMP/failure-${failure_stage}/output.log" \
+    "$TEST_TMP/failure-${failure_stage}/report.md" \
+    || fail_test "$failure_stage 실패 안내가 DB 재초기화를 금지하지 않았습니다."
+done
+grep -Eq ' compose .* up --detach app ' "$TEST_TMP/failure-app-start/commands.log" \
+  || fail_test "app-start 실패 주입이 앱 재기동 단계에 도달하지 않았습니다."
+grep -Fq '/actuator/health' "$TEST_TMP/failure-health/commands.log" \
+  || fail_test "health 실패 주입이 health 단계에 도달하지 않았습니다."
+grep -Fq '/dev/auth/personas' "$TEST_TMP/failure-persona/commands.log" \
+  || fail_test "persona 실패 주입이 smoke 단계에 도달하지 않았습니다."
+grep -Fq '현재 앱 상태: 컨테이너 실행 중(health 미확인)' \
+  "$TEST_TMP/failure-app-start/report.md" \
+  || fail_test "app-start 실패 report가 실제 컨테이너 상태를 확인하지 않았습니다."
+grep -Fq '현재 앱 상태: 컨테이너 실행 중(health 미확인)' \
+  "$TEST_TMP/failure-health/report.md" \
+  || fail_test "health 실패 report가 실행 중인 컨테이너 상태를 누락했습니다."
+grep -Fq '현재 앱 상태: 정상 실행(health UP)' \
+  "$TEST_TMP/failure-persona/report.md" \
+  || fail_test "persona 실패 report가 이미 확인한 health UP 상태를 잃었습니다."
+
+run_case failure-persona-encoding persona-encoding \
+  --confirm-dev-reset main pm-full-requested-catalog false
+grep -Fq '정확한 한글 닉네임' \
+  "$TEST_TMP/failure-persona-encoding/output.log" \
+  "$TEST_TMP/failure-persona-encoding/report.md" \
+  || fail_test "persona 문자셋 실패의 한글 복구 안내가 없습니다."
+grep -Fq '현재 앱 상태: 정상 실행(health UP)' \
+  "$TEST_TMP/failure-persona-encoding/report.md" \
+  || fail_test "문자셋 smoke 실패 report가 이미 확인한 health UP 상태를 잃었습니다."
+
+for success_scenario in \
+  matching-price-vivaldi \
+  matching-no-candidate-alpensia \
+  matching-multi-request-oak \
+  pm-full-requested-catalog; do
+  run_case "success-${success_scenario}" "" \
+    --confirm-dev-reset main "$success_scenario" true
+done
+
+for non_pm_scenario in \
+  matching-price-vivaldi \
+  matching-no-candidate-alpensia \
+  matching-multi-request-oak; do
+  ! grep -Fq 'SQL_STAGE=playground' \
+    "$TEST_TMP/success-${non_pm_scenario}/commands.log" \
+    || fail_test "$non_pm_scenario 시나리오에 PM playground overlay를 적용했습니다."
+done
+grep -Fq 'SQL_STAGE=playground' \
+  "$TEST_TMP/success-pm-full-requested-catalog/commands.log" \
+  || fail_test "PM 시나리오에 dev playground overlay가 적용되지 않았습니다."
+assert_pm_success_order \
+  "$TEST_TMP/success-pm-full-requested-catalog/commands.log"
+
+run_migrate_case migration-blocked-by-marker "" true false
+! grep -Eq ' flyway/flyway:' "$TEST_TMP/migration-blocked-by-marker/commands.log" \
+  || fail_test "incomplete reset marker가 있는 배포에서 Flyway를 실행했습니다."
+run_migrate_case migration-account-collision "" false false ssing_migration
+! grep -Eq ' flyway/flyway:' "$TEST_TMP/migration-account-collision/commands.log" \
+  || fail_test "runtime과 migration 계정이 같은 배포에서 Flyway를 실행했습니다."
+run_migrate_case migration-mysql-connect mysql-connect false false
+[[ "$(< "$TEST_TMP/migration-mysql-connect/exit-code")" == "50" ]] \
+  || fail_test "migration MySQL 연결 실패 종료 코드가 보존되지 않았습니다."
+grep -Fq 'ERROR 2003' "$TEST_TMP/migration-mysql-connect/output.log" \
+  || fail_test "migration MySQL 연결 실패 진단이 사라졌습니다."
+grep -Fq '[REDACTED_DEV_DB_HOST]' \
+  "$TEST_TMP/migration-mysql-connect/output.log" \
+  || fail_test "migration MySQL 연결 실패 로그에서 DB host가 마스킹되지 않았습니다."
+[[ "$(grep -Fc '::error title=dev DB migration 실패::' \
+    "$TEST_TMP/migration-mysql-connect/output.log")" == "1" ]] \
+  || fail_test "MySQL 연결 실패에서 migration 오류 안내가 중복 출력됐습니다."
+run_migrate_case migration-failure flyway-migrate false false
+[[ "$(< "$TEST_TMP/migration-failure/exit-code")" == "43" ]] \
+  || fail_test "migration Flyway 실패 종료 코드가 보존되지 않았습니다."
+! grep -Eq ' compose .* up ' "$TEST_TMP/migration-failure/commands.log" \
+  || fail_test "migration 실패 뒤 앱을 재기동했습니다."
+run_migrate_case migration-success "" false true
+
+printf 'dev runner contract test passed\n'

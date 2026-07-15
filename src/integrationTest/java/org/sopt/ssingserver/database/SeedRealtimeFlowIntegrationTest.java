@@ -398,6 +398,7 @@ class SeedRealtimeFlowIntegrationTest {
 
     private void runSql(String path) {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new FileSystemResource(path));
+        populator.setSqlScriptEncoding(StandardCharsets.UTF_8.name());
         populator.setContinueOnError(false);
         populator.execute(dataSource);
     }

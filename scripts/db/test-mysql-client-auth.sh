@@ -51,6 +51,8 @@ docker() {
   [[ "$mysql_index" -ge 0 ]] || fail_test "mysql client command was not found"
   [[ "${arguments[$((mysql_index + 1))]:-}" == "--defaults-extra-file=/run/secrets/ssing-mysql-client.cnf" ]] \
     || fail_test "--defaults-extra-file must be the first mysql option"
+  [[ "${arguments[$((mysql_index + 2))]:-}" == "--default-character-set=utf8mb4" ]] \
+    || fail_test "utf8mb4 must be selected immediately after the defaults file"
   [[ " ${arguments[*]} " != *" ${EXPECTED_PASSWORD} "* ]] \
     || fail_test "password must not appear in Docker arguments"
 

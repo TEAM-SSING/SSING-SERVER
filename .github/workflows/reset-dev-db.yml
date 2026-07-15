@@ -1,0 +1,360 @@
+name: Reset Dev DB
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenarioKey:
+        description: 적용할 Seed 시나리오
+        required: true
+        type: choice
+        options:
+          - matching-price-vivaldi
+          - matching-no-candidate-alpensia
+          - matching-multi-request-oak
+          - pm-full-requested-catalog
+      confirmReset:
+        description: dev DB의 기존 데이터를 지우고 다시 만들겠습니다
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: ssing-dev-mutation
+  queue: max
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: 입력과 main ref 확인
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - name: 파괴 작업 입력 재검증
+        env:
+          CONFIRM_RESET: ${{ inputs.confirmReset }}
+          GIT_REF: ${{ github.ref }}
+          SCENARIO_KEY: ${{ inputs.scenarioKey }}
+        run: |
+          set -euo pipefail
+
+          if [ "$CONFIRM_RESET" != "true" ]; then
+            echo "::error title=초기화 확인 필요::confirmReset을 체크해야 dev DB reset을 실행할 수 있습니다. DB는 변경되지 않았습니다."
+            exit 2
+          fi
+          if [ "$GIT_REF" != "refs/heads/main" ]; then
+            echo "::error title=main ref 필요::dev DB reset은 main ref에서만 실행할 수 있습니다. DB는 변경되지 않았습니다."
+            exit 2
+          fi
+
+          case "$SCENARIO_KEY" in
+            matching-price-vivaldi|matching-no-candidate-alpensia|matching-multi-request-oak|pm-full-requested-catalog)
+              ;;
+            *)
+              echo "::error title=시나리오 확인 실패::허용된 Seed 시나리오가 아닙니다. DB는 변경되지 않았습니다."
+              exit 2
+              ;;
+          esac
+
+          echo "::notice title=입력 검증 완료::main ref, 초기화 확인, 시나리오 allowlist를 확인했습니다."
+
+  reset:
+    name: 승인 후 dev DB reset
+    needs: preflight
+    environment: dev-reset
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    env:
+      DEPLOY_DIR: /home/ubuntu/ssing
+      REMOTE_WORK_DIR: /home/ubuntu/ssing/.dev-reset-work/${{ github.run_id }}
+    steps:
+      - name: 실행 시작 시각 기록
+        run: |
+          {
+            printf 'RESET_STARTED_AT=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            printf 'RESET_STARTED_EPOCH=%s\n' "$(date +%s)"
+          } >> "$GITHUB_ENV"
+
+      - name: 저장소 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: dev DB 대상 로그 마스킹
+        env:
+          SSING_DEV_DB_HOST: ${{ vars.SSING_DEV_DB_HOST }}
+          SSING_DEV_DB_PORT: ${{ vars.SSING_DEV_DB_PORT }}
+          SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}
+          SSING_DEV_RUNTIME_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
+        run: |
+          set -euo pipefail
+          jdbc_prefix=""
+          if [ -n "$SSING_DEV_DB_HOST" ] \
+              && [ -n "$SSING_DEV_DB_PORT" ] \
+              && [ -n "$SSING_DEV_DB_NAME" ]; then
+            jdbc_prefix="jdbc:mysql://${SSING_DEV_DB_HOST}:${SSING_DEV_DB_PORT}/${SSING_DEV_DB_NAME}"
+          fi
+          for sensitive_value in \
+            "$SSING_DEV_DB_HOST" \
+            "$SSING_DEV_RUNTIME_DATASOURCE_URL" \
+            "$jdbc_prefix"; do
+            if [ -n "$sensitive_value" ]; then
+              printf '::add-mask::%s\n' "$sensitive_value"
+            fi
+          done
+
+      - name: dev-reset Environment 활성화와 설정 확인
+        env:
+          RESET_ENABLED: ${{ vars.SSING_DEV_RESET_ENABLED }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_SSH_KNOWN_HOSTS: ${{ secrets.EC2_SSH_KNOWN_HOSTS }}
+          SSING_DEV_DB_HOST: ${{ vars.SSING_DEV_DB_HOST }}
+          SSING_DEV_DB_PORT: ${{ vars.SSING_DEV_DB_PORT }}
+          SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}
+          SSING_DEV_DB_ALLOWED_TARGET_SHA256: ${{ vars.SSING_DEV_DB_ALLOWED_TARGET_SHA256 }}
+          SSING_DEV_RUNTIME_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
+          SSING_DEV_RUNTIME_DB_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
+          SSING_DEV_DB_MIGRATION_USERNAME: ${{ vars.SSING_DEV_DB_MIGRATION_USERNAME }}
+          SSING_DEV_DB_MIGRATION_PASSWORD: ${{ secrets.SSING_DEV_DB_MIGRATION_PASSWORD }}
+          SSING_DEV_DB_RESET_USERNAME: ${{ vars.SSING_DEV_DB_RESET_USERNAME }}
+          SSING_DEV_DB_RESET_PASSWORD: ${{ secrets.SSING_DEV_DB_RESET_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ "$RESET_ENABLED" != "true" ]; then
+            echo "::error title=dev reset 비활성화::dev-reset Environment 보호 규칙과 전용 계정을 확인한 뒤 SSING_DEV_RESET_ENABLED=true로 설정하세요. DB는 변경되지 않았습니다."
+            exit 1
+          fi
+
+          required_values=(
+            EC2_HOST
+            EC2_USERNAME
+            EC2_SSH_PRIVATE_KEY
+            EC2_SSH_KNOWN_HOSTS
+            SSING_DEV_DB_HOST
+            SSING_DEV_DB_PORT
+            SSING_DEV_DB_NAME
+            SSING_DEV_DB_ALLOWED_TARGET_SHA256
+            SSING_DEV_RUNTIME_DATASOURCE_URL
+            SSING_DEV_RUNTIME_DB_USERNAME
+            SSING_DEV_DB_MIGRATION_USERNAME
+            SSING_DEV_DB_MIGRATION_PASSWORD
+            SSING_DEV_DB_RESET_USERNAME
+            SSING_DEV_DB_RESET_PASSWORD
+          )
+          for variable_name in "${required_values[@]}"; do
+            if [ -z "${!variable_name}" ]; then
+              echo "::error title=dev-reset 설정 누락::${variable_name} 값이 없습니다. DB는 변경되지 않았습니다."
+              exit 1
+            fi
+          done
+
+          echo "::notice title=dev-reset 설정 확인 완료::보호 Environment 활성화 값과 필수 설정이 준비되었습니다."
+
+      - name: 고정된 EC2 SSH host key 준비
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_SSH_KNOWN_HOSTS: ${{ secrets.EC2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/ssing-dev-key
+          chmod 600 ~/.ssh/ssing-dev-key
+          printf '%s\n' "$EC2_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh-keygen -l -f ~/.ssh/known_hosts >/dev/null
+          echo "::notice title=SSH host key 준비 완료::저장된 known_hosts 값만 사용합니다."
+
+      - name: reset 실행 파일 업로드
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          tar -czf .dev-reset-artifact.tgz \
+            scripts/db \
+            db/seed \
+            src/main/resources/db/migration
+
+          ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "mkdir -p '$REMOTE_WORK_DIR' && chmod 700 '$REMOTE_WORK_DIR'"
+          scp -i ~/.ssh/ssing-dev-key .dev-reset-artifact.tgz \
+            "$SSH_TARGET:$REMOTE_WORK_DIR/artifact.tgz"
+          ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "tar -xzf '$REMOTE_WORK_DIR/artifact.tgz' -C '$REMOTE_WORK_DIR' && rm -f '$REMOTE_WORK_DIR/artifact.tgz'"
+          rm -f .dev-reset-artifact.tgz
+
+      - name: reset 전용 임시 설정 업로드
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          SSING_DEV_DB_HOST: ${{ vars.SSING_DEV_DB_HOST }}
+          SSING_DEV_DB_PORT: ${{ vars.SSING_DEV_DB_PORT }}
+          SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}
+          SSING_DEV_DB_ALLOWED_TARGET_SHA256: ${{ vars.SSING_DEV_DB_ALLOWED_TARGET_SHA256 }}
+          SSING_DEV_RUNTIME_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
+          SSING_DEV_RUNTIME_DB_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
+          SSING_DEV_DB_MIGRATION_USERNAME: ${{ vars.SSING_DEV_DB_MIGRATION_USERNAME }}
+          SSING_DEV_DB_MIGRATION_PASSWORD: ${{ secrets.SSING_DEV_DB_MIGRATION_PASSWORD }}
+          SSING_DEV_DB_RESET_USERNAME: ${{ vars.SSING_DEV_DB_RESET_USERNAME }}
+          SSING_DEV_DB_RESET_PASSWORD: ${{ secrets.SSING_DEV_DB_RESET_PASSWORD }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f .dev-reset.env' EXIT
+          umask 077
+          {
+            printf 'SSING_SEED_TARGET_ENV=%q\n' dev
+            printf 'SSING_DEV_DEPLOY_DIR=%q\n' "$DEPLOY_DIR"
+            printf 'SSING_DEV_DB_HOST=%q\n' "$SSING_DEV_DB_HOST"
+            printf 'SSING_DEV_DB_PORT=%q\n' "$SSING_DEV_DB_PORT"
+            printf 'SSING_DEV_DB_NAME=%q\n' "$SSING_DEV_DB_NAME"
+            printf 'SSING_DEV_DB_ALLOWED_TARGET_SHA256=%q\n' "$SSING_DEV_DB_ALLOWED_TARGET_SHA256"
+            printf 'SSING_DEV_RUNTIME_DATASOURCE_URL=%q\n' "$SSING_DEV_RUNTIME_DATASOURCE_URL"
+            printf 'SSING_DEV_RUNTIME_DB_USERNAME=%q\n' "$SSING_DEV_RUNTIME_DB_USERNAME"
+            printf 'SSING_DEV_DB_MIGRATION_USERNAME=%q\n' "$SSING_DEV_DB_MIGRATION_USERNAME"
+            printf 'SSING_DEV_DB_MIGRATION_PASSWORD=%q\n' "$SSING_DEV_DB_MIGRATION_PASSWORD"
+            printf 'SSING_DEV_DB_RESET_USERNAME=%q\n' "$SSING_DEV_DB_RESET_USERNAME"
+            printf 'SSING_DEV_DB_RESET_PASSWORD=%q\n' "$SSING_DEV_DB_RESET_PASSWORD"
+            printf 'SSING_RESET_COMMIT_SHA=%q\n' "$GITHUB_SHA"
+            printf 'SSING_DEV_RESET_REPORT_PATH=%q\n' "$REMOTE_WORK_DIR/.dev-reset-report.md"
+          } > .dev-reset.env
+
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          scp -i ~/.ssh/ssing-dev-key .dev-reset.env \
+            "$SSH_TARGET:$REMOTE_WORK_DIR/.dev-reset.env"
+          ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "chmod 600 '$REMOTE_WORK_DIR/.dev-reset.env'"
+
+      - name: dev 앱 중지와 DB 전체 reset 실행
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          SCENARIO_KEY: ${{ inputs.scenarioKey }}
+        run: |
+          set -euo pipefail
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          printf -v remote_command 'bash -s -- %q %q' "$REMOTE_WORK_DIR" "$SCENARIO_KEY"
+
+          ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "$remote_command" <<'EOF'
+          set -euo pipefail
+          work_dir="$1"
+          scenario_key="$2"
+          cd "$work_dir"
+          chmod +x scripts/db/*.sh
+          set -a
+          source .dev-reset.env
+          set +a
+          rm -f .dev-reset.env
+          ./scripts/db/reset-dev.sh --confirm-dev-reset main "$scenario_key"
+          EOF
+
+      - name: 원격 실행기 결과 회수
+        if: always()
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          if scp -i ~/.ssh/ssing-dev-key \
+              "$SSH_TARGET:$REMOTE_WORK_DIR/.dev-reset-report.md" \
+              .dev-reset-report.md; then
+            echo "::notice title=원격 reset 결과 회수 완료::원격 실행기의 단계별 report를 가져왔습니다."
+            exit 0
+          fi
+
+          marker_state="UNKNOWN"
+          remote_marker_path="$DEPLOY_DIR/.dev-db-reset-incomplete"
+          printf -v marker_command \
+            'if [ -e %q ]; then printf PRESENT; else printf ABSENT; fi' \
+            "$remote_marker_path"
+          if marker_probe="$(ssh -i ~/.ssh/ssing-dev-key \
+              "$SSH_TARGET" "$marker_command" 2>/dev/null)"; then
+            case "$marker_probe" in
+              PRESENT) marker_state="PRESENT" ;;
+              ABSENT) marker_state="ABSENT" ;;
+              *) marker_state="UNKNOWN" ;;
+            esac
+          fi
+
+          case "$marker_state" in
+            PRESENT)
+              marker_summary="존재함 — DB가 부분 상태일 수 있으므로 앱 재기동과 새 배포를 중단해야 합니다."
+              next_action="원격 실행 실패 원인을 수정한 뒤 보호된 Reset Dev DB workflow를 처음부터 다시 실행하세요."
+              ;;
+            ABSENT)
+              marker_summary="없음 — reset 미시작, marker 생성 전 실패, DB 검증 완료 중 어느 상태인지는 확정할 수 없습니다."
+              next_action="EC2 앱 컨테이너와 DB 검증 상태를 먼저 확인한 뒤 reset 재실행 또는 앱 복구를 결정하세요."
+              ;;
+            UNKNOWN)
+              marker_summary="확인 실패 — SSH 연결 또는 원격 상태부터 복구해야 합니다."
+              next_action="새 배포나 앱 재기동 전에 EC2 marker, 앱 컨테이너, DB 상태를 모두 수동 확인하세요."
+              ;;
+          esac
+
+          umask 077
+          {
+            echo "### 원격 실행기 결과 회수 실패"
+            echo ""
+            echo "- 결과: \`확인 불가\`"
+            echo "- 실패/종료 단계: \`원격 report 미생성 또는 회수 실패\`"
+            echo "- 마지막 성공 단계: \`확인 불가\`"
+            echo "- 현재 DB 상태: 원격 상태를 확정할 수 없습니다."
+            echo "- 현재 앱 상태: 원격 상태를 확정할 수 없습니다."
+            echo "- incomplete marker: $marker_summary"
+            echo "- 최초 원인 확인: 이 단계보다 먼저 실패한 첫 Actions step의 한글 로그를 확인하세요."
+            echo "- 다음 조치: $next_action"
+            echo ""
+            echo "> reset 진행 여부를 알 수 없으므로 기존 token과 resource ID가 유효하다고 가정하지 마세요."
+          } > .dev-reset-report.md
+          chmod 600 .dev-reset-report.md
+          echo "::error title=원격 reset 결과 확인 실패::fallback report를 남겼습니다. 원격 상태를 확정할 수 없어 workflow를 실패 처리합니다."
+          exit 1
+
+      - name: dev DB reset 결과 요약
+        if: always()
+        env:
+          SCENARIO_KEY: ${{ inputs.scenarioKey }}
+        run: |
+          ended_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          ended_epoch="$(date +%s)"
+          duration_seconds=$((ended_epoch - RESET_STARTED_EPOCH))
+          {
+            echo "## Dev DB reset 결과"
+            echo ""
+            echo "- 상태: \`${{ job.status }}\`"
+            echo "- 실행자: \`${{ github.actor }}\`"
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- 시나리오: \`$SCENARIO_KEY\`"
+            echo "- 시작: \`$RESET_STARTED_AT\`"
+            echo "- 종료: \`$ended_at\`"
+            echo "- 소요 시간: \`${duration_seconds}초\`"
+            echo ""
+            if [ -f .dev-reset-report.md ]; then
+              cat .dev-reset-report.md
+            else
+              echo "원격 상태를 확정할 수 없습니다. 실패 step과 EC2 marker·앱·DB 상태를 모두 확인하세요."
+            fi
+            if [ "$SCENARIO_KEY" = "pm-full-requested-catalog" ]; then
+              echo ""
+              echo "> 이 시나리오는 앱 재기동 뒤 scheduler에 따라 자연스럽게 바뀔 수 있습니다. 새 QA는 \`qa-free-consumer\`로 시작하세요."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: reset 임시 파일 정리
+        if: always()
+        continue-on-error: true
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          rm -f .dev-reset.env .dev-reset-artifact.tgz .dev-reset-report.md
+          if [ -f ~/.ssh/ssing-dev-key ]; then
+            SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+            ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "rm -rf '$REMOTE_WORK_DIR'"
+          fi
+          rm -f ~/.ssh/ssing-dev-key
