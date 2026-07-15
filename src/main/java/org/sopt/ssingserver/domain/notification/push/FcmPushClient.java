@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 public class FcmPushClient implements PushClient {
 
     private static final Logger log = LoggerFactory.getLogger(FcmPushClient.class);
+    private static final String PUSH_ACCEPTED_EVENT = "fcm.push.accepted";
     private static final String PUSH_DELIVERY_FAILED_EVENT = "fcm.push.delivery_failed";
 
     private final FirebaseMessaging firebaseMessaging;
@@ -25,15 +26,27 @@ public class FcmPushClient implements PushClient {
 
     @Override
     public void send(PushMessage message) {
+        long startedAt = System.nanoTime();
+
         // notification block 없이 Android가 직접 표시할 data-only 메시지를 HIGH priority로 전송한다.
         try {
-            firebaseMessaging.send(Message.builder()
+            String fcmMessageId = firebaseMessaging.send(Message.builder()
                     .setToken(message.token())
                     .setAndroidConfig(AndroidConfig.builder()
                             .setPriority(AndroidConfig.Priority.HIGH)
                             .build())
                     .putAllData(message.data())
                     .build());
+
+            log.atInfo()
+                    .addKeyValue("event", PUSH_ACCEPTED_EVENT)
+                    .addKeyValue("provider", "firebase")
+                    .addKeyValue("operation", "send")
+                    .addKeyValue("notification_id", String.valueOf(message.notificationId()))
+                    .addKeyValue("notification_type", message.data().get("type"))
+                    .addKeyValue("fcm_message_id", fcmMessageId)
+                    .addKeyValue("duration_ms", elapsedMillis(startedAt))
+                    .log("FCM push accepted");
         } catch (FirebaseMessagingException exception) {
             if (exception.getMessagingErrorCode() == MessagingErrorCode.UNREGISTERED) {
                 // 앱 삭제 또는 토큰 교체로 더 이상 사용할 수 없는 토큰은 다음 발송 전에 제거한다.
@@ -44,9 +57,21 @@ public class FcmPushClient implements PushClient {
                     .addKeyValue("event", PUSH_DELIVERY_FAILED_EVENT)
                     .addKeyValue("provider", "firebase")
                     .addKeyValue("operation", "send")
-                    .addKeyValue("error_code", exception.getMessagingErrorCode())
-                    .addKeyValue("exception_type", exception.getClass().getSimpleName())
+                    .addKeyValue("notification_id", String.valueOf(message.notificationId()))
+                    .addKeyValue("notification_type", message.data().get("type"))
+                    .addKeyValue("error_code", errorCode(exception))
+                    .addKeyValue("exception_type", exception.getClass().getName())
+                    .addKeyValue("duration_ms", elapsedMillis(startedAt))
                     .log("FCM push delivery failed");
         }
+    }
+
+    private String errorCode(FirebaseMessagingException exception) {
+        MessagingErrorCode errorCode = exception.getMessagingErrorCode();
+        return errorCode == null ? "UNKNOWN" : errorCode.name();
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000L;
     }
 }

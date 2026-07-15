@@ -10,6 +10,8 @@ import org.sopt.ssingserver.domain.notification.push.PushClient;
 import org.sopt.ssingserver.domain.notification.push.PushMessage;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
 import org.sopt.ssingserver.domain.notification.repository.NotificationRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,9 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @RequiredArgsConstructor
 public class NotificationDeliveryService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationDeliveryService.class);
+    private static final String PUSH_SKIPPED_NO_TOKEN_EVENT = "fcm.push.skipped.no_token";
 
     private final MemberRepository memberRepository;
     private final NotificationRepository notificationRepository;
@@ -39,7 +44,7 @@ public class NotificationDeliveryService {
                 .toList();
 
         // FCM 성공 여부와 무관하게 알림함에서 확인할 수 있도록 row를 현재 트랜잭션에 저장한다.
-        notificationRepository.save(Notification.create(
+        Notification notification = notificationRepository.save(Notification.create(
                 member,
                 payload.clientApp(),
                 payload.type(),
@@ -52,9 +57,33 @@ public class NotificationDeliveryService {
             @Override
             public void afterCommit() {
                 // DB 커밋이 실제로 성공한 경우에만 외부 Firebase 호출을 시작한다.
-                tokens.forEach(token -> pushClient.send(new PushMessage(token, payload.fcmData())));
+                sendPushMessages(memberId, notification, payload, tokens);
             }
         });
+    }
+
+    private void sendPushMessages(
+            Long memberId,
+            Notification notification,
+            NotificationPayload payload,
+            List<String> tokens
+    ) {
+        if (tokens.isEmpty()) {
+            log.atInfo()
+                    .addKeyValue("event", PUSH_SKIPPED_NO_TOKEN_EVENT)
+                    .addKeyValue("notification_id", String.valueOf(notification.getId()))
+                    .addKeyValue("notification_type", payload.type().name())
+                    .addKeyValue("member_id", String.valueOf(memberId))
+                    .addKeyValue("client_app", payload.clientApp().name())
+                    .log("FCM push skipped because no token was registered");
+            return;
+        }
+
+        tokens.forEach(token -> pushClient.send(new PushMessage(
+                notification.getId(),
+                token,
+                payload.fcmData()
+        )));
     }
 
     // JSON 컬럼에는 이동에 필요한 대상 정보만 문자열 JSON으로 저장한다.
