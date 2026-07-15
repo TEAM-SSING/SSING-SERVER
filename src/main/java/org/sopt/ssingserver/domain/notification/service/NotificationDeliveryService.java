@@ -11,6 +11,7 @@ import org.sopt.ssingserver.domain.notification.push.PushMessage;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
 import org.sopt.ssingserver.domain.notification.repository.NotificationRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -27,8 +28,8 @@ public class NotificationDeliveryService {
     private final PushClient pushClient;
     private final ObjectMapper objectMapper;
 
-    // 알림함 row를 먼저 커밋하고, 커밋 성공 후 수신 앱에 등록된 토큰으로 FCM을 발송한다.
-    @Transactional
+    // 매칭 트랜잭션의 afterCommit에서 호출되므로, 알림함 저장은 별도 트랜잭션으로 커밋한다.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void saveAndSend(Long memberId, NotificationPayload payload) {
         // 수신 회원과 앱 유형으로 토큰을 먼저 모으되, 토큰이 없어도 알림함 저장은 계속한다.
         Member member = memberRepository.getReferenceById(memberId);

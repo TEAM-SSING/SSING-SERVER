@@ -27,6 +27,8 @@ import org.sopt.ssingserver.domain.notification.push.PushClient;
 import org.sopt.ssingserver.domain.notification.push.PushMessage;
 import org.sopt.ssingserver.domain.notification.repository.FcmTokenRepository;
 import org.sopt.ssingserver.domain.notification.repository.NotificationRepository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.ObjectMapper;
@@ -45,6 +47,16 @@ class NotificationDeliveryServiceTest {
 
     @Mock
     private PushClient pushClient;
+
+    @Test
+    void saveAndSend은_매칭_afterCommit에서도_알림함을_커밋하도록_독립_트랜잭션을_사용한다()
+            throws NoSuchMethodException {
+        Transactional transactional = NotificationDeliveryService.class
+                .getDeclaredMethod("saveAndSend", Long.class, NotificationPayload.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(transactional.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
+    }
 
     @Test
     void 알림함을_저장한_커밋_이후에_등록된_강사_토큰으로_FCM을_발송한다() {
