@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.domain.notification.service;
 
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -140,7 +141,7 @@ public class NotificationService {
             Instant createdAt = Instant.parse(cursor.substring(0, separatorIndex));
             Long notificationId = Long.parseLong(cursor.substring(separatorIndex + 1));
             return new Cursor(createdAt, notificationId);
-        } catch (IllegalArgumentException exception) {
+        } catch (IllegalArgumentException | DateTimeException exception) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, exception);
         }
     }

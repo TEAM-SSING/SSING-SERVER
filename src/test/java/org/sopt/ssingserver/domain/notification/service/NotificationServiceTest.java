@@ -145,6 +145,18 @@ class NotificationServiceTest {
     }
 
     @Test
+    void getNotifications는_날짜형식이_잘못된_cursor면_BAD_REQUEST를_던진다() {
+        assertThatThrownBy(() -> notificationService.getNotifications(
+                currentMember(MemberRole.CONSUMER),
+                "invalid-date_99",
+                20
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(CommonErrorCode.BAD_REQUEST);
+    }
+
+    @Test
     void getNotifications는_빈_cursor면_BAD_REQUEST를_던진다() {
         assertThatThrownBy(() -> notificationService.getNotifications(
                 currentMember(MemberRole.CONSUMER),
