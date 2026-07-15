@@ -100,7 +100,9 @@ playground 데이터를 더하고, scheduler 기본 설정을 켠 채 앱을 재
 결과 report에 incomplete marker가 남았다고 나오면 부분 DB일 수 있으므로 앱을 직접 켜지
 않는다. 수동 reset은 기존 marker가 있으면 중단한다. 자동 배포는 현재 main SHA와 dev DB
 대상을 다시 확인한 뒤 전체 clean부터 재실행해 복구하며, 성공 전까지 marker가 앱 재기동을
-막는다. report 자체를 가져오지 못한 경우에는 reset 미시작·진행 중·완료를 단정할 수 없다.
+막는다. 자동 배포가 clean을 시작하기 전에는 후보 Compose 문법, image pull, DB 연결, Flyway
+실행 가능 여부를 먼저 확인한다. 이 사전 검증이 실패하면 기존 앱과 DB는 그대로 둔다. report
+자체를 가져오지 못한 경우에는 reset 미시작·진행 중·완료를 단정할 수 없다.
 먼저 EC2 marker, 앱 컨테이너, DB 상태를 확인한다.
 
 ## 로컬 서버와 토큰 사용하기
@@ -243,7 +245,9 @@ workflow로 실행한다.
 빈 DB V1→최신 bootstrap 검증은 계속 필수 CI에 남는다.
 
 `db-seed-check.yml`은 disposable 로컬 MySQL에 `reset-all-local.sh`을 한 번 실행해 모든
-시나리오 reset 경로를 검증한다. 통합 테스트는 CI/CD의 두 Gradle Runner에서 별도로 실행한다.
+시나리오 reset 경로를 검증한다. 같은 검증이 PR마다 세 번째 Runner로 붙어 대기 시간을 늘리지
+않도록 nightly와 수동 실행으로만 유지한다. 통합 테스트와 빠른 DB 실행기 계약은 CI/CD의 두
+Gradle Runner에서 계속 필수로 실행한다.
 
 `test-dev-runner-contract.sh`와 `test_dev_workflow_contract.py`는 실제 dev DB 대신 가짜
 명령과 workflow 구조를 사용해 대상 allowlist, UTF-8 client 설정, DB 주소 마스킹, 실패
@@ -252,9 +256,10 @@ workflow로 실행한다.
 
 main 배포에서는 애플리케이션 테스트, DB·Seed 테스트, ARM64 이미지 build·push가 동시에
 시작한다. 세 작업이 모두 성공해야 Dev DB를 초기화하고 앱을 재기동한다. 이미지는
-`dev-{commit SHA}` 태그로 찾되 실제 배포 설정은 registry digest까지 고정한다. DB clean 직전과
-Compose 재시작 직전에 현재 main SHA를 다시 확인하므로 오래된 main은 DB를 지우거나 앱을
-재기동할 수 없다.
+`dev-{commit SHA}` 태그로 찾되 실제 배포 설정은 registry digest까지 고정한다. migration과
+seed 파일도 `releases/{commit SHA}`의 빈 snapshot에 설치해 이전 배포에서 삭제된 SQL이 섞이지
+않게 한다. 후보 Compose·image·Flyway 사전 검증 뒤 DB clean 직전과 Compose 재시작 직전에 현재
+main SHA를 다시 확인한다. 재시작은 사전 검증에서 받은 image만 사용하고 다시 pull하지 않는다.
 
 ## 현재 범위 밖의 후속 작업
 

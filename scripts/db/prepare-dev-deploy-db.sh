@@ -43,19 +43,31 @@ trap 'on_signal HUP 129' HUP
 trap 'on_signal INT 130' INT
 trap 'on_signal TERM 143' TERM
 
-confirmation="${1:-}"
+operation="${1:-}"
 git_ref_name="${2:-}"
 deploy_dir="$(dev_deploy_dir)"
 compose_file="${SSING_DEV_COMPOSE_FILE:-docker-compose.dev.yml}"
 candidate_env="$deploy_dir/.env.next"
+preflight_marker="$deploy_dir/.dev-deploy-preflight"
 
-[[ "$confirmation" == "--confirm-dev-deploy-reset" ]] \
-  || dev_fail "배포 초기화 확인값이 올바르지 않습니다." 2
+case "$operation" in
+  --preflight-dev-deploy|--confirm-dev-deploy-reset)
+    ;;
+  *)
+    dev_fail "배포 사전 검증 또는 초기화 확인값이 올바르지 않습니다." 2
+    ;;
+esac
 [[ "$git_ref_name" == "main" ]] \
   || dev_fail "main ref에서만 dev 배포 DB 초기화를 실행할 수 있습니다." 2
 require_dev_value SSING_DEPLOY_COMMIT_SHA
 [[ "$SSING_DEPLOY_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] \
   || dev_fail "배포 commit SHA 형식이 올바르지 않습니다."
+[[ "$PROJECT_ROOT" == "$deploy_dir/releases/$SSING_DEPLOY_COMMIT_SHA" ]] \
+  || dev_fail "배포 DB 실행기는 해당 commit의 고정 release snapshot에서만 실행할 수 있습니다."
+
+if [[ "$operation" == "--preflight-dev-deploy" ]]; then
+  rm -f -- "$preflight_marker" "${preflight_marker}.tmp"
+fi
 
 CURRENT_STAGE="대상·권한·후보 설정 사전 검사"
 dev_require_command sudo
@@ -97,17 +109,57 @@ candidate_ddl_auto="$(sed -n 's/^SSING_JPA_DDL_AUTO=//p' "$candidate_env")"
   || dev_fail "후보 앱 profile이 dev가 아닙니다."
 [[ "$candidate_ddl_auto" == "validate" ]] \
   || dev_fail "후보 앱 JPA schema 정책이 validate가 아닙니다."
-assert_dev_connection_contract
+calculate_preflight_fingerprint() {
+  {
+    printf '%s\0' "$SSING_DEPLOY_COMMIT_SHA"
+    command cat "$candidate_env"
+    command cat "$deploy_dir/$compose_file"
+  } | dev_sha256
+}
+
+if [[ "$operation" == "--preflight-dev-deploy" ]]; then
+  CURRENT_STAGE="후보 Compose 설정 검증"
+  sudo env SSING_RUNTIME_ENV_FILE=.env.next docker compose \
+    --env-file "$candidate_env" \
+    --file "$deploy_dir/$compose_file" \
+    config --quiet
+
+  CURRENT_STAGE="후보 Docker 이미지 pull"
+  sudo env SSING_RUNTIME_ENV_FILE=.env.next docker compose \
+    --env-file "$candidate_env" \
+    --file "$deploy_dir/$compose_file" \
+    pull
+
+  CURRENT_STAGE="dev DB 연결과 Flyway 실행기 사전 검증"
+  assert_dev_connection_contract
+  run_dev_flyway info
+
+  preflight_fingerprint="$(calculate_preflight_fingerprint)"
+  printf '%s\n' "$preflight_fingerprint" > "${preflight_marker}.tmp"
+  chmod 600 "${preflight_marker}.tmp"
+  mv -f "${preflight_marker}.tmp" "$preflight_marker"
+
+  CURRENT_STAGE="완료"
+  printf 'dev 배포 사전 검증이 완료되었습니다. 현재 main 재확인 뒤 DB 초기화를 진행할 수 있습니다.\n'
+  exit 0
+fi
+
+CURRENT_STAGE="사전 검증 증거 확인"
+[[ -s "$preflight_marker" ]] \
+  || dev_fail "dev 배포 사전 검증이 완료되지 않아 DB 초기화를 차단했습니다."
+expected_preflight_fingerprint="$(calculate_preflight_fingerprint)"
+actual_preflight_fingerprint="$(< "$preflight_marker")"
+if [[ "$actual_preflight_fingerprint" != "$expected_preflight_fingerprint" ]]; then
+  rm -f -- "$preflight_marker"
+  dev_fail "사전 검증 뒤 후보 설정이 바뀌어 DB 초기화를 차단했습니다."
+fi
+rm -f -- "$preflight_marker"
 
 CURRENT_STAGE="안전 marker 생성과 앱 중지"
 create_dev_reset_marker
 MARKER_CREATED=true
-runtime_env_file=".env.next"
-if [[ -s "$deploy_dir/.env" ]]; then
-  runtime_env_file=".env"
-fi
-sudo env SSING_RUNTIME_ENV_FILE="$runtime_env_file" docker compose \
-  --env-file "$deploy_dir/$runtime_env_file" \
+sudo env SSING_RUNTIME_ENV_FILE=.env.next docker compose \
+  --env-file "$candidate_env" \
   --file "$deploy_dir/$compose_file" \
   stop app
 

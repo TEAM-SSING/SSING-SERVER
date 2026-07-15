@@ -64,7 +64,7 @@ class MatchingSearchSchedulerConfigTest {
     }
 
     @Test
-    void integration_test_설정은_예약_작업_자동_등록을_끄고_매칭_scheduler_빈은_유지한다() {
+    void 전체_예약_작업을_꺼도_매칭_scheduler_빈_설정은_독립적으로_유지된다() {
         contextRunner.run(context -> {
             assertThat(context.containsBean(
                     TaskManagementConfigUtils.SCHEDULED_ANNOTATION_PROCESSOR_BEAN_NAME

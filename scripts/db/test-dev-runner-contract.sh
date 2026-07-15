@@ -41,6 +41,14 @@ sudo() {
     [[ "${FAKE_FAIL_STAGE:-}" != "app-stop" ]] || return 41
     return 0
   fi
+  if [[ "$joined" == *" docker compose "*" config --quiet "* ]]; then
+    [[ "${FAKE_FAIL_STAGE:-}" != "compose-config" ]] || return 55
+    return 0
+  fi
+  if [[ "$joined" == *" docker compose "*" pull "* ]]; then
+    [[ "${FAKE_FAIL_STAGE:-}" != "compose-pull" ]] || return 56
+    return 0
+  fi
   if [[ "$joined" == *" docker compose "*" up --detach app "* ]]; then
     [[ "${FAKE_FAIL_STAGE:-}" != "app-start" ]] || return 42
     return 0
@@ -211,6 +219,14 @@ assert_no_mutation_command() {
     || fail_test "clean 전 실패가 mutation 명령을 실행했습니다."
 }
 
+assert_no_destructive_deploy_command() {
+  local command_log="$1"
+  ! grep -Eq \
+    ' compose .* (stop|up) | flyway/flyway:.* (clean|migrate|validate)[[:space:]]*$|SQL_STAGE=' \
+    "$command_log" \
+    || fail_test "배포 사전 검증 실패가 앱 또는 DB를 변경했습니다."
+}
+
 assert_secret_safe() {
   local output_file="$1"
   local report_file="$2"
@@ -273,6 +289,9 @@ assert_deploy_prepare_success_order() {
       || fail_test "자동 배포 DB 준비 순서가 잘못됐습니다: $label"
     previous_position="$position"
   done <<'EOF'
+compose-config| compose .* config --quiet |1
+compose-pull| compose .* pull |1
+flyway-info| flyway/flyway:.* info[[:space:]]*$|1
 app-stop| compose .* stop app |1
 flyway-clean| flyway/flyway:.* clean[[:space:]]*$|1
 migrate| flyway/flyway:.* migrate[[:space:]]*$|1
@@ -280,6 +299,23 @@ validate| flyway/flyway:.* validate[[:space:]]*$|1
 base|SQL_STAGE=base|1
 base-verify|SQL_STAGE=base-verify|1
 utf8-verify|SQL_STAGE=utf8|1
+EOF
+}
+
+assert_deploy_preflight_success_order() {
+  local command_log="$1"
+  local previous_position=0
+  local label pattern occurrence position
+  while IFS='|' read -r label pattern occurrence; do
+    position="$(command_position "$command_log" "$pattern" "$occurrence")"
+    [[ -n "$position" ]] || fail_test "자동 배포 사전 검증 순서에서 $label 단계가 없습니다."
+    [[ "$position" -gt "$previous_position" ]] \
+      || fail_test "자동 배포 사전 검증 순서가 잘못됐습니다: $label"
+    previous_position="$position"
+  done <<'EOF'
+compose-config| compose .* config --quiet |1
+compose-pull| compose .* pull |1
+flyway-info| flyway/flyway:.* info[[:space:]]*$|1
 EOF
 }
 
@@ -443,11 +479,33 @@ run_deploy_prepare_case() {
   local ref_name="${6:-main}"
   local candidate_image="${7:-$EXPECTED_DIGEST_IMAGE}"
   local current_env_present="${8:-true}"
+  local run_preflight_first="${9:-true}"
+  local mutate_after_preflight="${10:-false}"
   local case_dir="$TEST_TMP/$case_name"
   local deploy_dir="$case_dir/deploy"
+  local release_dir="$deploy_dir/releases/$TEST_SHA"
+  local release_script="$release_dir/scripts/db/prepare-dev-deploy-db.sh"
   local output_file="$case_dir/output.log"
   local command_log="$case_dir/commands.log"
-  mkdir -p "$deploy_dir"
+  mkdir -p \
+    "$release_dir/scripts/db" \
+    "$release_dir/src/main/resources/db/migration" \
+    "$release_dir/db/seed/base"
+  cp \
+    "$PROJECT_ROOT/scripts/db/common.sh" \
+    "$PROJECT_ROOT/scripts/db/dev-common.sh" \
+    "$PROJECT_ROOT/scripts/db/prepare-dev-deploy-db.sh" \
+    "$release_dir/scripts/db/"
+  cp -R \
+    "$PROJECT_ROOT/src/main/resources/db/migration/." \
+    "$release_dir/src/main/resources/db/migration/"
+  cp -R \
+    "$PROJECT_ROOT/db/seed/base/." \
+    "$release_dir/db/seed/base/"
+  cp \
+    "$PROJECT_ROOT/db/seed/verify-base.sql" \
+    "$PROJECT_ROOT/db/seed/verify-utf8.sql" \
+    "$release_dir/db/seed/"
   : > "$command_log"
   printf 'services: {}\n' > "$deploy_dir/docker-compose.dev.yml"
   if [[ "$current_env_present" == true ]]; then
@@ -487,23 +545,60 @@ run_deploy_prepare_case() {
   export SSING_DEPLOY_COMMIT_SHA="$TEST_SHA"
 
   set +e
-  bash "$PROJECT_ROOT/scripts/db/prepare-dev-deploy-db.sh" \
-    "$confirmation" "$ref_name" > "$output_file" 2>&1
-  local exit_code=$?
+  local exit_code
+  if [[ "$confirmation" == "--preflight-dev-deploy" ]]; then
+    bash "$release_script" \
+      "$confirmation" "$ref_name" > "$output_file" 2>&1
+    exit_code=$?
+  else
+    if [[ "$run_preflight_first" == true ]]; then
+      FAKE_FAIL_STAGE="" bash "$release_script" \
+        --preflight-dev-deploy main > "$output_file" 2>&1
+      local preflight_exit_code=$?
+      if [[ "$preflight_exit_code" -ne 0 ]]; then
+        set -e
+        fail_test "$case_name 자동 배포 사전 검증 준비가 실패했습니다: exit=$preflight_exit_code"
+      fi
+      if [[ "$mutate_after_preflight" == true ]]; then
+        printf 'JAVA_OPTS=-XX:MaxRAMPercentage=70\n' >> "$deploy_dir/.env.next"
+      fi
+    fi
+    FAKE_FAIL_STAGE="$fail_stage" bash "$release_script" \
+      "$confirmation" "$ref_name" >> "$output_file" 2>&1
+    exit_code=$?
+  fi
   set -e
   printf '%s\n' "$exit_code" > "$case_dir/exit-code"
 
   if [[ "$expected_success" == true ]]; then
     [[ "$exit_code" -eq 0 ]] \
       || fail_test "$case_name 자동 배포 DB 준비 성공 계약이 실패했습니다."
-    [[ ! -e "$deploy_dir/.dev-db-reset-incomplete" ]] \
-      || fail_test "$case_name 성공 뒤 incomplete marker가 남았습니다."
-    assert_deploy_prepare_success_order "$command_log"
-    ! grep -Eq ' compose .* up ' "$command_log" \
-      || fail_test "$case_name DB 준비 실행기가 앱을 직접 재기동했습니다."
+    if [[ "$confirmation" == "--preflight-dev-deploy" ]]; then
+      assert_deploy_preflight_success_order "$command_log"
+      assert_no_destructive_deploy_command "$command_log"
+      [[ ! -e "$deploy_dir/.dev-db-reset-incomplete" ]] \
+        || fail_test "$case_name 사전 검증이 reset incomplete marker를 만들었습니다."
+      [[ -s "$deploy_dir/.dev-deploy-preflight" ]] \
+        || fail_test "$case_name 사전 검증 완료 증거가 없습니다."
+    else
+      [[ ! -e "$deploy_dir/.dev-db-reset-incomplete" ]] \
+        || fail_test "$case_name 성공 뒤 incomplete marker가 남았습니다."
+      [[ ! -e "$deploy_dir/.dev-deploy-preflight" ]] \
+        || fail_test "$case_name 파괴 작업 뒤 사전 검증 증거가 남았습니다."
+      assert_deploy_prepare_success_order "$command_log"
+      ! grep -Eq ' compose .* up ' "$command_log" \
+        || fail_test "$case_name DB 준비 실행기가 앱을 직접 재기동했습니다."
+    fi
   else
     [[ "$exit_code" -ne 0 ]] \
       || fail_test "$case_name 자동 배포 DB 준비 실패 계약이 성공했습니다."
+    if [[ "$confirmation" == "--preflight-dev-deploy" ]]; then
+      assert_no_destructive_deploy_command "$command_log"
+      [[ ! -e "$deploy_dir/.dev-db-reset-incomplete" ]] \
+        || fail_test "$case_name 실패한 사전 검증이 reset incomplete marker를 만들었습니다."
+      [[ ! -e "$deploy_dir/.dev-deploy-preflight" ]] \
+        || fail_test "$case_name 실패한 사전 검증이 완료 증거를 남겼습니다."
+    fi
   fi
 
   assert_secret_safe "$output_file" "$case_dir/missing-report.md" "$command_log"
@@ -825,15 +920,37 @@ run_migrate_case migration-success "" false true
     "$TEST_TMP/migration-success/commands.log")" == "2" ]] \
   || fail_test "일반 migration 성공 전에 최종 schema UTF-8 계약을 다시 확인하지 않았습니다."
 
-run_deploy_prepare_case deploy-prepare-invalid-confirm "" false false wrong-confirm
+run_deploy_prepare_case deploy-prepare-invalid-confirm "" false false \
+  wrong-confirm main "$EXPECTED_DIGEST_IMAGE" true false
 assert_no_mutation_command "$TEST_TMP/deploy-prepare-invalid-confirm/commands.log"
 run_deploy_prepare_case deploy-prepare-invalid-ref "" false false \
-  --confirm-dev-deploy-reset feature
+  --confirm-dev-deploy-reset feature "$EXPECTED_DIGEST_IMAGE" true false
 assert_no_mutation_command "$TEST_TMP/deploy-prepare-invalid-ref/commands.log"
 stale_digest_image="teamssing/server:dev-1111111111111111111111111111111111111111@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 run_deploy_prepare_case deploy-prepare-stale-image "" false false \
-  --confirm-dev-deploy-reset main "$stale_digest_image"
+  --confirm-dev-deploy-reset main "$stale_digest_image" true false
 assert_no_mutation_command "$TEST_TMP/deploy-prepare-stale-image/commands.log"
+
+for failure_stage in compose-config compose-pull flyway-info mysql-connect; do
+  run_deploy_prepare_case "deploy-preflight-${failure_stage}" \
+    "$failure_stage" false false --preflight-dev-deploy main
+  assert_no_destructive_deploy_command \
+    "$TEST_TMP/deploy-preflight-${failure_stage}/commands.log"
+done
+run_deploy_prepare_case deploy-preflight-success "" false true \
+  --preflight-dev-deploy main
+
+run_deploy_prepare_case deploy-prepare-without-preflight "" false false \
+  --confirm-dev-deploy-reset main "$EXPECTED_DIGEST_IMAGE" true false
+assert_no_destructive_deploy_command \
+  "$TEST_TMP/deploy-prepare-without-preflight/commands.log"
+
+run_deploy_prepare_case deploy-prepare-stale-preflight "" false false \
+  --confirm-dev-deploy-reset main "$EXPECTED_DIGEST_IMAGE" true true true
+assert_no_destructive_deploy_command \
+  "$TEST_TMP/deploy-prepare-stale-preflight/commands.log"
+[[ ! -e "$TEST_TMP/deploy-prepare-stale-preflight/deploy/.dev-deploy-preflight" ]] \
+  || fail_test "변경된 후보 설정의 오래된 사전 검증 증거를 삭제하지 않았습니다."
 
 run_deploy_prepare_case deploy-prepare-app-stop app-stop false false
 [[ ! -e "$TEST_TMP/deploy-prepare-app-stop/deploy/.dev-db-reset-incomplete" ]] \

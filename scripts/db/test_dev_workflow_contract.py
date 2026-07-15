@@ -13,6 +13,7 @@ DEV_COMPOSE = ROOT / "deploy/docker-compose.dev.yml"
 BUILD_GRADLE = ROOT / "build.gradle"
 DEV_ENV_EXAMPLE = ROOT / "deploy/env.dev.example"
 INTEGRATION_SOURCE_ROOT = ROOT / "src/integrationTest/java"
+INTEGRATION_PROFILE = ROOT / "src/integrationTest/resources/application-integration-test.properties"
 DEV_RUNNERS = (
     ROOT / "scripts/db/dev-common.sh",
     ROOT / "scripts/db/reset-dev.sh",
@@ -53,6 +54,7 @@ class DevWorkflowContractTest(unittest.TestCase):
         cls.dev_compose = DEV_COMPOSE.read_text(encoding="utf-8")
         cls.build_gradle = BUILD_GRADLE.read_text(encoding="utf-8")
         cls.dev_env_example = DEV_ENV_EXAMPLE.read_text(encoding="utf-8")
+        cls.integration_profile = INTEGRATION_PROFILE.read_text(encoding="utf-8")
         cls.reset_job = indented_block(cls.reset, "reset:", 2)
         cls.ci_verify_job = indented_block(cls.ci, "verify:", 2)
         cls.ci_build_job = indented_block(cls.ci, "build-dev-image:", 2)
@@ -182,24 +184,36 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertNotIn("withReuse(true)", combined)
 
         container_owners = [
-            source.name
+            source.relative_to(ROOT).as_posix()
             for source, text in source_text.items()
             if "new MySQLContainer" in text
         ]
-        self.assertEqual(["SharedMySqlDatabase.java"], container_owners)
+        self.assertEqual(
+            [
+                "src/integrationTest/java/org/sopt/ssingserver/database/"
+                "support/SharedMySqlDatabase.java"
+            ],
+            container_owners,
+        )
 
         flyway_clean_owners = [
-            source.name
+            source.relative_to(ROOT).as_posix()
             for source, text in source_text.items()
-            if "flyway().clean()" in text
+            if re.search(r"\.\s*clean\s*\(\s*\)", text)
         ]
-        self.assertEqual(
-            ["MatchingRequestV4MigrationTest.java", "NotificationV5MigrationTest.java"],
-            flyway_clean_owners,
-        )
-        for source, text in source_text.items():
-            if source.name in flyway_clean_owners:
-                self.assertIn('@Tag("legacy-migration")', text)
+        expected_legacy_owners = {
+            "src/integrationTest/java/org/sopt/ssingserver/database/"
+            "MatchingRequestV4MigrationTest.java",
+            "src/integrationTest/java/org/sopt/ssingserver/database/"
+            "NotificationV5MigrationTest.java",
+        }
+        legacy_tag_owners = {
+            source.relative_to(ROOT).as_posix()
+            for source, text in source_text.items()
+            if '@Tag("legacy-migration")' in text
+        }
+        self.assertEqual(expected_legacy_owners, set(flyway_clean_owners))
+        self.assertEqual(expected_legacy_owners, legacy_tag_owners)
 
     def test_ci_uses_two_complementary_runners_before_exact_sha_deploy(self):
         self.assertNotIn("publish-unit-test-result-action", self.ci)
@@ -222,6 +236,7 @@ class DevWorkflowContractTest(unittest.TestCase):
         fast_contract_commands = (
             "bash -n scripts/db/*.sh",
             "bash scripts/db/test-mysql-client-auth.sh",
+            "bash scripts/db/test-install-dev-release.sh",
             "bash scripts/db/test-dev-runner-contract.sh",
             "python3 scripts/db/test_dev_workflow_contract.py",
         )
@@ -234,7 +249,10 @@ class DevWorkflowContractTest(unittest.TestCase):
             "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
             self.ci_build_job,
         )
-        self.assertRegex(self.ci_build_job, r"(?m)^    environment: dev$")
+        self.assertRegex(
+            self.ci_build_job,
+            r"(?m)^    environment:\n      name: dev\n      deployment: false$",
+        )
         self.assertNotRegex(self.ci_build_job, r"(?m)^    needs:")
         self.assertIn("image_digest: ${{ steps.build.outputs.digest }}", self.ci_build_job)
         self.assertIn("id: build", self.ci_build_job)
@@ -242,6 +260,14 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertIn(
             "tags: ${{ vars.DOCKERHUB_IMAGE }}:dev-${{ github.sha }}",
             self.ci_build_job,
+        )
+        self.assertIn(
+            "cache-to: type=gha,mode=max,ignore-error=true",
+            self.ci_build_job,
+        )
+        self.assertIn(
+            "cache-to: type=gha,mode=max,ignore-error=true",
+            self.deploy_job,
         )
 
         self.assertIn(
@@ -284,12 +310,26 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertNotIn("dev-latest", self.deploy_job)
         self.assertNotIn("dev-latest", self.dev_env_example)
 
-        for workflow in (self.ci, self.db_check):
-            self.assertIn(
-                "github.event.pull_request.number || github.run_id",
-                workflow,
-            )
-            self.assertNotIn("github.head_ref", workflow)
+        self.assertIn(
+            "github.event.pull_request.number || github.run_id",
+            self.ci,
+        )
+        self.assertNotIn("github.head_ref", self.ci)
+
+    def test_integration_profile_disables_all_business_schedulers(self):
+        properties = {}
+        for raw_line in self.integration_profile.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, value = line.split("=", 1)
+            properties[key.strip()] = value.strip()
+
+        self.assertEqual("false", properties.get("ssing.scheduled-jobs.enabled"))
+        self.assertEqual(
+            "false",
+            properties.get("ssing.matching.search-scheduler.enabled"),
+        )
 
     def test_runtime_and_migration_credentials_and_ssh_trust_are_separated(self):
         self.assertIn("SSING_DEV_DB_MIGRATION_PASSWORD", self.reset)
@@ -346,11 +386,14 @@ class DevWorkflowContractTest(unittest.TestCase):
         marker_position = self.deploy_job.index("미완료 dev DB 작업 확인")
         upload_position = self.deploy_job.index("EC2 배포 파일 업로드")
         runtime_env_position = self.deploy_job.index("EC2 런타임 환경변수 생성")
+        preflight_position = self.deploy_job.index("EC2 배포 사전 검증")
         db_guard_position = self.deploy_job.index("dev DB 초기화 직전 현재 main SHA 재확인")
-        migration_position = self.deploy_job.index("./scripts/db/prepare-dev-deploy-db.sh")
+        migration_position = self.deploy_job.index(
+            "./scripts/db/prepare-dev-deploy-db.sh --confirm-dev-deploy-reset main"
+        )
         restart_guard_position = self.deploy_job.index("Compose 재시작 직전 현재 main SHA 재확인")
         activate_env_position = self.deploy_job.index("mv -f .env.next .env")
-        restart_position = self.deploy_job.index("up -d --remove-orphans")
+        restart_position = self.deploy_job.index("up --pull never -d --remove-orphans")
         health_position = self.deploy_job.index('/actuator/health | grep -q')
         restart_step = indented_block(
             self.deploy_job,
@@ -366,6 +409,8 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertLess(marker_position, upload_position)
         self.assertLess(marker_position, runtime_env_position)
         self.assertLess(upload_position, runtime_env_position)
+        self.assertLess(runtime_env_position, preflight_position)
+        self.assertLess(preflight_position, db_guard_position)
         self.assertLess(runtime_env_position, db_guard_position)
         self.assertLess(db_guard_position, migration_position)
         self.assertLess(runtime_env_position, migration_position)
@@ -381,8 +426,9 @@ class DevWorkflowContractTest(unittest.TestCase):
             restart_step,
             r"sudo env SSING_RUNTIME_ENV_FILE=\.env\.next \\\n"
             r"\s+docker compose --env-file \.env\.next -f \"\$COMPOSE_FILE\" "
-            r"up -d --remove-orphans",
+            r"up --pull never -d --remove-orphans",
         )
+        self.assertNotIn("docker compose --env-file .env.next -f \"$COMPOSE_FILE\" pull", restart_step)
         self.assertRegex(
             health_step,
             r"if curl [^\n]+; then\n"
@@ -426,13 +472,61 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertGreaterEqual(self.deploy_job.count(sha_check), 3)
         first_check = self.deploy_job.index("- name: 현재 main SHA 확인")
         db_guard = self.deploy_job.index("- name: dev DB 초기화 직전 현재 main SHA 재확인")
-        db_reset = self.deploy_job.index("./scripts/db/prepare-dev-deploy-db.sh")
+        preflight = self.deploy_job.index(
+            "./scripts/db/prepare-dev-deploy-db.sh --preflight-dev-deploy main"
+        )
+        db_reset = self.deploy_job.index(
+            "./scripts/db/prepare-dev-deploy-db.sh --confirm-dev-deploy-reset main"
+        )
         restart_guard = self.deploy_job.index("- name: Compose 재시작 직전 현재 main SHA 재확인")
-        restart = self.deploy_job.index("up -d --remove-orphans")
-        self.assertLess(first_check, db_guard)
+        restart = self.deploy_job.index("up --pull never -d --remove-orphans")
+        self.assertLess(first_check, preflight)
+        self.assertLess(preflight, db_guard)
         self.assertLess(db_guard, db_reset)
         self.assertLess(db_reset, restart_guard)
         self.assertLess(restart_guard, restart)
+
+    def test_deploy_uses_one_exact_sha_tooling_snapshot_and_preflights_before_clean(self):
+        upload_step = indented_block(
+            self.deploy_job,
+            "- name: EC2 배포 파일 업로드",
+            6,
+        )
+        preflight_step = indented_block(
+            self.deploy_job,
+            "- name: EC2 배포 사전 검증",
+            6,
+        )
+        db_step = indented_block(
+            self.deploy_job,
+            "- name: dev DB clean·migration·base seed",
+            6,
+        )
+        prepare_runner = (
+            ROOT / "scripts/db/prepare-dev-deploy-db.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("scripts/db/install-dev-release.sh", upload_step)
+        self.assertIn("'$DEPLOY_DIR/releases' '$DEPLOY_SHA'", upload_step)
+        self.assertNotIn("-C '$DEPLOY_DIR'", upload_step)
+        for step in (preflight_step, db_step):
+            self.assertIn('release_dir="$deploy_dir/releases/$deploy_sha"', step)
+            self.assertIn('cd "$release_dir"', step)
+            self.assertIn('source "$deploy_dir/.migration.env"', step)
+        self.assertIn(
+            "./scripts/db/prepare-dev-deploy-db.sh --preflight-dev-deploy main",
+            preflight_step,
+        )
+        self.assertNotIn("continue-on-error:", preflight_step)
+        self.assertIn("docker compose", prepare_runner)
+        self.assertIn("config --quiet", prepare_runner)
+        self.assertIn(" pull", prepare_runner)
+        self.assertIn("run_dev_flyway info", prepare_runner)
+        self.assertIn(".dev-deploy-preflight", prepare_runner)
+        self.assertIn(
+            "./scripts/db/prepare-dev-deploy-db.sh --confirm-dev-deploy-reset main",
+            db_step,
+        )
 
     def test_legacy_migrations_are_manual_nightly_and_retained(self):
         self.assertIn("workflow_dispatch:", self.legacy_migration)
@@ -463,6 +557,14 @@ class DevWorkflowContractTest(unittest.TestCase):
             1,
             self.db_check.count("./scripts/db/reset-all-local.sh --confirm-local-reset\n"),
         )
+
+        triggers = indented_block(self.db_check, "on:", 0)
+        trigger_names = re.findall(r"(?m)^  ([a-z_]+):", triggers)
+        self.assertEqual(["workflow_dispatch", "schedule"], trigger_names)
+        self.assertIn('cron: "40 18 * * *"', triggers)
+        concurrency = indented_block(self.db_check, "concurrency:", 0)
+        self.assertIn("group: db-seed-check", concurrency)
+        self.assertIn("cancel-in-progress: false", concurrency)
 
 
 if __name__ == "__main__":
