@@ -4,7 +4,7 @@ set -euo pipefail
 
 readonly DB_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="$(cd "$DB_SCRIPT_DIR/../.." && pwd)"
-readonly FLYWAY_IMAGE="flyway/flyway:12.10.0-alpine"
+readonly FLYWAY_IMAGE="flyway/flyway:12.4.0-alpine"
 readonly MYSQL_IMAGE="mysql:8.4.8"
 readonly MYSQL_CLIENT_DEFAULTS_PATH="/run/secrets/ssing-mysql-client.cnf"
 
@@ -61,7 +61,9 @@ run_flyway() {
 
 write_mysql_client_defaults_file() {
   local output_file="$1"
-  local password="${SSING_LOCAL_DB_ROOT_PASSWORD}"
+  local password="${2:-${SSING_LOCAL_DB_ROOT_PASSWORD:-}}"
+
+  [[ -n "$password" ]] || fail "database password is required"
 
   # option file 구문 주입을 막기 위해 개행을 거부하고 따옴표·역슬래시를 escape한다.
   [[ "$password" != *$'\n'* && "$password" != *$'\r'* ]] \
@@ -95,6 +97,7 @@ run_mysql_client() (
     "$MYSQL_IMAGE" \
     mysql \
     "--defaults-extra-file=${MYSQL_CLIENT_DEFAULTS_PATH}" \
+    --default-character-set=utf8mb4 \
     --protocol=TCP \
     --host=127.0.0.1 \
     --port=3306 \

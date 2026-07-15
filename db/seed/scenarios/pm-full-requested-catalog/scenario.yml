@@ -1,14 +1,20 @@
 scenario_key: pm-full-requested-catalog
-purpose: PM spreadsheet 전체 입력을 단일 활성 협상 정책에 맞춰 조회하는 local/CI catalog
+purpose: PM spreadsheet 원본을 검증하고 dev에서는 자유 QA 소비자를 덧붙이는 catalog playground
 schema_version: 2
 scenario_type: SNAPSHOT
 scheduler_type: TRANSITION
 execution_scope:
   - local
   - ci
+  - dev
 required_runtime:
-  scheduled_jobs_enabled: false
-  matching_search_scheduler_enabled: false
+  snapshot_validation:
+    app_state: stopped
+    scheduled_jobs_enabled: false
+    matching_search_scheduler_enabled: false
+  dev_after_reset:
+    scheduler_override: none
+    scheduler_mode: default_on
 base_dependencies:
   - db/seed/base/001_reference_data.sql
   - db/seed/base/010_dev_personas.sql
@@ -71,7 +77,9 @@ notes:
   - 같은 소비자의 반복 입력은 각 `_a` 요청만 REQUESTED로 두고 나머지는 CANCELED 이력으로 정규화해 활성 협상 1건 정책을 지킨다.
   - scheduler를 켜면 조건이 맞는 REQUESTED 요청이 GROUPED로 전이될 수 있다.
   - 통합 테스트는 @Scheduled 자동 등록을 끄고 실제 MatchingSearchScheduler.runScheduledSearch()를 수동 호출해 전이를 검증한다.
-  - 공용 dev 기본 scenario로 사용하지 않고 local/CI에서만 선택 실행한다.
+  - local/CI는 원본 snapshot만 검증하고 dev reset은 그 뒤 dev-playground.sql을 적용한다.
+  - dev 앱은 scheduler를 정상 설정으로 재기동하므로 일부 REQUESTED 요청은 자연스럽게 GROUPED로 전이될 수 있다.
+  - qa-free-consumer는 활성 요청이 없는 GENERAL_CONSUMER 시작점이며 PM 원본 snapshot 소유권에 포함하지 않는다.
   - WebSocket event와 계산 상태는 seed하지 않는다.
 deferred_checks:
   - key: instructor-realtime-reconnect-recovery

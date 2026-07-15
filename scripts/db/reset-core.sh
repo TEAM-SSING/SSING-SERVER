@@ -34,6 +34,7 @@ run_flyway validate
 apply_sql_directory "$PROJECT_ROOT/db/seed/base"
 run_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$scenario_key/seed.sql"
 "$SCRIPT_DIR/verify-all.sh" "$scenario_key"
+run_mysql_file "$PROJECT_ROOT/db/seed/verify-utf8.sql"
 
 # A second migrate must report no pending versioned migrations.
 run_flyway migrate

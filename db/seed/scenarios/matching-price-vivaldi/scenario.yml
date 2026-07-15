@@ -6,6 +6,7 @@ scheduler_type: STABLE
 execution_scope:
   - local
   - ci
+  - dev
 base_dependencies:
   - db/seed/base/001_reference_data.sql
   - db/seed/base/010_dev_personas.sql
@@ -54,12 +55,6 @@ deferred_checks:
     tracking:
       - https://github.com/TEAM-SSING/SSING-SERVER/issues/86
     resume_when: 강사 메인 복구 작업을 시작할 때
-  - key: dev-database-adoption
-    status: DEFERRED
-    reason: dev DB는 빈 DB로 V1부터 초기화하며, 승인된 migration·seed workflow와 dev auth 2차 경계는 별도 작업으로 적용한다.
-    tracking:
-      - https://github.com/TEAM-SSING/SSING-SERVER/issues/122
-    resume_when: dev migration·seed 적용 흐름을 구현할 때
   - key: scheduler-batch-fairness
     status: DEFERRED
     reason: 이 시나리오는 단일 요청 STABLE 계약만 증명하고 100건 초과 재탐색 공정성은 별도 버그로 관리한다.

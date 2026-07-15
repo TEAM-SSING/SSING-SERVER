@@ -1,18 +1,35 @@
 package org.sopt.ssingserver.domain.auth.dev.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.swagger.v3.oas.annotations.Hidden;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class DevAuthConsoleResourceTest {
 
     @Test
     void HTML_콘솔은_REST_Swagger_문서에서_숨긴다() {
         assertThat(DevAuthConsoleController.class.isAnnotationPresent(Hidden.class)).isTrue();
+    }
+
+    @Test
+    void HTML_콘솔은_UTF8_문자셋을_응답_헤더에_명시한다() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(new DevAuthConsoleController())
+                .build();
+
+        mockMvc.perform(get("/dev/auth/console"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(new MediaType("text", "html", StandardCharsets.UTF_8)));
     }
 
     @Test

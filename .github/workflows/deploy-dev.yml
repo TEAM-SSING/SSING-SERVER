@@ -9,8 +9,8 @@ on:
 
 # dev 배포 동시 실행 제어
 concurrency:
-  group: deploy-dev
-  cancel-in-progress: false
+  group: ssing-dev-mutation
+  queue: max
 
 # 저장소 읽기 전용 권한
 permissions:
@@ -34,6 +34,29 @@ jobs:
       - name: 저장소 코드 체크아웃
         uses: actions/checkout@v4
 
+      - name: dev DB 대상 로그 마스킹
+        env:
+          SSING_DEV_DB_HOST: ${{ vars.SSING_DEV_DB_HOST }}
+          SSING_DEV_DB_PORT: ${{ vars.SSING_DEV_DB_PORT }}
+          SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}
+          SSING_DEV_RUNTIME_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
+        run: |
+          set -euo pipefail
+          jdbc_prefix=""
+          if [ -n "$SSING_DEV_DB_HOST" ] \
+              && [ -n "$SSING_DEV_DB_PORT" ] \
+              && [ -n "$SSING_DEV_DB_NAME" ]; then
+            jdbc_prefix="jdbc:mysql://${SSING_DEV_DB_HOST}:${SSING_DEV_DB_PORT}/${SSING_DEV_DB_NAME}"
+          fi
+          for sensitive_value in \
+            "$SSING_DEV_DB_HOST" \
+            "$SSING_DEV_RUNTIME_DATASOURCE_URL" \
+            "$jdbc_prefix"; do
+            if [ -n "$sensitive_value" ]; then
+              printf '::add-mask::%s\n' "$sensitive_value"
+            fi
+          done
+
       # 배포 입력값 사전 점검
       - name: GitHub Variables와 Secrets 사전 점검
         env:
@@ -43,9 +66,16 @@ jobs:
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_SSH_KNOWN_HOSTS: ${{ secrets.EC2_SSH_KNOWN_HOSTS }}
           SSING_DEV_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
           SSING_DEV_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
           SSING_DEV_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
+          SSING_DEV_DB_HOST: ${{ vars.SSING_DEV_DB_HOST }}
+          SSING_DEV_DB_PORT: ${{ vars.SSING_DEV_DB_PORT }}
+          SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}
+          SSING_DEV_DB_ALLOWED_TARGET_SHA256: ${{ vars.SSING_DEV_DB_ALLOWED_TARGET_SHA256 }}
+          SSING_DEV_DB_MIGRATION_USERNAME: ${{ vars.SSING_DEV_DB_MIGRATION_USERNAME }}
+          SSING_DEV_DB_MIGRATION_PASSWORD: ${{ secrets.SSING_DEV_DB_MIGRATION_PASSWORD }}
           SSING_DEV_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
           SSING_DEV_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
@@ -63,9 +93,16 @@ jobs:
             EC2_HOST
             EC2_USERNAME
             EC2_SSH_PRIVATE_KEY
+            EC2_SSH_KNOWN_HOSTS
             SSING_DEV_DATASOURCE_URL
             SSING_DEV_DATASOURCE_USERNAME
             SSING_DEV_DATASOURCE_PASSWORD
+            SSING_DEV_DB_HOST
+            SSING_DEV_DB_PORT
+            SSING_DEV_DB_NAME
+            SSING_DEV_DB_ALLOWED_TARGET_SHA256
+            SSING_DEV_DB_MIGRATION_USERNAME
+            SSING_DEV_DB_MIGRATION_PASSWORD
             SSING_DEV_JWT_SECRET
             SSING_DEV_KAKAO_APP_ID
             SSING_DEV_DOMAIN
@@ -209,25 +246,47 @@ jobs:
       # EC2 SSH 접속 준비
       - name: EC2 SSH 접속 준비
         env:
-          EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_SSH_KNOWN_HOSTS: ${{ secrets.EC2_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
 
           echo "::group::EC2 SSH 접속 준비"
-          echo "SSH 개인 키 파일 생성과 EC2 host key 등록"
+          echo "SSH 개인 키와 고정 known_hosts 파일 준비"
 
           install -m 700 -d ~/.ssh
           printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/ssing-dev-key
           chmod 600 ~/.ssh/ssing-dev-key
 
-          if ! ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts; then
-            echo "::error title=EC2 host key 등록 실패::EC2_HOST 값, EC2 실행 상태, 보안 그룹의 22번 인바운드 허용 여부를 확인하세요."
+          printf '%s\n' "$EC2_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          if ! ssh-keygen -l -f ~/.ssh/known_hosts >/dev/null; then
+            echo "::error title=EC2 host key 검증 실패::EC2_SSH_KNOWN_HOSTS가 유효한 known_hosts 형식인지 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
 
-          echo "::notice title=EC2 SSH 접속 준비 완료::SSH 키와 known_hosts 설정을 완료했습니다."
+          echo "::notice title=EC2 SSH 접속 준비 완료::동적 host key 수집 없이 저장된 값만 사용합니다."
+          echo "::endgroup::"
+
+      # 실패한 reset의 파일과 DB 상태를 보존하기 위해 EC2 파일을 덮어쓰기 전에 차단
+      - name: 미완료 dev DB reset 사전 차단
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::미완료 dev DB reset 사전 차단"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "test ! -e '$DEPLOY_DIR/.dev-db-reset-incomplete'"; then
+            echo "::error title=미완료 dev DB reset 감지::부분 DB와 기존 배포 설정을 보존하기 위해 파일 업로드와 앱 재기동을 시작하지 않습니다. 원인을 수정한 뒤 같은 commit의 reset을 처음부터 완료하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=dev DB reset 상태 확인 완료::미완료 marker가 없어 배포 파일 준비를 진행합니다."
           echo "::endgroup::"
 
       # EC2 배포 파일 업로드
@@ -248,17 +307,31 @@ jobs:
             exit 1
           fi
 
-          echo "Docker Compose와 Caddyfile 업로드"
+          echo "Docker Compose, Caddyfile, 고정 Flyway 실행기 업로드"
+          tar -czf .deploy-db-tooling.tgz \
+            scripts/db \
+            src/main/resources/db/migration
           if ! scp -i ~/.ssh/ssing-dev-key \
             deploy/docker-compose.dev.yml \
             deploy/Caddyfile \
+            .deploy-db-tooling.tgz \
             "$SSH_TARGET:$DEPLOY_DIR/"; then
+            rm -f .deploy-db-tooling.tgz
             echo "::error title=EC2 배포 파일 업로드 실패::SSH 접속 상태, $DEPLOY_DIR 디렉터리 권한, 네트워크 연결 상태를 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
 
-          echo "::notice title=EC2 배포 파일 업로드 완료::docker-compose.dev.yml과 Caddyfile을 EC2에 업로드했습니다."
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "tar -xzf '$DEPLOY_DIR/.deploy-db-tooling.tgz' -C '$DEPLOY_DIR' && rm -f '$DEPLOY_DIR/.deploy-db-tooling.tgz' && chmod +x '$DEPLOY_DIR'/scripts/db/*.sh"; then
+            rm -f .deploy-db-tooling.tgz
+            echo "::error title=DB 실행기 준비 실패::EC2의 tar, 디스크 권한, 업로드 파일 상태를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+          rm -f .deploy-db-tooling.tgz
+
+          echo "::notice title=EC2 배포 파일 업로드 완료::Compose와 migration 실행 파일을 EC2에 준비했습니다."
           echo "::endgroup::"
 
       # EC2 런타임 환경변수 파일 생성
@@ -269,7 +342,7 @@ jobs:
           SSING_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
           SSING_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
           SSING_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
-          SSING_JPA_DDL_AUTO: ${{ vars.SSING_DEV_JPA_DDL_AUTO }}
+          SSING_JPA_DDL_AUTO: validate
           SSING_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
           SSING_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
@@ -328,7 +401,11 @@ jobs:
             fi
           fi
 
-          SSING_JPA_DDL_AUTO="${SSING_JPA_DDL_AUTO:-update}"
+          if [ "$SSING_JPA_DDL_AUTO" != "validate" ]; then
+            echo "::error title=JPA schema 정책 오류::dev 앱은 ddl-auto=validate로만 배포할 수 있습니다."
+            echo "::endgroup::"
+            exit 1
+          fi
           JAVA_OPTS="${JAVA_OPTS:--XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=40.0}"
 
           trap 'rm -f .deploy.env' EXIT
@@ -353,21 +430,82 @@ jobs:
 
           SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
 
-          echo "EC2 .env 파일 업로드"
-          if ! scp -i ~/.ssh/ssing-dev-key .deploy.env "$SSH_TARGET:$DEPLOY_DIR/.env"; then
+          echo "EC2 .env.next 후보 파일 업로드"
+          if ! scp -i ~/.ssh/ssing-dev-key .deploy.env "$SSH_TARGET:$DEPLOY_DIR/.env.next"; then
             echo "::error title=EC2 .env 업로드 실패::SSH 연결, $DEPLOY_DIR 권한, EC2 디스크 여유 공간을 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
 
-          echo "EC2 .env 파일 권한 제한"
-          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "chmod 600 '$DEPLOY_DIR/.env'"; then
-            echo "::error title=EC2 .env 권한 설정 실패::EC2_USERNAME 사용자가 $DEPLOY_DIR/.env 파일 권한을 변경할 수 있는지 확인하세요."
+          echo "EC2 .env.next 파일 권한 제한"
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "chmod 600 '$DEPLOY_DIR/.env.next'"; then
+            echo "::error title=EC2 .env 권한 설정 실패::EC2_USERNAME 사용자가 $DEPLOY_DIR/.env.next 파일 권한을 변경할 수 있는지 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
 
-          echo "::notice title=EC2 런타임 환경변수 생성 완료::GitHub Variables와 Secrets 기반 .env 파일을 EC2에 반영했습니다."
+          echo "::notice title=EC2 런타임 환경변수 후보 준비 완료::migration·컨테이너 재기동·health가 통과하면 .env.next를 현재 .env로 원자적으로 전환합니다."
+          echo "::endgroup::"
+
+      # 새 앱을 재기동하기 전에 고정 Flyway 실행기로 DB를 비파괴 검증
+      - name: dev DB migration과 validate
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          SSING_DEV_DB_HOST: ${{ vars.SSING_DEV_DB_HOST }}
+          SSING_DEV_DB_PORT: ${{ vars.SSING_DEV_DB_PORT }}
+          SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}
+          SSING_DEV_DB_ALLOWED_TARGET_SHA256: ${{ vars.SSING_DEV_DB_ALLOWED_TARGET_SHA256 }}
+          SSING_DEV_RUNTIME_DATASOURCE_URL: ${{ vars.SSING_DEV_DATASOURCE_URL }}
+          SSING_DEV_RUNTIME_DB_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
+          SSING_DEV_DB_MIGRATION_USERNAME: ${{ vars.SSING_DEV_DB_MIGRATION_USERNAME }}
+          SSING_DEV_DB_MIGRATION_PASSWORD: ${{ secrets.SSING_DEV_DB_MIGRATION_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "::group::dev DB migration과 validate"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          remote_env_path="$DEPLOY_DIR/.migration.env"
+          trap 'rm -f .migration.env' EXIT
+          umask 077
+          {
+            printf 'SSING_SEED_TARGET_ENV=%q\n' dev
+            printf 'SSING_DEV_DEPLOY_DIR=%q\n' "$DEPLOY_DIR"
+            printf 'SSING_DEV_DB_HOST=%q\n' "$SSING_DEV_DB_HOST"
+            printf 'SSING_DEV_DB_PORT=%q\n' "$SSING_DEV_DB_PORT"
+            printf 'SSING_DEV_DB_NAME=%q\n' "$SSING_DEV_DB_NAME"
+            printf 'SSING_DEV_DB_ALLOWED_TARGET_SHA256=%q\n' "$SSING_DEV_DB_ALLOWED_TARGET_SHA256"
+            printf 'SSING_DEV_RUNTIME_DATASOURCE_URL=%q\n' "$SSING_DEV_RUNTIME_DATASOURCE_URL"
+            printf 'SSING_DEV_RUNTIME_DB_USERNAME=%q\n' "$SSING_DEV_RUNTIME_DB_USERNAME"
+            printf 'SSING_DEV_DB_MIGRATION_USERNAME=%q\n' "$SSING_DEV_DB_MIGRATION_USERNAME"
+            printf 'SSING_DEV_DB_MIGRATION_PASSWORD=%q\n' "$SSING_DEV_DB_MIGRATION_PASSWORD"
+          } > .migration.env
+
+          scp -i ~/.ssh/ssing-dev-key .migration.env "$SSH_TARGET:$remote_env_path"
+          printf -v remote_command 'bash -s -- %q' "$DEPLOY_DIR"
+
+          set +e
+          ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "$remote_command" <<'EOF'
+          set -euo pipefail
+          deploy_dir="$1"
+          cd "$deploy_dir"
+          trap 'rm -f .migration.env' EXIT
+          chmod +x scripts/db/*.sh
+          set -a
+          source .migration.env
+          set +a
+          ./scripts/db/migrate-dev.sh
+          EOF
+          migration_exit_code=$?
+          set -e
+
+          ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" "rm -f '$remote_env_path'" || true
+          if [ "$migration_exit_code" -ne 0 ]; then
+            echo "::error title=dev DB migration 실패::기존 앱은 재기동하지 않았습니다. migration 계정·대상·Flyway 오류를 확인하세요."
+            echo "::endgroup::"
+            exit "$migration_exit_code"
+          fi
+
+          echo "::notice title=dev DB migration 완료::migrate와 validate가 통과해 앱 재기동을 진행합니다."
           echo "::endgroup::"
 
       # EC2 Docker Compose 재시작
@@ -387,17 +525,30 @@ jobs:
           echo "배포 디렉터리 이동: $DEPLOY_DIR"
           cd "$DEPLOY_DIR"
 
-          echo "최신 Docker 이미지 pull"
-          sudo docker compose --env-file .env -f "$COMPOSE_FILE" pull
+          if [ -e .dev-db-reset-incomplete ]; then
+            echo "dev DB reset incomplete marker가 있어 앱 재기동을 차단합니다."
+            exit 1
+          fi
 
-          echo "Docker Compose 컨테이너 재시작"
-          sudo docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans
+          if [ ! -f .env.next ]; then
+            echo "검증할 새 런타임 .env.next 파일이 없습니다."
+            exit 1
+          fi
+
+          echo "최신 Docker 이미지 pull"
+          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
+            docker compose --env-file .env.next -f "$COMPOSE_FILE" pull
+
+          echo "후보 런타임 설정으로 Docker Compose 컨테이너 재시작"
+          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
+            docker compose --env-file .env.next -f "$COMPOSE_FILE" up -d --remove-orphans
 
           echo "Docker Compose 컨테이너 상태"
-          sudo docker compose --env-file .env -f "$COMPOSE_FILE" ps
+          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
+            docker compose --env-file .env.next -f "$COMPOSE_FILE" ps
           EOF
           then
-            echo "::error title=EC2 Docker Compose 재시작 실패::EC2의 Docker 실행 상태, Docker Hub 이미지 pull 가능 여부, docker-compose.dev.yml 문법, .env 값을 확인하세요."
+            echo "::error title=EC2 Docker Compose 재시작 실패::Docker 실행 상태, 이미지 pull 가능 여부, docker-compose.dev.yml 문법, 후보 .env.next 값을 확인하세요. 기존 .env는 교체하지 않았습니다."
             echo "::endgroup::"
             exit 1
           fi
@@ -425,6 +576,11 @@ jobs:
             echo "헬스체크 시도: ${attempt}/30"
             if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
               echo "헬스체크 성공: /actuator/health status UP"
+              echo "검증을 마친 런타임 설정으로 원자적 전환"
+              if ! mv -f .env.next .env; then
+                echo "런타임 설정 전환 실패: .env.next를 .env로 교체하지 못했습니다. 파일 권한과 디스크 여유 공간을 확인하세요."
+                exit 1
+              fi
               exit 0
             fi
 
@@ -432,11 +588,12 @@ jobs:
           done
 
           echo "헬스체크 실패: app 컨테이너 최근 로그"
-          sudo docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=100 app
+          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
+            docker compose --env-file .env.next -f "$COMPOSE_FILE" logs --tail=100 app
           exit 1
           EOF
           then
-            echo "::error title=애플리케이션 헬스체크 실패::앱 기동 실패, DB 연결 실패, JWT/환경변수 누락, 또는 /actuator/health 비정상 가능성이 있습니다. 바로 위 app 컨테이너 로그를 확인하세요."
+            echo "::error title=애플리케이션 검증 또는 설정 전환 실패::health 로그와 런타임 설정 전환 실패 메시지를 확인하세요. 기존 .env 보존 여부, 후보 .env.next 권한, 디스크 여유 공간을 함께 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
@@ -544,3 +701,18 @@ jobs:
             echo "실패한 경우 GitHub Actions 화면에서 자동으로 펼쳐진 실패 step을 먼저 확인하세요."
             echo "각 실패 step의 \`::error\` 메시지에 확인해야 할 설정과 로그 위치를 적어두었습니다."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 배포 임시 비밀 파일 정리
+        if: always()
+        continue-on-error: true
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          rm -f .migration.env .deploy-db-tooling.tgz
+          if [ -f ~/.ssh/ssing-dev-key ]; then
+            SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+            ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+              "rm -f '$DEPLOY_DIR/.migration.env' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.env.next'" || true
+          fi
+          rm -f ~/.ssh/ssing-dev-key

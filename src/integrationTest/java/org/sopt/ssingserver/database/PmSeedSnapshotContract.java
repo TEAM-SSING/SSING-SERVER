@@ -9,6 +9,7 @@ import java.sql.Timestamp;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -27,14 +28,32 @@ final class PmSeedSnapshotContract {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final Set<String> ignoredConsumerPersonaKeys;
 
-    private PmSeedSnapshotContract(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    private PmSeedSnapshotContract(
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
+            Set<String> ignoredConsumerPersonaKeys
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.ignoredConsumerPersonaKeys = ignoredConsumerPersonaKeys;
     }
 
     static void assertMatches(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) throws IOException {
-        new PmSeedSnapshotContract(jdbcTemplate, objectMapper).assertMatches();
+        new PmSeedSnapshotContract(jdbcTemplate, objectMapper, Set.of()).assertMatches();
+    }
+
+    static void assertMatchesIgnoringConsumerPersona(
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
+            String ignoredPersonaKey
+    ) throws IOException {
+        new PmSeedSnapshotContract(
+                jdbcTemplate,
+                objectMapper,
+                Set.of(ignoredPersonaKey)
+        ).assertMatches();
     }
 
     // DB에 원본 source key를 저장하지 않으므로 가변 ID·시각을 뺀 aggregate 값의 multiset을 비교한다.
@@ -42,7 +61,11 @@ final class PmSeedSnapshotContract {
         List<ExpectedAggregate> expected = readExpectedAggregates();
         List<ActualAggregate> actual = new ArrayList<>();
         actual.addAll(readActualResorts());
-        actual.addAll(readActualConsumers());
+        actual.addAll(readActualConsumers().stream()
+                .filter(aggregate -> !ignoredConsumerPersonaKeys.contains(
+                        aggregate.json().path("personaKey").asText()
+                ))
+                .toList());
         actual.addAll(readActualInstructors());
         actual.addAll(readActualRequests());
 

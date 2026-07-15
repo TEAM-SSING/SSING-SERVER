@@ -176,6 +176,44 @@ class DatabaseSeedContractTest {
         assertThat(secondTransitionRelations).containsExactlyElementsOf(firstTransitionRelations);
     }
 
+    @Test
+    void PM_dev_playground는_원본_snapshot을_바꾸지_않고_활성_요청이_없는_QA_소비자를_추가한다() throws Exception {
+        applyScenario("pm-full-requested-catalog");
+
+        PmSeedSnapshotContract.assertMatches(jdbcTemplate, objectMapper);
+        runSql("db/seed/scenarios/pm-full-requested-catalog/dev-playground.sql");
+        runSql("db/seed/scenarios/pm-full-requested-catalog/verify-dev-playground.sql");
+        PmSeedSnapshotContract.assertMatchesIgnoringConsumerPersona(
+                jdbcTemplate,
+                objectMapper,
+                "qa-free-consumer"
+        );
+
+        Long memberId = personaMemberId("qa-free-consumer");
+        String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_requests WHERE member_id = ?",
+                Integer.class,
+                memberId
+        )).isZero();
+        assertNoActiveMatchingRequest(consumerToken);
+
+        matchingSearchScheduler.runScheduledSearch();
+
+        assertPmCatalogTransitionCounts(7, 2, 2);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM matching_requests
+                WHERE member_id = ?
+                  AND status IN ('REQUESTED', 'GROUPED', 'MATCHED')
+                """,
+                Integer.class,
+                memberId
+        )).isZero();
+        assertNoActiveMatchingRequest(consumerToken);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"REQUESTED", "GROUPED", "MATCHED"})
     void V4는_활성_상태마다_같은_소비자의_두번째_활성_요청을_DB에서_차단한다(String activeStatus) {
@@ -808,6 +846,7 @@ class DatabaseSeedContractTest {
     private void applyScenario(String scenarioKey) {
         runSql("db/seed/scenarios/" + scenarioKey + "/seed.sql");
         runSql("db/seed/scenarios/" + scenarioKey + "/verify.sql");
+        runSql("db/seed/verify-utf8.sql");
     }
 
     private String bearer(String token) {
@@ -963,6 +1002,7 @@ class DatabaseSeedContractTest {
 
     private void runSql(String path) {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new FileSystemResource(path));
+        populator.setSqlScriptEncoding(StandardCharsets.UTF_8.name());
         populator.setContinueOnError(false);
         populator.execute(dataSource);
     }
