@@ -160,6 +160,21 @@ class NotificationControllerTest {
                 .andExpect(header().string(RequestIdFilter.REQUEST_ID_HEADER, REQUEST_ID))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors.size").value("조회할 알림 개수는 1개 이상이어야 합니다."))
+                .andExpect(jsonPath("$.requestId").value(REQUEST_ID));
+
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    void getNotifications는_size가_100을_초과하면_명시적인_검증메시지로_400을_반환한다() throws Exception {
+        mockMvc.perform(get("/api/v1/notifications")
+                        .param("size", "101")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN)
+                        .header(RequestIdFilter.REQUEST_ID_HEADER, REQUEST_ID))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors.size").value("조회할 알림 개수는 100개 이하여야 합니다."))
                 .andExpect(jsonPath("$.requestId").value(REQUEST_ID));
 
         verifyNoInteractions(notificationService);

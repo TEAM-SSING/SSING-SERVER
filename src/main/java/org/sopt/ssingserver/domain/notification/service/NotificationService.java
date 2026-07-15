@@ -8,7 +8,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.notification.dto.response.NotificationListResponse;
-import org.sopt.ssingserver.domain.notification.dto.response.NotificationListResponse.NotificationItemResponse;
 import org.sopt.ssingserver.domain.notification.entity.Notification;
 import org.sopt.ssingserver.domain.notification.enums.ClientApp;
 import org.sopt.ssingserver.domain.notification.repository.NotificationRepository;
@@ -56,10 +55,8 @@ public class NotificationService {
                 ? queriedNotifications.subList(0, size)
                 : queriedNotifications;
 
-        return new NotificationListResponse(
-                notifications.stream()
-                        .map(this::toNotificationItemResponse)
-                        .toList(),
+        return NotificationListResponse.of(
+                notifications,
                 nextCursor(notifications, hasNext),
                 hasNext
         );
@@ -72,18 +69,6 @@ public class NotificationService {
             case INSTRUCTOR -> ClientApp.INSTRUCTOR;
             case ADMIN -> throw new BusinessException(CommonErrorCode.FORBIDDEN);
         };
-    }
-
-    // 알림 엔티티를 목록 조회 응답의 단일 알림 항목으로 변환함
-    private NotificationItemResponse toNotificationItemResponse(Notification notification) {
-        return new NotificationItemResponse(
-                notification.getId(),
-                notification.getType(),
-                notification.getTitle(),
-                notification.getBody(),
-                notification.isRead(),
-                notification.getCreatedAt()
-        );
     }
 
     // 다음 페이지가 있을 때 마지막 응답 알림을 기준으로 다음 조회 커서를 생성함

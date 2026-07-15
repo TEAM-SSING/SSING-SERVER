@@ -13,6 +13,7 @@ import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
 import org.sopt.ssingserver.global.swagger.error.ApiErrorCodes;
+import org.sopt.ssingserver.global.swagger.success.ApiSuccessExamples;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -25,6 +26,7 @@ public interface NotificationApiDocs {
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "알림 목록 조회 성공")
+    @ApiSuccessExamples(NotificationApiExamples.NotificationList.class)
     @ApiErrorCodes(
             type = CommonErrorCode.class,
             names = {
@@ -42,9 +44,15 @@ public interface NotificationApiDocs {
     ResponseEntity<BaseResponse<NotificationListResponse>> getNotifications(
             @Parameter(hidden = true)
             CurrentMember currentMember,
-            @Parameter(description = "다음 페이지 조회용 커서 (createdAt_notificationId 형식)")
+            @Parameter(
+                    description = "이전 응답의 nextCursor를 그대로 전달합니다. (createdAt_notificationId 형식)",
+                    example = "2026-07-04T12:59:00Z_99"
+            )
             @RequestParam(required = false) String cursor,
-            @Parameter(description = "조회할 알림 개수")
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+            @Parameter(description = "조회할 알림 개수 (기본값 20, 허용 범위 1~100)")
+            @RequestParam(defaultValue = "20")
+            @Min(value = 1, message = "조회할 알림 개수는 1개 이상이어야 합니다.")
+            @Max(value = 100, message = "조회할 알림 개수는 100개 이하여야 합니다.")
+            int size
     );
 }

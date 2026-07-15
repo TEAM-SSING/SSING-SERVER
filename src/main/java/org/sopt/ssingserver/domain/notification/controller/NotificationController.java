@@ -33,7 +33,10 @@ public class NotificationController implements NotificationApiDocs {
     public ResponseEntity<BaseResponse<NotificationListResponse>> getNotifications(
             CurrentMember currentMember,
             @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+            @RequestParam(defaultValue = "20")
+            @Min(value = 1, message = "조회할 알림 개수는 1개 이상이어야 합니다.")
+            @Max(value = 100, message = "조회할 알림 개수는 100개 이하여야 합니다.")
+            int size
     ) {
         NotificationListResponse response = notificationService.getNotifications(currentMember, cursor, size);
         return SuccessResponseFactory.success(CommonSuccessCode.SUCCESS, response);

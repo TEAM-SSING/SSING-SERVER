@@ -28,8 +28,8 @@ import org.sopt.ssingserver.global.entity.BaseTimeEntity;
         name = "notifications",
         indexes = {
                 @Index(
-                        name = "idx_notifications_member_created_id",
-                        columnList = "member_id, created_at, id"
+                        name = "idx_notifications_member_app_created_id",
+                        columnList = "member_id, client_app, created_at, id"
                 )
         }
 )

@@ -18,6 +18,7 @@ import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.notification.dto.response.NotificationListResponse;
+import org.sopt.ssingserver.domain.notification.dto.response.NotificationListResponse.NotificationItemResponse;
 import org.sopt.ssingserver.domain.notification.entity.Notification;
 import org.sopt.ssingserver.domain.notification.enums.ClientApp;
 import org.sopt.ssingserver.domain.notification.enums.NotificationType;
@@ -51,7 +52,11 @@ class NotificationServiceTest {
 
     @Test
     void getNotifications는_size보다_하나_더_조회해서_nextCursor를_생성한다() {
-        Notification first = notification(100L, Instant.parse("2026-07-14T10:00:00Z"), null);
+        Notification first = notification(
+                100L,
+                Instant.parse("2026-07-14T10:00:00Z"),
+                Instant.parse("2026-07-14T11:00:00Z")
+        );
         Notification second = notification(99L, Instant.parse("2026-07-14T09:00:00Z"), null);
         Notification extra = notification(98L, Instant.parse("2026-07-14T08:00:00Z"), null);
         when(notificationRepository.findFirstPage(
@@ -68,7 +73,14 @@ class NotificationServiceTest {
         );
 
         assertThat(response.notifications()).hasSize(2);
-        assertThat(response.notifications().get(0).notificationId()).isEqualTo(100L);
+        assertThat(response.notifications().getFirst()).isEqualTo(new NotificationItemResponse(
+                100L,
+                NotificationType.MATCHING_OFFER_RECEIVED,
+                "씽 매칭 강습 도착",
+                "새로운 강습이 도착했어요. 강습생 정보를 확인하고 강습을 수락해보세요.",
+                true,
+                Instant.parse("2026-07-14T10:00:00Z")
+        ));
         assertThat(response.nextCursor()).isEqualTo("2026-07-14T09:00:00Z_99");
         assertThat(response.hasNext()).isTrue();
     }
