@@ -18,6 +18,11 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
             LessonStatus status
     );
 
+    long countByInstructorProfileIdAndStatus(
+            Long instructorProfileId,
+            LessonStatus status
+    );
+
     Optional<Lesson> findByMatchingOfferId(Long matchingOfferId);
 
     @EntityGraph(attributePaths = {

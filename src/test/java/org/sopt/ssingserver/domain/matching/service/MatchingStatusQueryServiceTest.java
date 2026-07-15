@@ -7,8 +7,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -17,9 +19,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
+import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
+import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
@@ -46,6 +50,8 @@ import org.sopt.ssingserver.domain.payment.enums.MatchingRequestPaymentStatus;
 import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
+import org.sopt.ssingserver.domain.review.entity.Review;
+import org.sopt.ssingserver.domain.review.repository.ReviewRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -56,6 +62,10 @@ class MatchingStatusQueryServiceTest {
     private static final Instant PAYMENT_EXPIRES_AT = Instant.parse("2026-07-07T00:15:00Z");
     private static final Instant OFFER_EXPOSED_AT = Instant.parse("2026-07-07T00:00:00Z");
     private static final Instant OFFER_RESPONDED_AT = Instant.parse("2026-07-07T00:01:00Z");
+    private static final Clock FIXED_CLOCK = Clock.fixed(
+            Instant.parse("2026-07-16T00:00:00Z"),
+            ZoneOffset.UTC
+    );
 
     @Mock
     private MatchingRequestRepository matchingRequestRepository;
@@ -74,6 +84,9 @@ class MatchingStatusQueryServiceTest {
 
     @Mock
     private LessonRepository lessonRepository;
+
+    @Mock
+    private ReviewRepository reviewRepository;
 
     @Mock
     private MatchingStatusResolver matchingStatusResolver;
@@ -118,6 +131,267 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.matchingRequestId()).isEqualTo(10L);
         assertThat(result.matchingStatus()).isSameAs(MatchingStatus.SEARCHING);
         assertThat(result.requestStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
+        assertThat(result.requestSummary().resort().code()).isEqualTo("HIGH1");
+        assertThat(result.requestSummary().resort().displayName()).isEqualTo("하이원");
+        assertThat(result.requestSummary().sport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(result.requestSummary().lessonLevel()).isSameAs(LessonLevel.FIRST_TIME);
+        assertThat(result.requestSummary().headcount()).isEqualTo(2);
+        assertThat(result.lessonSummary()).isNull();
+        assertThat(result.instructorProfile()).isNull();
+        verifyNoInteractions(reviewRepository);
+    }
+
+    @Test
+    void getActiveStatus는_REMATCHING이면_과거_그룹_제안_결제_화면데이터를_숨긴다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup oldGroup = matchingRequestGroup(20L);
+        MatchingRequestGroupItem oldItem = matchingRequestGroupItem(30L, matchingRequest, oldGroup);
+        MatchingOffer oldOffer = acceptedOffer(50L, instructorProfile(40L), oldGroup);
+        MatchingRequestPayment oldPayment = matchingRequestPayment(
+                60L,
+                matchingRequest,
+                oldOffer,
+                MatchingRequestPaymentStatus.PENDING,
+                PAYMENT_EXPIRES_AT
+        );
+        matchingRequest.markMatched(oldOffer);
+        matchingRequest.rematchAfterConsumerRejected();
+
+        when(matchingRequestRepository.findByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        )).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(oldItem));
+        when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
+                .thenReturn(Optional.of(oldPayment));
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.of(oldGroup),
+                Optional.of(oldItem),
+                Optional.of(oldOffer),
+                Optional.of(oldPayment)
+        )).thenReturn(MatchingStatus.REMATCHING);
+
+        MatchingStatusQueryResult result = service.getActiveStatus(1L).orElseThrow();
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.REMATCHING);
+        assertThat(result.requestSummary().resort().code()).isEqualTo("HIGH1");
+        assertThat(result.requestSummary().headcount()).isEqualTo(2);
+        assertThat(result.groupId()).isNull();
+        assertThat(result.groupStatus()).isNull();
+        assertThat(result.itemStatus()).isNull();
+        assertThat(result.offerStatus()).isNull();
+        assertThat(result.paymentStatus()).isNull();
+        assertThat(result.progressSummary()).isNull();
+        assertThat(result.instructorProfile()).isNull();
+        assertThat(result.priceSummary()).isNull();
+        verifyNoInteractions(reviewRepository);
+        verifyNoInteractions(lessonRepository);
+    }
+
+    @Test
+    void getActiveStatus는_WAITING_FOR_TEAM이면_현재_그룹과_요청요약만_복구한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = MatchingRequestGroup.createCandidate(120);
+        ReflectionTestUtils.setField(group, "id", 20L);
+        MatchingRequestGroupItem item = MatchingRequestGroupItem.createNotRequested(matchingRequest, group);
+        ReflectionTestUtils.setField(item, "id", 30L);
+
+        when(matchingRequestRepository.findByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        )).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(item));
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.of(item),
+                Optional.empty(),
+                Optional.empty()
+        )).thenReturn(MatchingStatus.WAITING_FOR_TEAM);
+
+        MatchingStatusQueryResult result = service.getActiveStatus(1L).orElseThrow();
+
+        assertThat(result.matchingStatus()).isSameAs(MatchingStatus.WAITING_FOR_TEAM);
+        assertThat(result.groupId()).isEqualTo(20L);
+        assertThat(result.groupStatus()).isSameAs(MatchingRequestGroupStatus.CANDIDATE);
+        assertThat(result.itemStatus()).isSameAs(MatchingRequestGroupItemStatus.NOT_REQUESTED);
+        assertThat(result.requestSummary().headcount()).isEqualTo(2);
+        assertThat(result.offerStatus()).isNull();
+        assertThat(result.paymentStatus()).isNull();
+        assertThat(result.lessonSummary()).isNull();
+        assertThat(result.instructorProfile()).isNull();
+        assertThat(result.progressSummary()).isNull();
+        assertThat(result.priceSummary()).isNull();
+    }
+
+    @Test
+    void getActiveStatus는_최종확인_화면에_강습과_현재_강사프로필을_복구한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest currentRequest = matchingRequest(10L, member(1L, "현재 요청자", MemberRole.CONSUMER));
+        MatchingRequest otherRequest = matchingRequest(11L, member(2L, "다른 요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        MatchingRequestGroupItem currentItem = matchingRequestGroupItem(30L, currentRequest, group);
+        MatchingRequestGroupItem otherItem = matchingRequestGroupItem(31L, otherRequest, group);
+        otherItem.accept(Instant.parse("2026-07-07T00:02:00Z"));
+        InstructorProfile instructorProfile = instructorProfile(40L);
+        instructorProfile.registerCertificate(InstructorCertificateType.KSIA_SNOWBOARD_LEVEL_2);
+        instructorProfile.registerCertificate(InstructorCertificateType.KSIA_SKI_LEVEL_1);
+        ReflectionTestUtils.setField(instructorProfile, "careerStartDate", LocalDate.of(2020, 7, 17));
+        ReflectionTestUtils.setField(instructorProfile, "level", 3);
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile, group);
+        Review latestReview = newInstance(Review.class);
+        ReflectionTestUtils.setField(latestReview, "content", "설명을 친절하게 해주셨어요.");
+        currentRequest.markMatched(offer);
+
+        when(matchingRequestRepository.findByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        )).thenReturn(Optional.of(currentRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(currentItem));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(currentItem, otherItem));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(50L))
+                .thenReturn(Optional.of(offerPriceSnapshot(offer, 80_000, 20_000)));
+        when(lessonRepository.countByInstructorProfileIdAndStatus(40L, LessonStatus.COMPLETED))
+                .thenReturn(24L);
+        when(reviewRepository.findAverageRatingByInstructorProfileId(40L)).thenReturn(4.66);
+        when(reviewRepository.findFirstByInstructorProfileIdOrderByCreatedAtDescIdDesc(40L))
+                .thenReturn(Optional.of(latestReview));
+        when(matchingStatusResolver.resolve(
+                currentRequest,
+                Optional.of(group),
+                Optional.of(currentItem),
+                Optional.of(offer),
+                Optional.empty()
+        )).thenReturn(MatchingStatus.WAITING_FOR_CONFIRMATION);
+
+        MatchingStatusQueryResult result = service.getActiveStatus(1L).orElseThrow();
+
+        assertThat(result.paymentStatus()).isNull();
+        assertThat(result.lessonSummary().durationMinutes()).isEqualTo(120);
+        assertThat(result.lessonSummary().totalHeadcount()).isEqualTo(4);
+        assertThat(result.lessonSummary().startType()).isEqualTo("IMMEDIATE");
+        assertThat(result.progressSummary().acceptedRequesterCount()).isEqualTo(1);
+        assertThat(result.progressSummary().totalRequesterCount()).isEqualTo(2);
+        assertThat(result.instructorProfile().instructorId()).isEqualTo(40L);
+        assertThat(result.instructorProfile().careerYears()).isEqualTo(5);
+        assertThat(result.instructorProfile().completedLessonCount()).isEqualTo(24L);
+        assertThat(result.instructorProfile().averageRating()).isEqualTo(4.7);
+        assertThat(result.instructorProfile().introduction()).isEqualTo("친절한 강사입니다.");
+        assertThat(result.instructorProfile().certificateTypes()).containsExactly(
+                InstructorCertificateType.KSIA_SKI_LEVEL_1,
+                InstructorCertificateType.KSIA_SNOWBOARD_LEVEL_2
+        );
+        assertThat(result.instructorProfile().latestReview().content())
+                .isEqualTo("설명을 친절하게 해주셨어요.");
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
+    }
+
+    @Test
+    void getActiveStatus는_결제_화면에_결제상태와_강습요약을_복구한다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest currentRequest = matchingRequest(10L, member(1L, "현재 요청자", MemberRole.CONSUMER));
+        MatchingRequest otherRequest = matchingRequest(11L, member(2L, "다른 요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        group.markPaymentPending();
+        MatchingRequestGroupItem currentItem = matchingRequestGroupItem(30L, currentRequest, group);
+        MatchingRequestGroupItem otherItem = matchingRequestGroupItem(31L, otherRequest, group);
+        currentItem.accept(Instant.parse("2026-07-07T00:02:00Z"));
+        otherItem.accept(Instant.parse("2026-07-07T00:03:00Z"));
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile(40L), group);
+        MatchingRequestPayment pendingPayment = matchingRequestPayment(
+                60L,
+                currentRequest,
+                offer,
+                MatchingRequestPaymentStatus.PENDING,
+                PAYMENT_EXPIRES_AT
+        );
+        MatchingRequestPayment completedPayment = matchingRequestPayment(
+                61L,
+                otherRequest,
+                offer,
+                MatchingRequestPaymentStatus.COMPLETED,
+                PAYMENT_EXPIRES_AT
+        );
+        currentRequest.markMatched(offer);
+
+        when(matchingRequestRepository.findByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        )).thenReturn(Optional.of(currentRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(currentItem));
+        when(matchingRequestGroupItemRepository.findByMatchingRequestGroupIdOrderByIdAsc(20L))
+                .thenReturn(List.of(currentItem, otherItem));
+        when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
+                .thenReturn(Optional.of(pendingPayment));
+        when(matchingRequestPaymentRepository.findByMatchingOfferIdOrderByMatchingRequestIdAsc(50L))
+                .thenReturn(List.of(pendingPayment, completedPayment));
+        when(reviewRepository.findAverageRatingByInstructorProfileId(40L)).thenReturn(null);
+        when(matchingStatusResolver.resolve(
+                currentRequest,
+                Optional.of(group),
+                Optional.of(currentItem),
+                Optional.of(offer),
+                Optional.of(pendingPayment)
+        )).thenReturn(MatchingStatus.PAYMENT_PENDING);
+
+        MatchingStatusQueryResult result = service.getActiveStatus(1L).orElseThrow();
+
+        assertThat(result.paymentStatus()).isSameAs(MatchingRequestPaymentStatus.PENDING);
+        assertThat(result.lessonSummary().totalHeadcount()).isEqualTo(4);
+        assertThat(result.progressSummary().paidRequesterCount()).isEqualTo(1);
+        assertThat(result.progressSummary().totalRequesterCount()).isEqualTo(2);
+        assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
+        assertThat(result.instructorProfile().certificateTypes()).isEmpty();
+        assertThat(result.instructorProfile().averageRating()).isNull();
+        assertThat(result.instructorProfile().latestReview()).isNull();
+    }
+
+    @Test
+    void getActiveStatus는_PAYMENT_EXPIRED_데이터이상이면_화면을_복구하지_않는다() {
+        MatchingStatusQueryService service = createService();
+        MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        MatchingRequestGroup group = matchingRequestGroup(20L);
+        group.markPaymentExpired();
+        MatchingRequestGroupItem item = matchingRequestGroupItem(30L, matchingRequest, group);
+        MatchingOffer offer = acceptedOffer(50L, instructorProfile(40L), group);
+        MatchingRequestPayment payment = matchingRequestPayment(
+                60L,
+                matchingRequest,
+                offer,
+                MatchingRequestPaymentStatus.EXPIRED,
+                PAYMENT_EXPIRES_AT
+        );
+        matchingRequest.markMatched(offer);
+
+        when(matchingRequestRepository.findByMemberIdAndStatusIn(
+                1L,
+                MatchingRequestStatus.activeNegotiationStatuses()
+        )).thenReturn(Optional.of(matchingRequest));
+        when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
+                .thenReturn(Optional.of(item));
+        when(matchingRequestPaymentRepository.findByMatchingRequestIdAndMatchingOfferId(10L, 50L))
+                .thenReturn(Optional.of(payment));
+        when(matchingStatusResolver.resolve(
+                matchingRequest,
+                Optional.of(group),
+                Optional.of(item),
+                Optional.of(offer),
+                Optional.of(payment)
+        )).thenReturn(MatchingStatus.PAYMENT_EXPIRED);
+
+        assertThat(service.getActiveStatus(1L)).isEmpty();
+
+        verifyNoInteractions(reviewRepository);
+        verifyNoInteractions(matchingOfferPriceSnapshotRepository);
+        verifyNoInteractions(lessonRepository);
     }
 
     @Test
@@ -275,6 +549,7 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.priceSummary().resortPassFeeAmount()).isEqualTo(20_000);
         assertThat(result.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
         verifyNoInteractions(lessonRepository);
+        verifyNoInteractions(reviewRepository);
     }
 
     @Test
@@ -594,8 +869,10 @@ class MatchingStatusQueryServiceTest {
                 matchingOfferPriceSnapshotRepository,
                 matchingRequestPaymentRepository,
                 lessonRepository,
+                reviewRepository,
                 matchingStatusResolver,
-                new MatchingTimeoutPolicy()
+                new MatchingTimeoutPolicy(),
+                FIXED_CLOCK
         );
     }
 

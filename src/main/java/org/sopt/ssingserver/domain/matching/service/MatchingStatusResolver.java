@@ -74,6 +74,12 @@ public class MatchingStatusResolver {
             return MatchingStatus.CONFIRMED;
         }
 
+        // 재매칭 요청에는 이전 그룹/결제 row가 남을 수 있으므로 자식 상태보다 요청의 현재 의도를 우선한다.
+        if (matchingRequest.getStatus() == MatchingRequestStatus.REQUESTED
+                && isRematchingReason(matchingRequest.getStatusReason())) {
+            return MatchingStatus.REMATCHING;
+        }
+
         // 결제 단계 row가 생긴 이후에는 MATCHED 요청보다 결제 화면 상태를 우선 표시
         if (isPaymentExpired(matchingRequestGroup, matchingRequestPayment)) {
             return MatchingStatus.PAYMENT_EXPIRED;
@@ -85,12 +91,6 @@ public class MatchingStatusResolver {
 
         if (isWaitingForOtherPayments(matchingRequestGroup, matchingRequestPayment)) {
             return MatchingStatus.WAITING_FOR_OTHER_PAYMENTS;
-        }
-
-        // 기존 요청을 유지한 채 현재 그룹 실패 후 다음 후보를 찾는 상태
-        if (matchingRequest.getStatus() == MatchingRequestStatus.REQUESTED
-                && isRematchingReason(matchingRequest.getStatusReason())) {
-            return MatchingStatus.REMATCHING;
         }
 
         // 강사 수락 이후에는 소비자 개인 확인 여부에 따라 본인/다른 참여자 대기 상태를 구분

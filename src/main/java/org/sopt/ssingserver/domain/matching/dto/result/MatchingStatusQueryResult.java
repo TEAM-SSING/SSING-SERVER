@@ -2,7 +2,12 @@ package org.sopt.ssingserver.domain.matching.dto.result;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
+import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
+import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
+import org.sopt.ssingserver.domain.instructor.enums.Sport;
+import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
@@ -28,8 +33,79 @@ public record MatchingStatusQueryResult(
         Instant expiresAt,
         InstructorProfileResult instructorProfile,
         Long lessonId,
-        MatchingPriceSummaryResult priceSummary
+        MatchingPriceSummaryResult priceSummary,
+        RequestSummaryResult requestSummary,
+        LessonSummaryResult lessonSummary
 ) {
+
+    public MatchingStatusQueryResult(
+            Long matchingRequestId,
+            MatchingStatus matchingStatus,
+            MatchingRequestStatus requestStatus,
+            MatchingRequestStatusReason requestStatusReason,
+            Long groupId,
+            MatchingRequestGroupStatus groupStatus,
+            MatchingRequestGroupItemStatus itemStatus,
+            MatchingOfferStatus offerStatus,
+            MatchingRequestPaymentStatus paymentStatus,
+            MatchingProgressSummaryResult progressSummary,
+            Instant expiresAt,
+            InstructorProfileResult instructorProfile,
+            Long lessonId,
+            MatchingPriceSummaryResult priceSummary
+    ) {
+        this(
+                matchingRequestId,
+                matchingStatus,
+                requestStatus,
+                requestStatusReason,
+                groupId,
+                groupStatus,
+                itemStatus,
+                offerStatus,
+                paymentStatus,
+                progressSummary,
+                expiresAt,
+                instructorProfile,
+                lessonId,
+                priceSummary,
+                null,
+                null
+        );
+    }
+
+    public record RequestSummaryResult(
+            ResortResult resort,
+            Sport sport,
+            LessonLevel lessonLevel,
+            int headcount
+    ) {
+
+        public static RequestSummaryResult from(MatchingRequest matchingRequest) {
+            return new RequestSummaryResult(
+                    new ResortResult(
+                            matchingRequest.getResort().getCode(),
+                            matchingRequest.getResort().getDisplayName()
+                    ),
+                    matchingRequest.getSport(),
+                    matchingRequest.getLessonLevel(),
+                    matchingRequest.getHeadcount()
+            );
+        }
+    }
+
+    public record ResortResult(
+            String code,
+            String displayName
+    ) {
+    }
+
+    public record LessonSummaryResult(
+            int durationMinutes,
+            int totalHeadcount,
+            String startType
+    ) {
+    }
 
     public record InstructorProfileResult(
             Long instructorId,
@@ -37,10 +113,44 @@ public record MatchingStatusQueryResult(
             String profileImageUrl,
             Gender gender,
             Integer birthYear,
-            Integer level
+            Integer level,
+            Integer careerYears,
+            Long completedLessonCount,
+            Double averageRating,
+            String introduction,
+            List<InstructorCertificateType> certificateTypes,
+            LatestReviewResult latestReview
     ) {
 
+        public InstructorProfileResult(
+                Long instructorId,
+                String name,
+                String profileImageUrl,
+                Gender gender,
+                Integer birthYear,
+                Integer level
+        ) {
+            this(
+                    instructorId,
+                    name,
+                    profileImageUrl,
+                    gender,
+                    birthYear,
+                    level,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+
         public static InstructorProfileResult from(InstructorProfile instructorProfile) {
+            return basicFrom(instructorProfile);
+        }
+
+        public static InstructorProfileResult basicFrom(InstructorProfile instructorProfile) {
             Member member = instructorProfile.getMember();
             LocalDate birthDate = instructorProfile.getBirthDate();
             return new InstructorProfileResult(
@@ -49,8 +159,45 @@ public record MatchingStatusQueryResult(
                     member == null ? null : member.getProfileImageUrl(),
                     instructorProfile.getGender(),
                     birthDate == null ? null : birthDate.getYear(),
-                    instructorProfile.getLevel()
+                    instructorProfile.getLevel(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
             );
         }
+
+        public static InstructorProfileResult activeFrom(
+                InstructorProfile instructorProfile,
+                int careerYears,
+                long completedLessonCount,
+                Double averageRating,
+                List<InstructorCertificateType> certificateTypes,
+                LatestReviewResult latestReview
+        ) {
+            Member member = instructorProfile.getMember();
+            LocalDate birthDate = instructorProfile.getBirthDate();
+            return new InstructorProfileResult(
+                    instructorProfile.getId(),
+                    instructorProfile.getRealName(),
+                    member == null ? null : member.getProfileImageUrl(),
+                    instructorProfile.getGender(),
+                    birthDate == null ? null : birthDate.getYear(),
+                    instructorProfile.getLevel(),
+                    careerYears,
+                    completedLessonCount,
+                    averageRating,
+                    instructorProfile.getIntro(),
+                    certificateTypes,
+                    latestReview
+            );
+        }
+    }
+
+    public record LatestReviewResult(
+            String content
+    ) {
     }
 }

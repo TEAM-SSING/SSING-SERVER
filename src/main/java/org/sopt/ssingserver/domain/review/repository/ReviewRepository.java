@@ -1,5 +1,6 @@
 package org.sopt.ssingserver.domain.review.repository;
 
+import java.util.Optional;
 import org.sopt.ssingserver.domain.review.entity.Review;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -16,4 +17,6 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     Double findAverageRatingByInstructorProfileId(
             @Param("instructorProfileId") Long instructorProfileId
     );
+
+    Optional<Review> findFirstByInstructorProfileIdOrderByCreatedAtDescIdDesc(Long instructorProfileId);
 }
