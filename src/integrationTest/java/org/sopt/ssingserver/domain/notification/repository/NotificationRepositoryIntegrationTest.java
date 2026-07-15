@@ -25,7 +25,8 @@ import org.testcontainers.utility.DockerImageName;
 
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
-        "spring.jpa.open-in-view=false"
+        "spring.jpa.open-in-view=false",
+        "ssing.auth.kakao.app-id=1234"
 })
 @ActiveProfiles("integration-test")
 @Execution(ExecutionMode.SAME_THREAD)
