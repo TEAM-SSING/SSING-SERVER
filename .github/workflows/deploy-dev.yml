@@ -105,6 +105,7 @@ jobs:
           SSING_DEV_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          FIREBASE_ADMIN_JSON: ${{ secrets.FIREBASE_ADMIN_JSON }}
         run: |
           set -euo pipefail
 
@@ -132,6 +133,7 @@ jobs:
             SSING_DEV_KAKAO_APP_ID
             SSING_DEV_DOMAIN
             SENTRY_DSN
+            FIREBASE_ADMIN_JSON
           )
 
           missing=0
@@ -255,6 +257,53 @@ jobs:
           fi
 
           echo "::notice title=EC2 SSH 접속 준비 완료::동적 host key 수집 없이 저장된 값만 사용합니다."
+          echo "::endgroup::"
+
+      # Firebase 서비스 계정 키를 GitHub Secret에서 EC2 런타임 파일로만 복원
+      - name: Firebase 서비스 계정 키 복원
+        env:
+          FIREBASE_ADMIN_JSON: ${{ secrets.FIREBASE_ADMIN_JSON }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::Firebase 서비스 계정 키 복원"
+          umask 077
+          credential_file="$(mktemp)"
+          trap 'rm -f "$credential_file"' EXIT
+
+          printf '%s' "$FIREBASE_ADMIN_JSON" > "$credential_file"
+
+          if ! jq -e '.type == "service_account" and (.private_key | type == "string")' "$credential_file" >/dev/null; then
+            echo "::error title=Firebase 서비스 계정 키 형식 오류::복원된 JSON이 서비스 계정 키인지 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "install -d -m 700 '$DEPLOY_DIR/secrets'"; then
+            echo "::error title=EC2 Firebase 키 디렉터리 생성 실패::배포 계정의 $DEPLOY_DIR 권한을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          if ! scp -i ~/.ssh/ssing-dev-key "$credential_file" \
+            "$SSH_TARGET:$DEPLOY_DIR/secrets/firebase-admin.json.next"; then
+            echo "::error title=EC2 Firebase 키 업로드 실패::SSH 연결과 EC2 디렉터리 권한을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "chmod 444 '$DEPLOY_DIR/secrets/firebase-admin.json.next' && mv -f '$DEPLOY_DIR/secrets/firebase-admin.json.next' '$DEPLOY_DIR/secrets/firebase-admin.json'"; then
+            echo "::error title=EC2 Firebase 키 교체 실패::EC2 파일 권한과 디스크 여유 공간을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=Firebase 서비스 계정 키 복원 완료::키를 EC2 런타임 파일로만 복원했습니다."
           echo "::endgroup::"
 
       # 실패한 reset의 파일과 DB 상태를 보존하기 위해 EC2 파일을 덮어쓰기 전에 차단
@@ -701,6 +750,6 @@ jobs:
           if [ -f ~/.ssh/ssing-dev-key ]; then
             SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
             ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-              "rm -f '$DEPLOY_DIR/.migration.env' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.env.next'" || true
+              "rm -f '$DEPLOY_DIR/.migration.env' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.env.next' '$DEPLOY_DIR/secrets/firebase-admin.json.next'" || true
           fi
           rm -f ~/.ssh/ssing-dev-key
