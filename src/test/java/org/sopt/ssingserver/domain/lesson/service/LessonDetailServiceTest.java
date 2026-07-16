@@ -45,6 +45,8 @@ import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
+import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPriceSnapshot;
+import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -77,6 +79,9 @@ class LessonDetailServiceTest {
 
     @Mock
     private MatchingRequestPaymentRepository matchingRequestPaymentRepository;
+
+    @Mock
+    private MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
 
     @Test
     void getDetail은_CONFIRMED_강습의_강사와_팀단위_준비상태를_반환한다() {
@@ -114,6 +119,9 @@ class LessonDetailServiceTest {
         assertThat(statusInfo.instructorConfirmed()).isTrue();
         assertThat(lessonInfo.representativeConsumerNames()).containsExactly("김소비", "박소비");
         assertThat(lessonInfo.myTeamLessonPrice()).isEqualTo(40_000);
+        assertThat(lessonInfo.priceSummary().lessonPriceAmount()).isEqualTo(40_000);
+        assertThat(lessonInfo.priceSummary().resortPassFeeAmount()).isEqualTo(20_000);
+        assertThat(lessonInfo.priceSummary().totalPaymentAmount()).isEqualTo(60_000);
         assertThat(response.matchingRequests()).hasSize(2);
         ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse firstMatchingRequest =
                 (ConsumerLessonDetailResponse.ConfirmedMatchingRequestResponse) response.matchingRequests().get(0);
@@ -320,7 +328,8 @@ class LessonDetailServiceTest {
                 lessonParticipantRepository,
                 lessonCancellationRepository,
                 lessonStartConfirmationRepository,
-                matchingRequestPaymentRepository
+                matchingRequestPaymentRepository,
+                matchingOfferPriceSnapshotRepository
         );
         return new LessonDetailService(
                 lessonDetailReader,
@@ -464,7 +473,12 @@ class LessonDetailServiceTest {
         MatchingRequestPayment payment = construct(MatchingRequestPayment.class);
         ReflectionTestUtils.setField(payment, "matchingRequest", matchingRequest);
         ReflectionTestUtils.setField(payment, "matchingOffer", offer);
-        ReflectionTestUtils.setField(payment, "amount", amount);
+        MatchingRequestPriceSnapshot priceSnapshot = construct(MatchingRequestPriceSnapshot.class);
+        ReflectionTestUtils.setField(priceSnapshot, "lessonPriceAmount", amount);
+        ReflectionTestUtils.setField(priceSnapshot, "resortPassFeeAmount", 20_000);
+        ReflectionTestUtils.setField(priceSnapshot, "totalPaymentAmount", amount + 20_000);
+        ReflectionTestUtils.setField(payment, "matchingRequestPriceSnapshot", priceSnapshot);
+        ReflectionTestUtils.setField(payment, "amount", amount + 20_000);
         ReflectionTestUtils.setField(payment, "paymentRequestedAt", Instant.parse("2026-07-10T00:00:00Z"));
         return payment;
     }

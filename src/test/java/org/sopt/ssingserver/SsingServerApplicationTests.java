@@ -720,9 +720,11 @@ class SsingServerApplicationTests {
 				"lessonLevels",
 				"availableDurationMinutes",
 				"maxHeadcount",
-				"equipmentReady"
+				"equipmentReady",
+				"pricePolicy"
 		);
-		assertThat(matchingSettingProperties.has("price")).isFalse();
+		assertThat(matchingSettingProperties.path("pricePolicy").path("$ref").asString())
+				.isEqualTo("#/components/schemas/InstructorPricePolicy");
 		assertThat(textValues(matchingSettingSchema.path("required"))).contains(
 				"isExposed",
 				"resort",
@@ -730,7 +732,8 @@ class SsingServerApplicationTests {
 				"lessonLevels",
 				"availableDurationMinutes",
 				"maxHeadcount",
-				"equipmentReady"
+				"equipmentReady",
+				"pricePolicy"
 		);
 
 		JsonNode currentOffersExamples = currentOffersResponses.path("200")
@@ -742,6 +745,8 @@ class SsingServerApplicationTests {
 		assertThat(waitingOfferExample.has("offerId")).isTrue();
 		assertThat(waitingOfferExample.path("offerId").isNull()).isTrue();
 		assertThat(waitingOfferExample.path("matchingSetting").path("isExposed").asBoolean()).isTrue();
+		assertThat(waitingOfferExample.path("matchingSetting").path("pricePolicy")
+				.path("basePriceAmount").asInt()).isEqualTo(60_000);
 		assertThat(waitingOfferExample.has("activeOffer")).isFalse();
 		JsonNode offeredOfferExample = currentOffersExamples.path("OFFERED").path("value").path("data");
 		assertThat(offeredOfferExample.path("offerId").asLong()).isEqualTo(21L);
@@ -801,6 +806,10 @@ class SsingServerApplicationTests {
 		assertThat(detailProperties.has("requestSummary")).isTrue();
 		assertThat(detailProperties.has("lessonSummary")).isTrue();
 		assertThat(detailProperties.has("priceSummary")).isTrue();
+		assertThat(detailProperties.path("priceSummary").path("$ref").asString())
+				.isEqualTo("#/components/schemas/InstructorMatchingPriceSummary");
+		JsonNode instructorPriceProperties = schemas.path("InstructorMatchingPriceSummary").path("properties");
+		assertThat(fieldNames(instructorPriceProperties)).containsExactly("instructorSettlementAmount");
 		assertThat(detailProperties.has("participants")).isTrue();
 		assertThat(textValues(schemas.path("InstructorMatchingOfferDetailResponse").path("required")))
 				.containsExactlyInAnyOrder(

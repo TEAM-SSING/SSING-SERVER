@@ -81,6 +81,17 @@ SELECT (
        AND policy.additional_person_price_amount = 20000) = 1
     AND
     (SELECT COUNT(*)
+     FROM (
+         SELECT profile.id
+         FROM instructor_profiles profile
+         LEFT JOIN instructor_price_policies policy
+           ON policy.instructor_profile_id = profile.id
+          AND policy.is_active = b'1'
+         GROUP BY profile.id
+         HAVING COUNT(policy.id) <> 1
+     ) invalid_active_price_policy) = 0
+    AND
+    (SELECT COUNT(*)
      FROM matching_requests
      WHERE status IN ('REQUESTED', 'GROUPED', 'MATCHED')) = 0
 );

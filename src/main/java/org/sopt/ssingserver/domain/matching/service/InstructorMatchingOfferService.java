@@ -8,14 +8,16 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorPricePolicy;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
-import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
+import org.sopt.ssingserver.domain.matching.dto.result.InstructorPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.NextMatchingOfferResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
@@ -53,6 +55,7 @@ public class InstructorMatchingOfferService {
 
     private final InstructorProfileRepository instructorProfileRepository;
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+    private final InstructorPricePolicyRepository instructorPricePolicyRepository;
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
@@ -87,17 +90,21 @@ public class InstructorMatchingOfferService {
         if (activeOfferIds.isEmpty() && !matchingSetting.isExposed()) {
             throw new BusinessException(MatchingErrorCode.MATCHING_NOT_ACTIVE);
         }
+        InstructorPricePolicy pricePolicy = instructorPricePolicyRepository
+                .findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(instructorProfile.getId())
+                .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_PRICE_POLICY_NOT_FOUND));
 
         return new InstructorMatchingOffersResult(
                 activeOfferIds.isEmpty() ? null : activeOfferIds.getFirst(),
-                toMatchingSettingResult(instructorProfile, matchingSetting)
+                toMatchingSettingResult(instructorProfile, matchingSetting, pricePolicy)
         );
     }
 
     // LAZY 저장 조건을 트랜잭션 안에서 응답 값으로 복사하고, Set 순서를 API 계약에 맞게 고정한다.
     private InstructorMatchingOffersResult.MatchingSettingResult toMatchingSettingResult(
             InstructorProfile instructorProfile,
-            InstructorMatchingSetting matchingSetting
+            InstructorMatchingSetting matchingSetting,
+            InstructorPricePolicy pricePolicy
     ) {
         Resort resort = Optional.ofNullable(instructorProfile.getResort())
                 .orElseThrow(() -> new BusinessException(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET));
@@ -116,7 +123,11 @@ public class InstructorMatchingOfferService {
                         .sorted()
                         .toList(),
                 matchingSetting.getMaxHeadcount(),
-                matchingSetting.isEquipmentReady()
+                matchingSetting.isEquipmentReady(),
+                new InstructorMatchingOffersResult.PricePolicyResult(
+                        pricePolicy.getBasePriceAmount(),
+                        pricePolicy.getAdditionalPersonPriceAmount()
+                )
         );
     }
 
@@ -324,7 +335,7 @@ public class InstructorMatchingOfferService {
                 resolveOfferExpiresAt(matchingOffer),
                 requestSummary,
                 lessonSummary,
-                MatchingPriceSummaryResult.from(priceSnapshot)
+                InstructorPriceSummaryResult.from(priceSnapshot)
         );
     }
 

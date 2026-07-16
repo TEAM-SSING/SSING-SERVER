@@ -35,14 +35,20 @@ public class InstructorLessonDetailResponseMapper {
             Lesson lesson,
             List<LessonParticipant> participants,
             Map<Long, Integer> teamPricesByMatchingRequestId,
+            int instructorSettlementAmount,
             List<LessonStartConfirmation> confirmations,
             Optional<LessonCancellation> latestCancellation
     ) {
         return switch (lesson.getStatus()) {
-            case CONFIRMED -> confirmedResponse(lesson, participants, teamPricesByMatchingRequestId, confirmations);
-            case IN_PROGRESS -> inProgressResponse(lesson, participants, teamPricesByMatchingRequestId);
-            case COMPLETED -> completedResponse(lesson, participants, teamPricesByMatchingRequestId);
-            case CANCELED -> canceledResponse(lesson, participants, teamPricesByMatchingRequestId, latestCancellation);
+            case CONFIRMED -> confirmedResponse(
+                    lesson, participants, teamPricesByMatchingRequestId, instructorSettlementAmount, confirmations);
+            case IN_PROGRESS -> inProgressResponse(
+                    lesson, participants, teamPricesByMatchingRequestId, instructorSettlementAmount);
+            case COMPLETED -> completedResponse(
+                    lesson, participants, teamPricesByMatchingRequestId, instructorSettlementAmount);
+            case CANCELED -> canceledResponse(
+                    lesson, participants, teamPricesByMatchingRequestId, instructorSettlementAmount,
+                    latestCancellation);
         };
     }
 
@@ -50,6 +56,7 @@ public class InstructorLessonDetailResponseMapper {
             Lesson lesson,
             List<LessonParticipant> participants,
             Map<Long, Integer> teamPricesByMatchingRequestId,
+            int instructorSettlementAmount,
             List<LessonStartConfirmation> confirmations
     ) {
         // 시작 전 화면은 강사와 팀 단위 준비 완료 상태를 함께 내려줌
@@ -70,7 +77,7 @@ public class InstructorLessonDetailResponseMapper {
         return InstructorLessonDetailResponse.confirmed(
                 lesson.getId(),
                 statusInfo,
-                activeLessonInfo(lesson, participants, teamPricesByMatchingRequestId),
+                activeLessonInfo(lesson, participants, instructorSettlementAmount),
                 confirmedMatchingRequests(participants, confirmedByMatchingRequestId, teamPricesByMatchingRequestId)
         );
     }
@@ -78,7 +85,8 @@ public class InstructorLessonDetailResponseMapper {
     private InstructorLessonDetailResponse inProgressResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            Map<Long, Integer> teamPricesByMatchingRequestId
+            Map<Long, Integer> teamPricesByMatchingRequestId,
+            int instructorSettlementAmount
     ) {
         // 강습 진행 중에는 실제 시작 시각과 서버 현재 시각으로 타이머 값을 계산
         Instant startedAt = requireInstant(lesson.getStartedAt());
@@ -97,7 +105,7 @@ public class InstructorLessonDetailResponseMapper {
         return InstructorLessonDetailResponse.inProgress(
                 lesson.getId(),
                 statusInfo,
-                activeLessonInfo(lesson, participants, teamPricesByMatchingRequestId),
+                activeLessonInfo(lesson, participants, instructorSettlementAmount),
                 matchingRequests(participants, teamPricesByMatchingRequestId)
         );
     }
@@ -105,7 +113,8 @@ public class InstructorLessonDetailResponseMapper {
     private InstructorLessonDetailResponse completedResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            Map<Long, Integer> teamPricesByMatchingRequestId
+            Map<Long, Integer> teamPricesByMatchingRequestId,
+            int instructorSettlementAmount
     ) {
         // 강습 종료 후에는 실제 시작/종료 시각 기준의 기록 정보를 내려줌
         Instant startedAt = requireInstant(lesson.getStartedAt());
@@ -124,7 +133,7 @@ public class InstructorLessonDetailResponseMapper {
                         toOffsetDateTime(startedAt),
                         toOffsetDateTime(completedAt),
                         actualDurationMinutes,
-                        totalLessonPrice(participants, teamPricesByMatchingRequestId)
+                        instructorSettlementAmount
                 ),
                 matchingRequests(participants, teamPricesByMatchingRequestId)
         );
@@ -134,6 +143,7 @@ public class InstructorLessonDetailResponseMapper {
             Lesson lesson,
             List<LessonParticipant> participants,
             Map<Long, Integer> teamPricesByMatchingRequestId,
+            int instructorSettlementAmount,
             Optional<LessonCancellation> latestCancellation
     ) {
         // lesson이 취소 상태이면 가장 마지막 취소 이력을 화면 복구 기준으로 사용
@@ -154,7 +164,7 @@ public class InstructorLessonDetailResponseMapper {
                         lesson.getSport(),
                         lesson.getLessonLevel(),
                         lesson.getDurationMinutes(),
-                        totalLessonPrice(participants, teamPricesByMatchingRequestId)
+                        instructorSettlementAmount
                 ),
                 matchingRequests(participants, teamPricesByMatchingRequestId)
         );
@@ -163,7 +173,7 @@ public class InstructorLessonDetailResponseMapper {
     private InstructorLessonDetailResponse.LessonInfoResponse activeLessonInfo(
             Lesson lesson,
             List<LessonParticipant> participants,
-            Map<Long, Integer> teamPricesByMatchingRequestId
+            int instructorSettlementAmount
     ) {
         return InstructorLessonDetailResponse.LessonInfoResponse.of(
                 representativeConsumerNames(participants),
@@ -173,7 +183,7 @@ public class InstructorLessonDetailResponseMapper {
                 lesson.getLessonLevel(),
                 toOffsetDateTime(lesson.getScheduledAt()),
                 lesson.getDurationMinutes(),
-                totalLessonPrice(participants, teamPricesByMatchingRequestId)
+                instructorSettlementAmount
         );
     }
 
@@ -301,18 +311,6 @@ public class InstructorLessonDetailResponseMapper {
                 ? lesson.getInstructorProfile().getRealName()
                 : member.getNickname();
         return InstructorLessonDetailResponse.CanceledByResponse.of(member.getId(), name);
-    }
-
-    private int totalLessonPrice(
-            List<LessonParticipant> participants,
-            Map<Long, Integer> teamPricesByMatchingRequestId
-    ) {
-        // 전체 강습 가격은 팀별 결제 요청 금액을 합산해서 계산
-        return groupedParticipants(participants)
-                .keySet()
-                .stream()
-                .mapToInt(matchingRequestId -> teamLessonPrice(matchingRequestId, teamPricesByMatchingRequestId))
-                .sum();
     }
 
     private int teamLessonPrice(

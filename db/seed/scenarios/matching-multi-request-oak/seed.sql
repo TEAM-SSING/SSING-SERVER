@@ -2,6 +2,28 @@ START TRANSACTION;
 
 SET @seed_now = UTC_TIMESTAMP(6);
 SET @scenario_member_id = CAST(UNIX_TIMESTAMP(@seed_now) * 1000000 AS UNSIGNED) + 100;
+SET @instructor_profile_id = (
+    SELECT profile.id
+    FROM instructor_profiles profile
+    JOIN dev_personas persona ON persona.member_id = profile.member_id
+    WHERE persona.persona_key = 'instructor-approved-default'
+);
+
+INSERT INTO instructor_price_policies (
+    instructor_profile_id,
+    base_price_amount,
+    additional_person_price_amount,
+    is_active,
+    created_at,
+    updated_at
+) VALUES (
+    @instructor_profile_id,
+    60000,
+    20000,
+    b'1',
+    @seed_now,
+    @seed_now
+);
 
 INSERT INTO members (
     id,

@@ -680,9 +680,8 @@ class DatabaseSeedContractTest {
                 .andExpect(jsonPath("$.data.offerId").value(offerId))
                 .andExpect(jsonPath("$.data.offerStatus").value("OFFERED"))
                 .andExpect(jsonPath("$.data.lessonSummary.resort.code").value("VIVALDI_PARK"))
-                .andExpect(jsonPath("$.data.priceSummary.lessonPriceAmount").value(60_000))
-                .andExpect(jsonPath("$.data.priceSummary.resortPassFeeAmount").value(25_000))
-                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000));
+                .andExpect(jsonPath("$.data.priceSummary.instructorSettlementAmount").value(60_000))
+                .andExpect(jsonPath("$.data.priceSummary.resortPassFeeAmount").doesNotExist());
     }
 
     private void acceptInstructorOffer(String instructorToken, long offerId) throws Exception {

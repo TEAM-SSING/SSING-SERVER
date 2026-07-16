@@ -9,6 +9,7 @@ import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffer
 import org.sopt.ssingserver.domain.matching.dto.response.InstructorMatchingOffersResponse;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
+import org.sopt.ssingserver.domain.matching.dto.result.InstructorPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingProgressSummaryResult;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingStatusQueryResult;
@@ -312,7 +313,7 @@ final class MatchingApiExamples {
                         2,
                         "IMMEDIATE"
                 ),
-                new MatchingPriceSummaryResult(80_000, 20_000, 100_000),
+                new InstructorPriceSummaryResult(80_000),
                 List.of(
                         new InstructorMatchingOfferDetailResult.ParticipantResult(10, Gender.MALE),
                         new InstructorMatchingOfferDetailResult.ParticipantResult(12, Gender.FEMALE)
@@ -342,7 +343,8 @@ final class MatchingApiExamples {
                 List.of(LessonLevel.FIRST_TIME, LessonLevel.BEGINNER),
                 List.of(120, 240),
                 3,
-                true
+                true,
+                new InstructorMatchingOffersResult.PricePolicyResult(60_000, 20_000)
         );
     }
 }

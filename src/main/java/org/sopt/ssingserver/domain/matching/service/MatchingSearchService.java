@@ -287,6 +287,7 @@ public class MatchingSearchService {
                 instructorPricePolicy,
                 platformFeePolicy,
                 totalHeadcount,
+                candidate.durationMinutes(),
                 matchingRequest.getResort().getPassFeeAmount()
         ));
 

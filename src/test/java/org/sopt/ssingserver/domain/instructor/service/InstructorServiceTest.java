@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -25,6 +26,7 @@ import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExp
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
 import org.sopt.ssingserver.domain.instructor.dto.result.InstructorMatchingExposureConditionsResult;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorPricePolicy;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
@@ -32,9 +34,11 @@ import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
+import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.service.MatchingAfterCommitExecutor;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchTriggerService;
 import org.sopt.ssingserver.domain.member.entity.Member;
@@ -61,6 +65,9 @@ class InstructorServiceTest {
 
     @Mock
     private InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+
+    @Mock
+    private InstructorPricePolicyRepository instructorPricePolicyRepository;
 
     @Mock
     private LessonRepository lessonRepository;
@@ -90,6 +97,9 @@ class InstructorServiceTest {
 
         InstructorMatchingSetting savedSetting = settingCaptor.getValue();
         assertThat(response.isExposed()).isTrue();
+        assertThat(response.pricePolicy().baseDurationMinutes()).isEqualTo(120);
+        assertThat(response.pricePolicy().basePriceAmount()).isEqualTo(60_000);
+        assertThat(response.pricePolicy().additionalPersonPriceAmount()).isEqualTo(20_000);
         assertThat(savedSetting.getInstructorProfile()).isSameAs(profile);
         assertThat(savedSetting.getSport()).isSameAs(Sport.SNOWBOARD);
         assertThat(savedSetting.getLessonLevels())
@@ -99,6 +109,25 @@ class InstructorServiceTest {
         assertThat(savedSetting.isEquipmentReady()).isTrue();
         assertThat(savedSetting.isExposed()).isTrue();
         verify(matchingSearchTriggerService).triggerAllRequested();
+    }
+
+    @Test
+    void startExposure는_활성_가격정책이_없으면_대기상태를_저장하지_않는다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(lessonRepository.existsByInstructorProfileIdAndStatus(10L, LessonStatus.IN_PROGRESS))
+                .thenReturn(false);
+        when(instructorPricePolicyRepository.findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(10L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.startExposure(1L, request()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isSameAs(MatchingErrorCode.MATCHING_PRICE_POLICY_NOT_FOUND));
+
+        verify(instructorMatchingSettingRepository, never()).save(any());
+        verify(matchingSearchTriggerService, never()).triggerAllRequested();
     }
 
     @Test
@@ -417,14 +446,32 @@ class InstructorServiceTest {
     }
 
     private InstructorService createService() {
+        lenient().when(instructorPricePolicyRepository
+                        .findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(10L))
+                .thenReturn(Optional.of(instructorPricePolicy()));
         return new InstructorService(
                 instructorProfileRepository,
                 instructorMatchingSettingRepository,
+                instructorPricePolicyRepository,
                 lessonRepository,
                 matchingSearchTriggerService,
                 new MatchingAfterCommitExecutor(),
                 new NoOpTransactionManager()
         );
+    }
+
+    private InstructorPricePolicy instructorPricePolicy() {
+        try {
+            Constructor<InstructorPricePolicy> constructor = InstructorPricePolicy.class.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            InstructorPricePolicy pricePolicy = constructor.newInstance();
+            ReflectionTestUtils.setField(pricePolicy, "basePriceAmount", 60_000);
+            ReflectionTestUtils.setField(pricePolicy, "additionalPersonPriceAmount", 20_000);
+            ReflectionTestUtils.setField(pricePolicy, "isActive", true);
+            return pricePolicy;
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private InstructorMatchingExposureRequest request() {

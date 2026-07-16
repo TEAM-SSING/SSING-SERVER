@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
+import org.sopt.ssingserver.domain.lesson.dto.result.LessonPriceSummaryResult;
 import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.LessonStartConfirmationResponse;
@@ -165,7 +166,7 @@ final class LessonApiExamples {
                         OffsetDateTime.parse("2026-01-01T10:00:00+09:00"),
                         OffsetDateTime.parse("2026-01-01T11:58:00+09:00"),
                         118,
-                        40000
+                        consumerPriceSummary()
                 ),
                 consumerInstructorProfile()
         );
@@ -189,7 +190,7 @@ final class LessonApiExamples {
                         Sport.SNOWBOARD,
                         LessonLevel.FIRST_TIME,
                         120,
-                        40000
+                        consumerPriceSummary()
                 ),
                 consumerInstructorProfile()
         );
@@ -204,12 +205,16 @@ final class LessonApiExamples {
                 LessonLevel.FIRST_TIME,
                 OffsetDateTime.parse("2026-01-01T10:00:00+09:00"),
                 120,
-                40000
+                consumerPriceSummary()
         );
     }
 
+    private static LessonPriceSummaryResult consumerPriceSummary() {
+        return new LessonPriceSummaryResult(40_000, 25_000, 65_000);
+    }
+
     private static ConsumerLessonDetailResponse.ResortResponse consumerResort() {
-        return ConsumerLessonDetailResponse.ResortResponse.of("HIGH1", "하이원");
+        return ConsumerLessonDetailResponse.ResortResponse.of("VIVALDI_PARK", "비발디파크");
     }
 
     private static ConsumerLessonDetailResponse.InstructorProfileResponse consumerInstructorProfile() {

@@ -8,13 +8,16 @@ import org.sopt.ssingserver.domain.instructor.dto.result.InstructorMatchingExpos
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureCancelResponse;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorPricePolicy;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
+import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.service.MatchingAfterCommitExecutor;
 import org.sopt.ssingserver.domain.matching.service.MatchingSearchTriggerService;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -33,6 +36,7 @@ public class InstructorService {
 
     private final InstructorProfileRepository instructorProfileRepository;
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+    private final InstructorPricePolicyRepository instructorPricePolicyRepository;
     private final LessonRepository lessonRepository;
     private final MatchingSearchTriggerService matchingSearchTriggerService;
     private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
@@ -41,6 +45,7 @@ public class InstructorService {
     public InstructorService(
             InstructorProfileRepository instructorProfileRepository,
             InstructorMatchingSettingRepository instructorMatchingSettingRepository,
+            InstructorPricePolicyRepository instructorPricePolicyRepository,
             LessonRepository lessonRepository,
             MatchingSearchTriggerService matchingSearchTriggerService,
             MatchingAfterCommitExecutor matchingAfterCommitExecutor,
@@ -48,6 +53,7 @@ public class InstructorService {
     ) {
         this.instructorProfileRepository = instructorProfileRepository;
         this.instructorMatchingSettingRepository = instructorMatchingSettingRepository;
+        this.instructorPricePolicyRepository = instructorPricePolicyRepository;
         this.lessonRepository = lessonRepository;
         this.matchingSearchTriggerService = matchingSearchTriggerService;
         this.matchingAfterCommitExecutor = matchingAfterCommitExecutor;
@@ -69,12 +75,12 @@ public class InstructorService {
             InstructorMatchingExposureRequest request
     ) {
         try {
-            boolean isExposed = Objects.requireNonNull(
+            ExposureState exposureState = Objects.requireNonNull(
                     transactionTemplate.execute(status -> startExposureInTransaction(memberId, request))
             );
-            return InstructorMatchingExposureResponse.from(isExposed);
+            return toExposureResponse(exposureState);
         } catch (DataIntegrityViolationException exception) {
-            return InstructorMatchingExposureResponse.from(updateAfterConflict(memberId, request));
+            return toExposureResponse(updateAfterConflict(memberId, request));
         }
     }
 
@@ -96,7 +102,7 @@ public class InstructorService {
     }
 
     // 단일 트랜잭션에서 검증과 조건 생성/갱신을 수행
-    private boolean startExposureInTransaction(
+    private ExposureState startExposureInTransaction(
             Long memberId,
             InstructorMatchingExposureRequest request
     ) {
@@ -104,7 +110,7 @@ public class InstructorService {
     }
 
     // 무결성 오류로 실패한 트랜잭션과 분리하여, 동시에 먼저 생성된 설정을 다시 조회해 요청값으로 덮어씀
-    private boolean updateAfterConflict(
+    private ExposureState updateAfterConflict(
             Long memberId,
             InstructorMatchingExposureRequest request
     ) {
@@ -114,13 +120,14 @@ public class InstructorService {
     }
 
     // 강사 프로필 조회, 노출 가능 검증, 조건 생성/갱신, 커밋 후 재탐색 예약의 공통 흐름
-    private boolean saveExposureSetting(
+    private ExposureState saveExposureSetting(
             Long memberId,
             InstructorMatchingExposureRequest request,
             boolean createWhenMissing
     ) {
         InstructorProfile instructorProfile = findInstructorProfile(memberId);
         validateExposureAllowed(instructorProfile, request.sport());
+        InstructorPricePolicy pricePolicy = findActivePricePolicy(instructorProfile.getId());
 
         InstructorMatchingSetting setting = findOrCreateMatchingSetting(
                 instructorProfile,
@@ -129,7 +136,25 @@ public class InstructorService {
         );
         instructorMatchingSettingRepository.save(setting);
         triggerRequestedSearchAfterCommit();
-        return setting.isExposed();
+        return new ExposureState(
+                setting.isExposed(),
+                pricePolicy.getBasePriceAmount(),
+                pricePolicy.getAdditionalPersonPriceAmount()
+        );
+    }
+
+    private InstructorPricePolicy findActivePricePolicy(Long instructorProfileId) {
+        return instructorPricePolicyRepository
+                .findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(instructorProfileId)
+                .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_PRICE_POLICY_NOT_FOUND));
+    }
+
+    private InstructorMatchingExposureResponse toExposureResponse(ExposureState exposureState) {
+        return InstructorMatchingExposureResponse.of(
+                exposureState.isExposed(),
+                exposureState.basePriceAmount(),
+                exposureState.additionalPersonPriceAmount()
+        );
     }
 
     // 인증 회원의 강사 프로필 필수 존재 조회
@@ -227,5 +252,12 @@ public class InstructorService {
         if (instructorProfile.getResort() == null) {
             throw new BusinessException(InstructorErrorCode.INSTRUCTOR_RESORT_NOT_SET);
         }
+    }
+
+    private record ExposureState(
+            boolean isExposed,
+            int basePriceAmount,
+            int additionalPersonPriceAmount
+    ) {
     }
 }

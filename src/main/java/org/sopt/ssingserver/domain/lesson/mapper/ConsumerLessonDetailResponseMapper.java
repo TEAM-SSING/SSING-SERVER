@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
+import org.sopt.ssingserver.domain.lesson.dto.result.LessonPriceSummaryResult;
 import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.entity.LessonCancellation;
@@ -43,7 +44,7 @@ public class ConsumerLessonDetailResponseMapper {
             Lesson lesson,
             List<LessonParticipant> participants,
             Long myMatchingRequestId,
-            int myTeamLessonPrice,
+            LessonPriceSummaryResult myTeamPriceSummary,
             List<LessonStartConfirmation> confirmations,
             Optional<LessonCancellation> myCancellation,
             Optional<LessonCancellation> instructorCancellation
@@ -51,11 +52,11 @@ public class ConsumerLessonDetailResponseMapper {
         LessonStatus responseStatus = myCancellation.isPresent() ? LessonStatus.CANCELED : lesson.getStatus();
         return switch (responseStatus) {
             case CONFIRMED -> confirmedResponse(
-                    lesson, participants, myMatchingRequestId, myTeamLessonPrice, confirmations);
-            case IN_PROGRESS -> inProgressResponse(lesson, participants, myTeamLessonPrice);
-            case COMPLETED -> completedResponse(lesson, participants, myTeamLessonPrice);
+                    lesson, participants, myMatchingRequestId, myTeamPriceSummary, confirmations);
+            case IN_PROGRESS -> inProgressResponse(lesson, participants, myTeamPriceSummary);
+            case COMPLETED -> completedResponse(lesson, participants, myTeamPriceSummary);
             case CANCELED -> canceledResponse(
-                    lesson, participants, myTeamLessonPrice, myCancellation, instructorCancellation);
+                    lesson, participants, myTeamPriceSummary, myCancellation, instructorCancellation);
         };
     }
 
@@ -63,7 +64,7 @@ public class ConsumerLessonDetailResponseMapper {
             Lesson lesson,
             List<LessonParticipant> participants,
             Long myMatchingRequestId,
-            int myTeamLessonPrice,
+            LessonPriceSummaryResult myTeamPriceSummary,
             List<LessonStartConfirmation> confirmations
     ) {
         // 강습 시작 전 강사와 각 팀이 준비 완료를 눌렀는지 확인
@@ -85,7 +86,7 @@ public class ConsumerLessonDetailResponseMapper {
         return ConsumerLessonDetailResponse.confirmed(
                 lesson.getId(),
                 statusInfo,
-                activeLessonInfo(lesson, participants, myTeamLessonPrice),
+                activeLessonInfo(lesson, participants, myTeamPriceSummary),
                 instructorProfile(lesson.getInstructorProfile()),
                 confirmedMatchingRequests(participants, confirmedByMatchingRequestId)
         );
@@ -94,7 +95,7 @@ public class ConsumerLessonDetailResponseMapper {
     private ConsumerLessonDetailResponse inProgressResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            int myTeamLessonPrice
+            LessonPriceSummaryResult myTeamPriceSummary
     ) {
         // 강습 진행 중에는 실제 시작 시각과 서버 현재 시각으로 타이머 값을 계산
         Instant startedAt = requireInstant(lesson.getStartedAt());
@@ -113,7 +114,7 @@ public class ConsumerLessonDetailResponseMapper {
         return ConsumerLessonDetailResponse.inProgress(
                 lesson.getId(),
                 statusInfo,
-                activeLessonInfo(lesson, participants, myTeamLessonPrice),
+                activeLessonInfo(lesson, participants, myTeamPriceSummary),
                 instructorProfile(lesson.getInstructorProfile()),
                 matchingRequests(participants)
         );
@@ -122,7 +123,7 @@ public class ConsumerLessonDetailResponseMapper {
     private ConsumerLessonDetailResponse completedResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            int myTeamLessonPrice
+            LessonPriceSummaryResult myTeamPriceSummary
     ) {
         // 강습 종료 후에는 실제 시작/종료 시각 기준의 기록 정보를 내려줌
         Instant startedAt = requireInstant(lesson.getStartedAt());
@@ -141,7 +142,7 @@ public class ConsumerLessonDetailResponseMapper {
                         toOffsetDateTime(startedAt),
                         toOffsetDateTime(completedAt),
                         actualDurationMinutes,
-                        myTeamLessonPrice
+                        myTeamPriceSummary
                 ),
                 instructorProfile(lesson.getInstructorProfile())
         );
@@ -150,7 +151,7 @@ public class ConsumerLessonDetailResponseMapper {
     private ConsumerLessonDetailResponse canceledResponse(
             Lesson lesson,
             List<LessonParticipant> participants,
-            int myTeamLessonPrice,
+            LessonPriceSummaryResult myTeamPriceSummary,
             Optional<LessonCancellation> myCancellation,
             Optional<LessonCancellation> instructorCancellation
     ) {
@@ -187,7 +188,7 @@ public class ConsumerLessonDetailResponseMapper {
                         lesson.getSport(),
                         lesson.getLessonLevel(),
                         lesson.getDurationMinutes(),
-                        myTeamLessonPrice
+                        myTeamPriceSummary
                 ),
                 instructorProfile(lesson.getInstructorProfile())
         );
@@ -196,7 +197,7 @@ public class ConsumerLessonDetailResponseMapper {
     private ConsumerLessonDetailResponse.LessonInfoResponse activeLessonInfo(
             Lesson lesson,
             List<LessonParticipant> participants,
-            int myTeamLessonPrice
+            LessonPriceSummaryResult myTeamPriceSummary
     ) {
         return ConsumerLessonDetailResponse.LessonInfoResponse.of(
                 representativeConsumerNames(participants),
@@ -206,7 +207,7 @@ public class ConsumerLessonDetailResponseMapper {
                 lesson.getLessonLevel(),
                 toOffsetDateTime(lesson.getScheduledAt()),
                 lesson.getDurationMinutes(),
-                myTeamLessonPrice
+                myTeamPriceSummary
         );
     }
 

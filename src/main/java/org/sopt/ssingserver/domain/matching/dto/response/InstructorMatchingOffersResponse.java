@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import org.sopt.ssingserver.domain.instructor.dto.response.InstructorPricePolicyResponse;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
@@ -84,7 +85,13 @@ public record InstructorMatchingOffersResponse(
                     example = "true",
                     requiredMode = Schema.RequiredMode.REQUIRED
             )
-            boolean equipmentReady
+            boolean equipmentReady,
+
+            @Schema(
+                    description = "최초 진입과 재접속에서 동일하게 복구하는 120분 기준 강사 가격",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            InstructorPricePolicyResponse pricePolicy
     ) {
 
         private static MatchingSettingResponse from(
@@ -97,7 +104,11 @@ public record InstructorMatchingOffersResponse(
                     result.lessonLevels(),
                     result.availableDurationMinutes(),
                     result.maxHeadcount(),
-                    result.equipmentReady()
+                    result.equipmentReady(),
+                    InstructorPricePolicyResponse.of(
+                            result.pricePolicy().basePriceAmount(),
+                            result.pricePolicy().additionalPersonPriceAmount()
+                    )
             );
         }
     }

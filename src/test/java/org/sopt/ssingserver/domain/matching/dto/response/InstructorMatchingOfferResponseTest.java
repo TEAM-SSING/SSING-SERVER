@@ -9,7 +9,7 @@ import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
-import org.sopt.ssingserver.domain.matching.dto.result.MatchingPriceSummaryResult;
+import org.sopt.ssingserver.domain.matching.dto.result.InstructorPriceSummaryResult;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
@@ -61,7 +61,11 @@ class InstructorMatchingOfferResponseTest {
         assertThat(json).contains("\"availableDurationMinutes\":[120,240]");
         assertThat(json).contains("\"maxHeadcount\":3");
         assertThat(json).contains("\"equipmentReady\":true");
-        assertThat(json).doesNotContain("items", "currentPage", "size", "hasNext", "activeOffer", "price");
+        assertThat(json).contains(
+                "\"pricePolicy\":{\"baseDurationMinutes\":120,"
+                        + "\"basePriceAmount\":60000,\"additionalPersonPriceAmount\":20000}"
+        );
+        assertThat(json).doesNotContain("items", "currentPage", "size", "hasNext", "activeOffer");
     }
 
     @Test
@@ -74,7 +78,7 @@ class InstructorMatchingOfferResponseTest {
                 MatchingStatus.WAITING_FOR_CONFIRMATION,
                 requestSummary(),
                 lessonSummary(),
-                priceSummary(),
+                new InstructorPriceSummaryResult(80_000),
                 List.of(
                         new InstructorMatchingOfferDetailResult.ParticipantResult(10, Gender.MALE),
                         new InstructorMatchingOfferDetailResult.ParticipantResult(12, Gender.FEMALE)
@@ -88,6 +92,8 @@ class InstructorMatchingOfferResponseTest {
         assertThat(json).contains("\"groupStatus\":\"INSTRUCTOR_ACCEPTED\"");
         assertThat(json).contains("\"matchingStatus\":\"WAITING_FOR_CONFIRMATION\"");
         assertThat(json).contains("\"requesterName\":\"홍길동\"");
+        assertThat(json).contains("\"priceSummary\":{\"instructorSettlementAmount\":80000}");
+        assertThat(json).doesNotContain("lessonPriceAmount", "resortPassFeeAmount", "totalPaymentAmount");
         assertThat(json).contains("\"participants\":[{\"age\":10,\"gender\":\"MALE\"},{\"age\":12,\"gender\":\"FEMALE\"}]");
         assertThat(json).doesNotContain("participantId");
         assertThat(json).doesNotContain("expiresAt");
@@ -126,10 +132,6 @@ class InstructorMatchingOfferResponseTest {
         return new InstructorMatchingOffersResult.RequestSummaryResult("홍길동", 2, 1);
     }
 
-    private MatchingPriceSummaryResult priceSummary() {
-        return new MatchingPriceSummaryResult(80_000, 20_000, 100_000);
-    }
-
     private InstructorMatchingOffersResult.MatchingSettingResult matchingSetting() {
         return new InstructorMatchingOffersResult.MatchingSettingResult(
                 true,
@@ -138,7 +140,8 @@ class InstructorMatchingOfferResponseTest {
                 List.of(LessonLevel.FIRST_TIME, LessonLevel.INTERMEDIATE),
                 List.of(120, 240),
                 3,
-                true
+                true,
+                new InstructorMatchingOffersResult.PricePolicyResult(60_000, 20_000)
         );
     }
 }

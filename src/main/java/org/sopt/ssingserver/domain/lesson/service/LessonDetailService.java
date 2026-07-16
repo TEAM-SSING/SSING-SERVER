@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.sopt.ssingserver.domain.lesson.dto.result.LessonPriceSummaryResult;
 import org.sopt.ssingserver.domain.lesson.dto.response.ConsumerLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.dto.response.InstructorLessonDetailResponse;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
@@ -43,7 +44,7 @@ public class LessonDetailService {
         Long myMatchingRequestId = matchingRequestIds.get(0);
 
         // 내 팀 가격 조회
-        int myTeamLessonPrice = lessonDetailReader.getTeamLessonPrice(
+        LessonPriceSummaryResult myTeamPriceSummary = lessonDetailReader.getTeamPriceSummary(
                 myMatchingRequestId,
                 lesson.getMatchingOffer().getId()
         );
@@ -71,7 +72,7 @@ public class LessonDetailService {
                 lesson,
                 participants,
                 myMatchingRequestId,
-                myTeamLessonPrice,
+                myTeamPriceSummary,
                 confirmations,
                 myCancellation,
                 instructorCancellation
@@ -94,6 +95,9 @@ public class LessonDetailService {
         Map<Long, Integer> teamPricesByMatchingRequestId = lessonDetailReader.getTeamLessonPricesByMatchingOfferId(
                 lesson.getMatchingOffer().getId()
         );
+        int instructorSettlementAmount = lessonDetailReader.getInstructorSettlementAmount(
+                lesson.getMatchingOffer().getId()
+        );
         // 시작 전 상태에서만 강사와 각 팀의 준비 완료 이력을 조회
         List<LessonStartConfirmation> confirmations = lessonDetailReader.getConfirmationsIfConfirmed(
                 lessonId,
@@ -109,6 +113,7 @@ public class LessonDetailService {
                 lesson,
                 participants,
                 teamPricesByMatchingRequestId,
+                instructorSettlementAmount,
                 confirmations,
                 latestCancellation
         );

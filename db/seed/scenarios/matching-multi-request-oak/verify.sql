@@ -15,6 +15,17 @@ SELECT (
        AND member.role = 'CONSUMER'
        AND member.status = 'ACTIVE') = 1
     AND
+    (SELECT COUNT(*)
+     FROM (
+         SELECT profile.id
+         FROM instructor_profiles profile
+         LEFT JOIN instructor_price_policies policy
+           ON policy.instructor_profile_id = profile.id
+          AND policy.is_active = b'1'
+         GROUP BY profile.id
+         HAVING COUNT(policy.id) <> 1
+     ) invalid_active_price_policy) = 0
+    AND
     (SELECT COUNT(*) FROM instructor_matching_settings WHERE is_exposed = b'1') = 0
     AND
     (SELECT COUNT(*) FROM matching_requests) = 0
