@@ -46,4 +46,28 @@ class SentryErrorTrackerTest {
         assertThat(event.route()).isEqualTo("/unmapped");
         assertThat(event.route()).doesNotContain("private-value");
     }
+
+    @Test
+    void 예상_밖_클라이언트_오류에는_unmapped일_때만_raw_URI를_포함한다() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/ws/realtime/info");
+
+        SentryErrorTracker.ClientErrorData event = SentryErrorTracker.ClientErrorData.from(request, 400);
+
+        assertThat(event.eventName()).isEqualTo("http.request.unexpected_client_error");
+        assertThat(event.status()).isEqualTo(400);
+        assertThat(event.route()).isEqualTo("/unmapped");
+        assertThat(event.rawPath()).isEqualTo("/ws/realtime/info");
+    }
+
+    @Test
+    void 예상_밖_클라이언트_오류의_raw_URI는_최대_길이로_제한한다() {
+        String rawPath = "/" + "x".repeat(RequestPathSanitizer.MAX_RAW_PATH_LENGTH);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", rawPath);
+
+        SentryErrorTracker.ClientErrorData event = SentryErrorTracker.ClientErrorData.from(request, 400);
+
+        assertThat(event.rawPath())
+                .hasSize(RequestPathSanitizer.MAX_RAW_PATH_LENGTH)
+                .endsWith("...");
+    }
 }

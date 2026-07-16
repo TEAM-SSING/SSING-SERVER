@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.global.error.ErrorCode;
 import org.sopt.ssingserver.global.error.ErrorResponseFactory;
+import org.sopt.ssingserver.global.monitoring.ClientErrorTrackingPolicy;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,9 @@ public class SecurityErrorResponseWriter {
 
         // Security 예외의 공통 실패 응답 직렬화
         ResponseEntity<BaseResponse<Void>> errorResponse = errorResponseFactory.error(errorCode, request);
+        if (errorResponse.getStatusCode().is4xxClientError()) {
+            ClientErrorTrackingPolicy.markDeclared(request);
+        }
         response.setStatus(errorResponse.getStatusCode().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

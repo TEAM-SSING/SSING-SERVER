@@ -5,6 +5,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sopt.ssingserver.global.monitoring.ErrorTracker;
+import org.sopt.ssingserver.global.monitoring.ClientErrorTrackingPolicy;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
@@ -48,6 +49,7 @@ public class GlobalExceptionHandler {
             BusinessValidationException exception,
             HttpServletRequest request
     ) {
+        ClientErrorTrackingPolicy.markDeclared(request);
         return errorResponseFactory.validationError(exception.getErrors(), request);
     }
 
@@ -58,6 +60,9 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         ErrorCode errorCode = exception.getErrorCode();
+        if (errorCode.getStatus().is4xxClientError()) {
+            ClientErrorTrackingPolicy.markDeclared(request);
+        }
         // 내부 5xx만 여기서 기록하고, 외부 연동 503은 호출 client가 단일 로그를 소유한다.
         if (errorCode.getStatus().is5xxServerError()
                 && errorCode != CommonErrorCode.EXTERNAL_SERVICE_UNAVAILABLE) {

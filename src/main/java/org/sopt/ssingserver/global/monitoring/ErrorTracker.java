@@ -9,4 +9,7 @@ public interface ErrorTracker {
     };
 
     void capture(String eventName, ErrorCode errorCode, Throwable exception, HttpServletRequest request);
+
+    default void captureUnexpectedClientError(HttpServletRequest request, int status) {
+    }
 }

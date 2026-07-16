@@ -8,7 +8,9 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
+import org.sopt.ssingserver.global.monitoring.ClientErrorTrackingPolicy;
 import org.sopt.ssingserver.global.monitoring.ErrorTracker;
+import org.sopt.ssingserver.global.monitoring.RequestPathSanitizer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
@@ -54,15 +56,22 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
             logUnhandledFilterException(request, response, exception);
             throw exception;
         } finally {
+            String path = resolveRouteTemplate(request);
             if (!isSuccessfulHealthCheck(request, response)) {
                 // 예외가 발생해도 요청 종료 로그는 한 번 남겨 장애 추적 기준점을 유지한다.
-                log.atInfo()
+                var logBuilder = log.atInfo()
                         .addKeyValue("event", "http.request.completed")
                         .addKeyValue("method", request.getMethod())
-                        .addKeyValue("path", resolveRouteTemplate(request))
+                        .addKeyValue("path", path)
                         .addKeyValue("status", response.getStatus())
-                        .addKeyValue("duration_ms", System.currentTimeMillis() - startedAt)
-                        .log("HTTP request completed");
+                        .addKeyValue("duration_ms", System.currentTimeMillis() - startedAt);
+                if ("/unmapped".equals(path)) {
+                    logBuilder.addKeyValue("raw_path", RequestPathSanitizer.rawPath(request));
+                }
+                logBuilder.log("HTTP request completed");
+            }
+            if (isUnmappedClientError(request, response, path)) {
+                errorTracker.captureUnexpectedClientError(request, response.getStatus());
             }
         }
     }
@@ -97,6 +106,17 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
                 && healthPath
                 && response.getStatus() >= 200
                 && response.getStatus() < 300;
+    }
+
+    private boolean isUnmappedClientError(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            String path
+    ) {
+        return response.getStatus() >= 400
+                && response.getStatus() < 500
+                && "/unmapped".equals(path)
+                && !ClientErrorTrackingPolicy.isDeclared(request);
     }
 
     private String resolveRouteTemplate(HttpServletRequest request) {
