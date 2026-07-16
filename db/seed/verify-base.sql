@@ -13,11 +13,26 @@ SELECT (
     AND
     (SELECT COUNT(*)
      FROM resorts
-     WHERE code IN ('HIGH1', 'VIVALDI_PARK')) = 2
+     WHERE code IN (
+         'HIGH1',
+         'PHOENIX_PARK',
+         'VIVALDI_PARK',
+         'WELLI_HILLI_PARK',
+         'ELYSIAN_GANGCHON',
+         'OAK_VALLEY',
+         'ALPENSIA',
+         'O2_RESORT',
+         'KONJIAM_RESORT',
+         'JISAN_FOREST_RESORT',
+         'MUJU_DEOGYUSAN_RESORT'
+     )) = 11
     AND
     (SELECT COUNT(*)
      FROM dev_personas
-     WHERE persona_key IN ('consumer-default', 'instructor-approved-default')) = 2
+     WHERE persona_key IN (
+         '대뜸GOAT-성빈-비발디가격결제-강습생',
+         '보법다른-유정-비발디가격결제-강사'
+     )) = 2
 );
 
 DROP TEMPORARY TABLE base_seed_contract_assertion;
