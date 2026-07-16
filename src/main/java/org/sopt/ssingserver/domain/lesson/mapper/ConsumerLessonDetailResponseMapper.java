@@ -28,10 +28,14 @@ import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.time.AppZoneId;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 @Component
 @RequiredArgsConstructor
 public class ConsumerLessonDetailResponseMapper {
+
+    private static final String DEFAULT_INSTRUCTOR_PROFILE_IMAGE_URL =
+            "https://placehold.co/256x256/E7F0FF/8FA8C8?text=SSING";
 
     private final Clock clock;
 
@@ -214,7 +218,9 @@ public class ConsumerLessonDetailResponseMapper {
                 profile.getGender(),
                 profile.getBirthDate().getYear(),
                 profile.getLevel(),
-                member.getProfileImageUrl()
+                StringUtils.hasText(member.getProfileImageUrl())
+                        ? member.getProfileImageUrl()
+                        : DEFAULT_INSTRUCTOR_PROFILE_IMAGE_URL
         );
     }
 
