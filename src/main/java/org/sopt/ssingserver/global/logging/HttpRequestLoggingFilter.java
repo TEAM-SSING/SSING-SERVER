@@ -56,9 +56,9 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
             logUnhandledFilterException(request, response, exception);
             throw exception;
         } finally {
+            String path = resolveRouteTemplate(request);
             if (!isSuccessfulHealthCheck(request, response)) {
                 // 예외가 발생해도 요청 종료 로그는 한 번 남겨 장애 추적 기준점을 유지한다.
-                String path = resolveRouteTemplate(request);
                 var logBuilder = log.atInfo()
                         .addKeyValue("event", "http.request.completed")
                         .addKeyValue("method", request.getMethod())
@@ -70,7 +70,7 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
                 }
                 logBuilder.log("HTTP request completed");
             }
-            if (isUnexpectedClientError(request, response)) {
+            if (isUnmappedClientError(request, response, path)) {
                 errorTracker.captureUnexpectedClientError(request, response.getStatus());
             }
         }
@@ -108,9 +108,14 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
                 && response.getStatus() < 300;
     }
 
-    private boolean isUnexpectedClientError(HttpServletRequest request, HttpServletResponse response) {
+    private boolean isUnmappedClientError(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            String path
+    ) {
         return response.getStatus() >= 400
                 && response.getStatus() < 500
+                && "/unmapped".equals(path)
                 && !ClientErrorTrackingPolicy.isDeclared(request);
     }
 

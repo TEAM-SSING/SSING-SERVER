@@ -130,7 +130,7 @@ class HttpRequestLoggingFilterTest {
     }
 
     @Test
-    void 명시되지_않은_4xx는_Sentry_추적기로_전달한다() throws Exception {
+    void unmapped_4xx는_Sentry_추적기로_전달한다() throws Exception {
         RecordingErrorTracker errorTracker = new RecordingErrorTracker();
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/unknown/path");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -140,6 +140,19 @@ class HttpRequestLoggingFilterTest {
 
         assertThat(errorTracker.capturedClientErrorRequest).isSameAs(request);
         assertThat(errorTracker.capturedClientErrorStatus).isEqualTo(400);
+    }
+
+    @Test
+    void 매핑된_4xx는_Sentry_추적기로_전달하지_않는다() throws Exception {
+        RecordingErrorTracker errorTracker = new RecordingErrorTracker();
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/matching-requests");
+        request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/matching-requests");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        new HttpRequestLoggingFilter(errorTracker).doFilter(request, response, (servletRequest, servletResponse) ->
+                ((MockHttpServletResponse) servletResponse).setStatus(400));
+
+        assertThat(errorTracker.capturedClientErrorRequest).isNull();
     }
 
     @Test
