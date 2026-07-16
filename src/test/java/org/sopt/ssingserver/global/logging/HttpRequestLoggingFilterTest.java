@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.sopt.ssingserver.global.error.ErrorCode;
+import org.sopt.ssingserver.global.monitoring.ClientErrorTrackingPolicy;
 import org.sopt.ssingserver.global.monitoring.ErrorTracker;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -104,7 +105,7 @@ class HttpRequestLoggingFilterTest {
     }
 
     @Test
-    void 매핑_템플릿이_없으면_raw_URI_대신_unmapped를_기록한다() throws Exception {
+    void 매핑_템플릿이_없으면_unmapped와_raw_URI를_함께_기록한다() throws Exception {
         Logger logger = (Logger) LoggerFactory.getLogger(HttpRequestLoggingFilter.class);
         Level originalLevel = logger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -121,11 +122,37 @@ class HttpRequestLoggingFilterTest {
 
             assertThat(keyValueMap(appender.list.getFirst()))
                     .containsEntry("path", "/unmapped")
-                    .doesNotContainValue("/unknown/private-value");
+                    .containsEntry("raw_path", "/unknown/private-value");
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);
         }
+    }
+
+    @Test
+    void 명시되지_않은_4xx는_Sentry_추적기로_전달한다() throws Exception {
+        RecordingErrorTracker errorTracker = new RecordingErrorTracker();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/unknown/path");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        new HttpRequestLoggingFilter(errorTracker).doFilter(request, response, (servletRequest, servletResponse) ->
+                ((MockHttpServletResponse) servletResponse).setStatus(400));
+
+        assertThat(errorTracker.capturedClientErrorRequest).isSameAs(request);
+        assertThat(errorTracker.capturedClientErrorStatus).isEqualTo(400);
+    }
+
+    @Test
+    void 명시된_4xx는_Sentry_추적기로_전달하지_않는다() throws Exception {
+        RecordingErrorTracker errorTracker = new RecordingErrorTracker();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/test");
+        ClientErrorTrackingPolicy.markDeclared(request);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        new HttpRequestLoggingFilter(errorTracker).doFilter(request, response, (servletRequest, servletResponse) ->
+                ((MockHttpServletResponse) servletResponse).setStatus(401));
+
+        assertThat(errorTracker.capturedClientErrorRequest).isNull();
     }
 
     @Test
@@ -199,6 +226,8 @@ class HttpRequestLoggingFilterTest {
         private ErrorCode capturedErrorCode;
         private Throwable capturedException;
         private jakarta.servlet.http.HttpServletRequest capturedRequest;
+        private jakarta.servlet.http.HttpServletRequest capturedClientErrorRequest;
+        private Integer capturedClientErrorStatus;
 
         @Override
         public void capture(
@@ -211,6 +240,12 @@ class HttpRequestLoggingFilterTest {
             this.capturedErrorCode = errorCode;
             this.capturedException = exception;
             this.capturedRequest = request;
+        }
+
+        @Override
+        public void captureUnexpectedClientError(jakarta.servlet.http.HttpServletRequest request, int status) {
+            this.capturedClientErrorRequest = request;
+            this.capturedClientErrorStatus = status;
         }
     }
 }

@@ -12,11 +12,15 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.sopt.ssingserver.global.logging.RequestIdFilter;
+import org.sopt.ssingserver.global.monitoring.ClientErrorTrackingPolicy;
 import org.sopt.ssingserver.global.monitoring.ErrorTracker;
 import org.sopt.ssingserver.global.response.BaseResponse;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 
 class GlobalExceptionHandlerTest {
 
@@ -40,6 +44,7 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().errors())
                 .containsEntry("sport", "보유 자격증으로 선택할 수 없는 종목입니다.");
         assertThat(response.getBody().requestId()).isEqualTo("req-90");
+        assertThat(ClientErrorTrackingPolicy.isDeclared(request)).isTrue();
     }
 
     @Test
@@ -56,9 +61,36 @@ class GlobalExceptionHandlerTest {
 
             assertThat(appender.list).isEmpty();
             assertThat(errorTracker.capturedEventName).isNull();
+            assertThat(ClientErrorTrackingPolicy.isDeclared(request)).isTrue();
         } finally {
             logger.detachAppender(appender);
         }
+    }
+
+    @Test
+    void JSON_파싱_실패는_명시된_4xx로_표시하지_않는다() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory());
+        MockHttpServletRequest request = requestWithRequestId("req-json");
+
+        handler.handleHttpMessageNotReadable(
+                new HttpMessageNotReadableException("invalid JSON", new MockHttpInputMessage(new byte[0])),
+                request
+        );
+
+        assertThat(ClientErrorTrackingPolicy.isDeclared(request)).isFalse();
+    }
+
+    @Test
+    void 필수_파라미터_누락은_명시된_4xx로_표시하지_않는다() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseFactory());
+        MockHttpServletRequest request = requestWithRequestId("req-missing-parameter");
+
+        handler.handleMissingServletRequestParameter(
+                new MissingServletRequestParameterException("page", "int"),
+                request
+        );
+
+        assertThat(ClientErrorTrackingPolicy.isDeclared(request)).isFalse();
     }
 
     @Test
