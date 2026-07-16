@@ -21,6 +21,8 @@ import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
+import org.sopt.ssingserver.domain.notification.enums.ClientApp;
+import org.sopt.ssingserver.domain.notification.service.NotificationService;
 
 @ExtendWith(MockitoExtension.class)
 class ConsumerHomeServiceTest {
@@ -47,6 +49,9 @@ class ConsumerHomeServiceTest {
 
     @Mock
     private InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+
+    @Mock
+    private NotificationService notificationService;
 
     @Test
     void getConsumerHome은_예정된_강습을_D_day와_함께_반환한다() {
@@ -141,11 +146,26 @@ class ConsumerHomeServiceTest {
         assertThat(response.hasUnreadNotification()).isFalse();
     }
 
+    @Test
+    void getConsumerHome은_소비자_앱의_안읽은_알림이_있으면_true를_반환한다() {
+        ConsumerHomeService service = createService();
+        when(lessonParticipantRepository.findHomeLessonCardsByMemberIdAndLessonStatusIn(
+                1L,
+                UPCOMING_LESSON_STATUSES
+        )).thenReturn(List.of());
+        when(notificationService.hasUnreadNotification(1L, ClientApp.CONSUMER)).thenReturn(true);
+
+        ConsumerHomeResponse response = service.getConsumerHome(1L);
+
+        assertThat(response.hasUnreadNotification()).isTrue();
+    }
+
     private ConsumerHomeService createService() {
         return new ConsumerHomeService(
                 lessonParticipantRepository,
                 matchingRequestRepository,
                 instructorMatchingSettingRepository,
+                notificationService,
                 FIXED_CLOCK
         );
     }

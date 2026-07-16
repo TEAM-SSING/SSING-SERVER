@@ -188,6 +188,27 @@ class NotificationServiceTest {
                 .isEqualTo(CommonErrorCode.FORBIDDEN);
     }
 
+    @Test
+    void hasUnreadNotification은_회원과_앱의_최근_7일_미읽음_알림_존재여부를_반환한다() {
+        when(notificationRepository.existsByMemberIdAndClientAppAndReadAtIsNullAndCreatedAtGreaterThanEqual(
+                MEMBER_ID,
+                ClientApp.INSTRUCTOR,
+                SINCE
+        )).thenReturn(true);
+
+        boolean hasUnreadNotification = notificationService.hasUnreadNotification(
+                MEMBER_ID,
+                ClientApp.INSTRUCTOR
+        );
+
+        assertThat(hasUnreadNotification).isTrue();
+        verify(notificationRepository).existsByMemberIdAndClientAppAndReadAtIsNullAndCreatedAtGreaterThanEqual(
+                MEMBER_ID,
+                ClientApp.INSTRUCTOR,
+                SINCE
+        );
+    }
+
     private Notification notification(Long id, Instant createdAt, Instant readAt) {
         Notification notification = Notification.create(
                 Member.create("회원", null, MemberRole.INSTRUCTOR, MemberStatus.ACTIVE),

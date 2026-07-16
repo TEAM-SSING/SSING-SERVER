@@ -122,6 +122,41 @@ class NotificationRepositoryIntegrationTest {
         assertThat(nextPage).extracting(Notification::getId).containsExactly(2L);
     }
 
+    @Test
+    void 회원과_앱의_최근_7일_미읽음_알림만_존재여부에_반영한다() {
+        insertMember(MEMBER_ID, "알림강사", "INSTRUCTOR");
+        insertMember(OTHER_MEMBER_ID, "다른강사", "INSTRUCTOR");
+        insertNotification(8L, MEMBER_ID, ClientApp.INSTRUCTOR, SINCE.minusNanos(1_000));
+        insertNotification(9L, OTHER_MEMBER_ID, ClientApp.INSTRUCTOR, SINCE.plusSeconds(1));
+        insertNotification(10L, MEMBER_ID, ClientApp.CONSUMER, SINCE.plusSeconds(1));
+        insertNotification(11L, MEMBER_ID, ClientApp.INSTRUCTOR, SINCE.plusSeconds(1));
+        jdbcTemplate.update(
+                "UPDATE notifications SET read_at = ? WHERE id = ?",
+                LocalDateTime.ofInstant(SINCE.plusSeconds(2), ZoneOffset.UTC),
+                11L
+        );
+
+        boolean hasUnreadBeforeBoundary = notificationRepository
+                .existsByMemberIdAndClientAppAndReadAtIsNullAndCreatedAtGreaterThanEqual(
+                        MEMBER_ID,
+                        ClientApp.INSTRUCTOR,
+                        SINCE
+                );
+
+        assertThat(hasUnreadBeforeBoundary).isFalse();
+
+        insertNotification(12L, MEMBER_ID, ClientApp.INSTRUCTOR, SINCE);
+
+        boolean hasUnreadAtBoundary = notificationRepository
+                .existsByMemberIdAndClientAppAndReadAtIsNullAndCreatedAtGreaterThanEqual(
+                        MEMBER_ID,
+                        ClientApp.INSTRUCTOR,
+                        SINCE
+                );
+
+        assertThat(hasUnreadAtBoundary).isTrue();
+    }
+
     private void insertMember(long memberId, String nickname, String role) {
         jdbcTemplate.update(
                 """

@@ -36,7 +36,7 @@ public class NotificationService {
     ) {
         Cursor decodedCursor = decodeCursor(cursor);
         PageRequest pageRequest = PageRequest.of(0, size + 1);
-        Instant since = clock.instant().minus(RETENTION_DAYS, ChronoUnit.DAYS);
+        Instant since = retentionStart();
         ClientApp clientApp = clientAppFrom(currentMember.role());
 
         List<Notification> queriedNotifications = decodedCursor == null
@@ -60,6 +60,19 @@ public class NotificationService {
                 nextCursor(notifications, hasNext),
                 hasNext
         );
+    }
+
+    // 회원 앱 기준으로 최근 보관 기간 안에 읽지 않은 알림이 존재하는지 확인함
+    public boolean hasUnreadNotification(Long memberId, ClientApp clientApp) {
+        return notificationRepository.existsByMemberIdAndClientAppAndReadAtIsNullAndCreatedAtGreaterThanEqual(
+                memberId,
+                clientApp,
+                retentionStart()
+        );
+    }
+
+    private Instant retentionStart() {
+        return clock.instant().minus(RETENTION_DAYS, ChronoUnit.DAYS);
     }
 
     // 회원 역할에 따라 알림을 노출할 앱 구분값을 결정함
