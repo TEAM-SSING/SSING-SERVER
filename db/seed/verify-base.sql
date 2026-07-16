@@ -30,8 +30,8 @@ SELECT (
     (SELECT COUNT(*)
      FROM dev_personas
      WHERE persona_key IN (
-         '대뜸GOAT-성빈-비발디가격결제-강습생',
-         '보법다른-유정-비발디가격결제-강사'
+         '대뜸GOAT-성빈-일반강습생',
+         '보법다른-유정-승인강사'
      )) = 2
 );
 

@@ -9,7 +9,7 @@ SELECT (
     (SELECT COUNT(*)
      FROM dev_personas persona
      JOIN members member ON member.id = persona.member_id
-     WHERE persona.persona_key = '냅다레전드-유빈-자유QA-강습생'
+     WHERE persona.persona_key = '냅다레전드-유빈-일반강습생'
        AND persona.template = 'GENERAL_CONSUMER'
        AND member.role = 'CONSUMER'
        AND member.status = 'ACTIVE'
@@ -18,17 +18,17 @@ SELECT (
     (SELECT COUNT(*)
      FROM matching_requests request
      JOIN dev_personas persona ON persona.member_id = request.member_id
-     WHERE persona.persona_key = '냅다레전드-유빈-자유QA-강습생') = 0
+     WHERE persona.persona_key = '냅다레전드-유빈-일반강습생') = 0
     AND
     (SELECT COUNT(*)
      FROM oauth_accounts account
      JOIN dev_personas persona ON persona.member_id = account.member_id
-     WHERE persona.persona_key = '냅다레전드-유빈-자유QA-강습생') = 0
+     WHERE persona.persona_key = '냅다레전드-유빈-일반강습생') = 0
     AND
     (SELECT COUNT(*)
      FROM refresh_tokens token
      JOIN dev_personas persona ON persona.member_id = token.member_id
-     WHERE persona.persona_key = '냅다레전드-유빈-자유QA-강습생') = 0
+     WHERE persona.persona_key = '냅다레전드-유빈-일반강습생') = 0
 );
 
 DROP TEMPORARY TABLE dev_playground_contract_assertion;

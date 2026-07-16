@@ -142,7 +142,7 @@ class DatabaseSeedContractTest {
     @ParameterizedTest(name = "{0} 매칭 요청 생성")
     @ValueSource(strings = {"O2_RESORT", "MUJU_DEOGYUSAN_RESORT"})
     void base_only_신규_리조트로_매칭_요청을_생성할_수_있다(String resortCode) throws Exception {
-        Long memberId = personaMemberId("대뜸GOAT-성빈-비발디가격결제-강습생");
+        Long memberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
 
         mockMvc.perform(post("/api/v1/consumer/matching-requests")
@@ -206,10 +206,10 @@ class DatabaseSeedContractTest {
         PmSeedSnapshotContract.assertMatchesIgnoringConsumerPersona(
                 jdbcTemplate,
                 objectMapper,
-                "냅다레전드-유빈-자유QA-강습생"
+                "냅다레전드-유빈-일반강습생"
         );
 
-        Long memberId = personaMemberId("냅다레전드-유빈-자유QA-강습생");
+        Long memberId = personaMemberId("냅다레전드-유빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM matching_requests WHERE member_id = ?",
@@ -238,7 +238,7 @@ class DatabaseSeedContractTest {
     void 저장된_강사조건은_제안이_없어도_매칭대기_복구응답으로_조회된다() throws Exception {
         applyScenario("matching-price-vivaldi");
         String instructorToken = accessTokenProvider.createAccessToken(
-                personaMemberId("보법다른-유정-비발디가격결제-강사"),
+                personaMemberId("보법다른-유정-승인강사"),
                 MemberRole.INSTRUCTOR
         );
 
@@ -268,8 +268,8 @@ class DatabaseSeedContractTest {
         applyScenario("matching-price-vivaldi");
         assertMandatoryAndSeedInvariants();
 
-        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-비발디가격결제-강습생");
-        Long instructorMemberId = personaMemberId("보법다른-유정-비발디가격결제-강사");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
@@ -343,7 +343,7 @@ class DatabaseSeedContractTest {
     void 후보가_없는_요청은_scheduler_실행_후에도_SEARCHING을_유지한다() throws Exception {
         applyScenario("matching-no-candidate-alpensia");
         String consumerToken = accessTokenProvider.createAccessToken(
-                personaMemberId("대뜸GOAT-성빈-비발디가격결제-강습생"),
+                personaMemberId("대뜸GOAT-성빈-일반강습생"),
                 MemberRole.CONSUMER
         );
 
@@ -374,8 +374,8 @@ class DatabaseSeedContractTest {
     @Test
     void MATCHED인데_결제자식만_만료된_이상데이터는_active에서_NONE으로_닫는다() throws Exception {
         applyScenario("matching-price-vivaldi");
-        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-비발디가격결제-강습생");
-        Long instructorMemberId = personaMemberId("보법다른-유정-비발디가격결제-강사");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
@@ -406,7 +406,7 @@ class DatabaseSeedContractTest {
     @Test
     void 한_소비자는_기존_활성_요청을_취소한_뒤에만_다음_요청을_생성한다() throws Exception {
         applyScenario("matching-multi-request-oak");
-        Long memberId = personaMemberId("도파민풀충-나현-오크다중요청-강습생");
+        Long memberId = personaMemberId("도파민풀충-나현-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
         List<String> requestNames = List.of("a", "b", "c", "d");
         Long[] matchingRequestIds = new Long[requestNames.size()];
@@ -492,7 +492,7 @@ class DatabaseSeedContractTest {
     @Test
     void 같은_소비자의_동시_생성_요청은_하나만_201이고_나머지는_409다() throws Exception {
         applyScenario("matching-multi-request-oak");
-        Long memberId = personaMemberId("도파민풀충-나현-오크다중요청-강습생");
+        Long memberId = personaMemberId("도파민풀충-나현-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
         String requestBody = requestJson(
                 "db/seed/scenarios/matching-multi-request-oak/request-007-a.json"
@@ -989,7 +989,7 @@ class DatabaseSeedContractTest {
                 FROM instructor_matching_settings setting
                 JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
                 JOIN dev_personas persona ON persona.member_id = profile.member_id
-                WHERE persona.persona_key = '보법다른-유정-비발디가격결제-강사'
+                WHERE persona.persona_key = '보법다른-유정-승인강사'
                   AND setting.is_exposed = 1
                   AND setting.is_equipment_ready = 1
                 """,
@@ -1017,8 +1017,8 @@ class DatabaseSeedContractTest {
         assertThat(relations)
                 .extracting(PmTransitionRelation::requestKey)
                 .containsExactlyInAnyOrder(
-                        "폭룡적-예지-하이원초급2인-강습생:HIGH1:SKI:BEGINNER",
-                        "대뜸GOAT-성빈-비발디가격결제-강습생:VIVALDI_PARK:SKI:FIRST_TIME"
+                        "폭룡적-예지-일반강습생:HIGH1:SKI:BEGINNER",
+                        "대뜸GOAT-성빈-일반강습생:VIVALDI_PARK:SKI:FIRST_TIME"
                 );
         assertThat(relations).allSatisfy(relation -> {
             assertThat(relation.groupId()).isPositive();

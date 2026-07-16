@@ -41,14 +41,14 @@ INSERT INTO dev_personas (
     updated_at
 ) VALUES
 (
-    '대뜸GOAT-성빈-비발디가격결제-강습생',
+    '대뜸GOAT-성빈-일반강습생',
     @seed_member_id_base + 1,
     'GENERAL_CONSUMER',
     @seed_now,
     @seed_now
 ),
 (
-    '보법다른-유정-비발디가격결제-강사',
+    '보법다른-유정-승인강사',
     @seed_member_id_base + 2,
     'INSTRUCTOR_APPROVED',
     @seed_now,

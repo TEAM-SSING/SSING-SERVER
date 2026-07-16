@@ -6,7 +6,7 @@ SET @instructor_profile_id = (
     SELECT profile.id
     FROM instructor_profiles profile
     JOIN dev_personas persona ON persona.member_id = profile.member_id
-    WHERE persona.persona_key = '보법다른-유정-비발디가격결제-강사'
+    WHERE persona.persona_key = '보법다른-유정-승인강사'
 );
 
 INSERT INTO instructor_matching_settings (

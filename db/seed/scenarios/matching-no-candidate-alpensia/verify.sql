@@ -7,7 +7,7 @@ INSERT INTO seed_contract_assertion (ok)
 SELECT (
     (SELECT COUNT(*) FROM resorts WHERE code = 'ALPENSIA' AND pass_fee_amount = 30000) = 1
     AND
-    (SELECT COUNT(*) FROM dev_personas WHERE persona_key = '대뜸GOAT-성빈-비발디가격결제-강습생') = 1
+    (SELECT COUNT(*) FROM dev_personas WHERE persona_key = '대뜸GOAT-성빈-일반강습생') = 1
     AND
     (SELECT COUNT(*)
      FROM (

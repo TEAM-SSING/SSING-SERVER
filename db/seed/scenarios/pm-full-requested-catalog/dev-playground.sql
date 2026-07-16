@@ -28,7 +28,7 @@ INSERT INTO dev_personas (
     created_at,
     updated_at
 ) VALUES (
-    '냅다레전드-유빈-자유QA-강습생',
+    '냅다레전드-유빈-일반강습생',
     @qa_free_consumer_member_id,
     'GENERAL_CONSUMER',
     @qa_seed_now,

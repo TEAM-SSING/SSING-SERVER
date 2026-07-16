@@ -12,7 +12,7 @@ SELECT (
     (SELECT HEX(member.nickname)
      FROM members member
      JOIN dev_personas persona ON persona.member_id = member.id
-     WHERE persona.persona_key = '대뜸GOAT-성빈-비발디가격결제-강습생')
+     WHERE persona.persona_key = '대뜸GOAT-성빈-일반강습생')
         = 'EB8C80EB9CB820474F415420EC84B1EBB988'
 );
 

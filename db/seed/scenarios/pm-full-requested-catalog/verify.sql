@@ -33,15 +33,15 @@ SELECT (
      JOIN members member ON member.id = persona.member_id
      WHERE member.role = 'CONSUMER'
        AND (persona.persona_key, member.nickname) IN (
-           ('폭룡적-예지-하이원초급2인-강습생', '폭룡적 예지'),
-           ('느좋그자체-예림-휘닉스보드4인-강습생', '느좋 그 자체 예림'),
-           ('감다살-유빈-곤지암첫스키-강습생', '감다살 유빈'),
-           ('야르-선문-지산중급보드-강습생', '야르 선문'),
-           ('난리자베스-채원-알펜시아무후보-강습생', '난리자베스 채원'),
-           ('대뜸GOAT-성빈-비발디가격결제-강습생', '대뜸 GOAT 성빈'),
-           ('도파민풀충-나현-오크다중요청-강습생', '도파민 풀충 나현'),
-           ('레전드갱신중인-지환-엘리시안아동5인-강습생', '레전드 갱신 중인 지환'),
-           ('갑차기스러운-예슬-웰리힐리복수종목-강습생', '갑차기스러운 예슬')
+           ('폭룡적-예지-일반강습생', '폭룡적 예지'),
+           ('느좋그자체-예림-일반강습생', '느좋 그 자체 예림'),
+           ('감다살-유빈-일반강습생', '감다살 유빈'),
+           ('야르-선문-일반강습생', '야르 선문'),
+           ('난리자베스-채원-일반강습생', '난리자베스 채원'),
+           ('대뜸GOAT-성빈-일반강습생', '대뜸 GOAT 성빈'),
+           ('도파민풀충-나현-일반강습생', '도파민 풀충 나현'),
+           ('레전드갱신중인-지환-일반강습생', '레전드 갱신 중인 지환'),
+           ('갑차기스러운-예슬-일반강습생', '갑차기스러운 예슬')
        )) = 9
     AND
     (SELECT COUNT(*)
@@ -69,17 +69,17 @@ SELECT (
      JOIN members member ON member.id = profile.member_id
      WHERE profile.real_name = member.nickname
        AND (persona.persona_key, member.nickname) IN (
-           ('기세로다해먹는-도연-하이원초급2인-강사', '기세로 다 해먹는 도연'),
-           ('폼미친-성빈-하이원5인-강사', '폼 미친 성빈'),
-           ('뉴런공유중인-유정-곤지암중상급-강사', '뉴런 공유 중인 유정'),
-           ('보법다른-유정-비발디가격결제-강사', '보법 다른 유정')
+           ('기세로다해먹는-도연-승인강사', '기세로 다 해먹는 도연'),
+           ('폼미친-성빈-승인강사', '폼 미친 성빈'),
+           ('뉴런공유중인-유정-승인강사', '뉴런 공유 중인 유정'),
+           ('보법다른-유정-승인강사', '보법 다른 유정')
        )
        AND (
-           (persona.persona_key = '보법다른-유정-비발디가격결제-강사'
+           (persona.persona_key = '보법다른-유정-승인강사'
             AND profile.phone = '010-0000-0000'
             AND profile.birth_date = '2000-01-04')
            OR
-           (persona.persona_key <> '보법다른-유정-비발디가격결제-강사'
+           (persona.persona_key <> '보법다른-유정-승인강사'
             AND profile.phone REGEXP '^010-0000-[0-9]{4}$'
             AND profile.birth_date IN ('2000-01-01', '2000-01-02', '2000-01-03'))
        )) = 4
@@ -159,17 +159,17 @@ SELECT (
     (SELECT COUNT(*)
      FROM matching_requests request
      JOIN dev_personas persona ON persona.member_id = request.member_id
-     WHERE persona.persona_key = '도파민풀충-나현-오크다중요청-강습생') = 4
+     WHERE persona.persona_key = '도파민풀충-나현-일반강습생') = 4
     AND
     (SELECT COUNT(*)
      FROM matching_requests request
      JOIN dev_personas persona ON persona.member_id = request.member_id
-     WHERE persona.persona_key = '레전드갱신중인-지환-엘리시안아동5인-강습생') = 4
+     WHERE persona.persona_key = '레전드갱신중인-지환-일반강습생') = 4
     AND
     (SELECT COUNT(*)
      FROM matching_requests request
      JOIN dev_personas persona ON persona.member_id = request.member_id
-     WHERE persona.persona_key = '갑차기스러운-예슬-웰리힐리복수종목-강습생') = 2
+     WHERE persona.persona_key = '갑차기스러운-예슬-일반강습생') = 2
     AND
     (SELECT COUNT(*) FROM matching_request_groups) = 0
     AND

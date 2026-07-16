@@ -266,7 +266,7 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
                 SELECT profile.id
                 FROM instructor_profiles profile
                 JOIN dev_personas persona ON persona.member_id = profile.member_id
-                WHERE persona.persona_key = '보법다른-유정-비발디가격결제-강사'
+                WHERE persona.persona_key = '보법다른-유정-승인강사'
                 """,
                 Long.class
         );
@@ -361,7 +361,7 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
                 JOIN matching_request_groups request_group ON request_group.id = offer.matching_request_group_id
                 JOIN instructor_profiles profile ON profile.id = offer.instructor_profile_id
                 JOIN dev_personas persona ON persona.member_id = profile.member_id
-                WHERE persona.persona_key = '보법다른-유정-비발디가격결제-강사'
+                WHERE persona.persona_key = '보법다른-유정-승인강사'
                   AND (
                     offer.status = 'OFFERED'
                     OR (

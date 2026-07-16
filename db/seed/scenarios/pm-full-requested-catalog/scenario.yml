@@ -81,7 +81,7 @@ notes:
   - 통합 테스트는 @Scheduled 자동 등록을 끄고 실제 MatchingSearchScheduler.runScheduledSearch()를 수동 호출해 전이를 검증한다.
   - local/CI는 원본 snapshot만 검증하고 dev reset은 그 뒤 dev-playground.sql을 적용한다.
   - dev 앱은 scheduler를 정상 설정으로 재기동하므로 일부 REQUESTED 요청은 자연스럽게 GROUPED로 전이될 수 있다.
-  - 냅다레전드-유빈-자유QA-강습생은 활성 요청이 없는 GENERAL_CONSUMER 시작점이며 PM 원본 snapshot 소유권에 포함하지 않는다.
+  - 냅다레전드-유빈-일반강습생은 활성 요청이 없는 GENERAL_CONSUMER 시작점이며 PM 원본 snapshot 소유권에 포함하지 않는다.
   - WebSocket event와 계산 상태는 seed하지 않는다.
 deferred_checks:
   - key: instructor-realtime-reconnect-recovery

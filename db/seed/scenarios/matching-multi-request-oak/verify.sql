@@ -10,7 +10,7 @@ SELECT (
     (SELECT COUNT(*)
      FROM dev_personas persona
      JOIN members member ON member.id = persona.member_id
-     WHERE persona.persona_key = '도파민풀충-나현-오크다중요청-강습생'
+     WHERE persona.persona_key = '도파민풀충-나현-일반강습생'
        AND persona.template = 'GENERAL_CONSUMER'
        AND member.role = 'CONSUMER'
        AND member.status = 'ACTIVE') = 1
