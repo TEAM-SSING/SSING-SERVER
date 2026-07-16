@@ -10,8 +10,7 @@ on:
         type: string
       image_digest:
         description: CI에서 미리 빌드한 Docker image digest
-        required: false
-        default: ""
+        required: true
         type: string
   # 긴급 상황에서 CI 성공 여부와 무관하게 팀이 명시적으로 실행하는 예외 경로
   # 단, 아래 현재 main SHA 검증은 자동·수동 배포 모두 동일하게 적용한다.
@@ -41,6 +40,7 @@ jobs:
 
     # EC2 t4g 계열과 동일한 ARM64 빌드 환경
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
 
     steps:
       # 저장소 코드 체크아웃
@@ -221,9 +221,22 @@ jobs:
                 mrkdwn_in:
                   - fields
 
-      # Docker Hub 이미지 push 인증
+      # 자동 배포는 CI가 만든 불변 image digest가 없으면 재빌드하지 않고 실패
+      - name: 자동 배포 Docker 이미지 digest 확인
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          PREBUILT_IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$PREBUILT_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error title=자동 배포 이미지 digest 누락::CI build job에서 만든 image digest가 없어 자동 배포를 차단했습니다."
+            exit 1
+          fi
+
+      # 긴급 수동 배포만 Docker Hub에 로그인해 현재 main 이미지를 직접 빌드
       - name: Docker Hub 로그인
-        if: inputs.image_digest == ''
+        if: github.event_name == 'workflow_dispatch'
         uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
@@ -231,13 +244,13 @@ jobs:
 
       # ARM64 Docker 이미지 빌드 도구
       - name: Docker Buildx 준비
-        if: inputs.image_digest == ''
+        if: github.event_name == 'workflow_dispatch'
         uses: docker/setup-buildx-action@v3
 
       # ARM64 Docker 이미지 빌드와 push
       - name: ARM64 Docker 이미지 빌드와 푸시
         id: build-image
-        if: inputs.image_digest == ''
+        if: github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -805,7 +818,7 @@ jobs:
 
       # dev 배포 실패 Slack 알림
       - name: Slack 배포 실패 알림
-        if: failure()
+        if: failure() || cancelled()
         continue-on-error: true
         uses: slackapi/slack-github-action@v3.0.3
         with:

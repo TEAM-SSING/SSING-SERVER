@@ -54,7 +54,14 @@ sudo() {
     return 0
   fi
 
+  if [[ "${FAKE_FAIL_STAGE:-}" == "docker-name-conflict" \
+      && "$joined" == *" docker run "* \
+      && "$joined" == *" --name ssing-dev-db-operation "* ]]; then
+    return 125
+  fi
+
   if [[ "$joined" == *" flyway/flyway:"* ]]; then
+    [[ "$joined" == *" --name ssing-dev-db-operation "* ]] || return 57
     local argument argument_index flyway_env_file=""
     for argument_index in "${!arguments[@]}"; do
       if [[ "${arguments[$argument_index]}" == "--env-file" ]]; then
@@ -80,6 +87,7 @@ sudo() {
   fi
 
   if [[ "$joined" == *" mysql "* ]]; then
+    [[ "$joined" == *" --name ssing-dev-db-operation "* ]] || return 57
     local argument argument_index mysql_command_index=-1 mysql_defaults_file=""
     for argument_index in "${!arguments[@]}"; do
       if [[ "${arguments[$argument_index]}" == "mysql" ]]; then
@@ -212,6 +220,10 @@ for signal_name in HUP INT TERM; do
   grep -Fq "trap 'on_signal ${signal_name} " "$PROJECT_ROOT/scripts/db/reset-dev.sh" \
     || fail_test "${signal_name} 중단 시 한글 실패 report를 남기는 trap이 없습니다."
 done
+
+grep -Fq 'readonly DEV_DB_DOCKER_CONTAINER_NAME="ssing-dev-db-operation"' \
+  "$PROJECT_ROOT/scripts/db/dev-common.sh" \
+  || fail_test "dev DB Docker 작업의 고정 컨테이너 이름이 없습니다."
 
 assert_no_mutation_command() {
   local command_log="$1"
@@ -931,7 +943,7 @@ run_deploy_prepare_case deploy-prepare-stale-image "" false false \
   --confirm-dev-deploy-reset main "$stale_digest_image" true false
 assert_no_mutation_command "$TEST_TMP/deploy-prepare-stale-image/commands.log"
 
-for failure_stage in compose-config compose-pull flyway-info mysql-connect; do
+for failure_stage in compose-config compose-pull docker-name-conflict flyway-info mysql-connect; do
   run_deploy_prepare_case "deploy-preflight-${failure_stage}" \
     "$failure_stage" false false --preflight-dev-deploy main
   assert_no_destructive_deploy_command \

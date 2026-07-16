@@ -105,6 +105,24 @@ playground 데이터를 더하고, scheduler 기본 설정을 켠 채 앱을 재
 자체를 가져오지 못한 경우에는 reset 미시작·진행 중·완료를 단정할 수 없다.
 먼저 EC2 marker, 앱 컨테이너, DB 상태를 확인한다.
 
+### 취소 뒤 남은 dev DB 컨테이너 복구
+
+Deploy Dev 또는 Reset Dev DB가 취소되면 원격 `docker run`이 즉시 끝나지 않아
+`ssing-dev-db-operation` 컨테이너가 남을 수 있다. 같은 이름은 다음 DB 작업의 중복 실행을
+안전하게 차단하므로, 이름 충돌만 보고 강제로 삭제하지 않는다.
+
+1. GitHub Actions에서 실행 중인 Deploy Dev와 Reset Dev DB가 없는지 먼저 확인한다.
+2. EC2에서 `sudo docker ps -a --filter name=^/ssing-dev-db-operation$`로 상태를 확인한다.
+3. 컨테이너가 실행 중이면 `sudo docker logs --tail=100 ssing-dev-db-operation`으로 진행 상태를
+   확인하고 종료될 때까지 기다린다. 실행 중 컨테이너를 임의로 강제 삭제하지 않는다.
+4. 관련 workflow가 없고 컨테이너가 `exited` 또는 `dead` 상태일 때만
+   `sudo docker rm ssing-dev-db-operation`으로 정리한다.
+5. `.dev-db-reset-incomplete` marker는 직접 삭제하지 않는다. 최신 `main`의 Deploy Dev를 다시
+   실행해 전체 clean부터 복구하고, 성공한 workflow가 marker를 제거하게 한다.
+
+컨테이너가 계속 실행되어 종료되지 않으면 DB 상태와 marker를 함께 확인해야 하므로 팀의 dev
+운영 담당자와 확인한 뒤 중단한다. 일상적인 복구 절차에서 `docker rm -f`를 사용하지 않는다.
+
 ## 로컬 서버와 토큰 사용하기
 
 최초 한 번 로컬 설정 파일을 만든다.

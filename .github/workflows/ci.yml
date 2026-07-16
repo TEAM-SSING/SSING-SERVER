@@ -84,6 +84,7 @@ jobs:
       name: dev
       deployment: false
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
     outputs:
       image_digest: ${{ steps.build.outputs.digest }}
 

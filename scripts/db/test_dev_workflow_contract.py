@@ -316,6 +316,78 @@ class DevWorkflowContractTest(unittest.TestCase):
         )
         self.assertNotIn("github.head_ref", self.ci)
 
+    def test_deploy_reuses_ci_digest_and_only_manual_dispatch_builds(self):
+        workflow_call = indented_block(self.deploy, "workflow_call:", 2)
+        inputs_block = indented_block(workflow_call, "inputs:", 4)
+        image_digest_input = indented_block(inputs_block, "image_digest:", 6)
+        automatic_digest_check = indented_block(
+            self.deploy_job,
+            "- name: 자동 배포 Docker 이미지 digest 확인",
+            6,
+        )
+        digest_selection_step = indented_block(
+            self.deploy_job,
+            "- name: Docker 이미지 digest 고정",
+            6,
+        )
+
+        self.assertRegex(image_digest_input, r"(?m)^        required: true$")
+        self.assertNotIn("default:", image_digest_input)
+        self.assertIn(
+            "if: github.event_name != 'workflow_dispatch'",
+            automatic_digest_check,
+        )
+        self.assertIn(
+            "PREBUILT_IMAGE_DIGEST: ${{ inputs.image_digest }}",
+            automatic_digest_check,
+        )
+        self.assertIn(
+            'if [[ ! "$PREBUILT_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then',
+            automatic_digest_check,
+        )
+        self.assertIn("exit 1", automatic_digest_check)
+        self.assertIn(
+            'image_digest="${PREBUILT_IMAGE_DIGEST:-$BUILT_IMAGE_DIGEST}"',
+            digest_selection_step,
+        )
+
+        for step_name in (
+            "Docker Hub 로그인",
+            "Docker Buildx 준비",
+            "ARM64 Docker 이미지 빌드와 푸시",
+        ):
+            manual_build_step = indented_block(
+                self.deploy_job,
+                f"- name: {step_name}",
+                6,
+            )
+            self.assertIn(
+                "if: github.event_name == 'workflow_dispatch'",
+                manual_build_step,
+            )
+
+        self.assertNotIn("if: inputs.image_digest == ''", self.deploy_job)
+
+    def test_long_running_jobs_timeout_and_cancelled_deploy_notifies(self):
+        self.assertRegex(
+            self.ci_build_job,
+            r"(?m)^    timeout-minutes: 45$",
+        )
+        self.assertRegex(
+            self.deploy_job,
+            r"(?m)^    timeout-minutes: 45$",
+        )
+
+        failure_notification_step = indented_block(
+            self.deploy_job,
+            "- name: Slack 배포 실패 알림",
+            6,
+        )
+        self.assertRegex(
+            failure_notification_step,
+            r"(?m)^        if: failure\(\) \|\| cancelled\(\)$",
+        )
+
     def test_integration_profile_disables_all_business_schedulers(self):
         properties = {}
         for raw_line in self.integration_profile.splitlines():
