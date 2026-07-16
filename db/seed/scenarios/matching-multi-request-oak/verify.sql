@@ -12,6 +12,7 @@ SELECT (
      JOIN members member ON member.id = persona.member_id
      WHERE persona.persona_key = '도파민풀충-나현-일반강습생'
        AND persona.template = 'GENERAL_CONSUMER'
+       AND member.nickname = '도파민 풀충 나현'
        AND member.role = 'CONSUMER'
        AND member.status = 'ACTIVE') = 1
     AND

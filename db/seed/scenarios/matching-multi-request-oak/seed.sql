@@ -35,7 +35,7 @@ INSERT INTO members (
     updated_at
 ) VALUES (
     @scenario_member_id,
-    '다중요청소비자',
+    '도파민 풀충 나현',
     NULL,
     'CONSUMER',
     'ACTIVE',
