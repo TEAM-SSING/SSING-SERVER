@@ -497,7 +497,10 @@ public sealed interface ConsumerLessonDetailResponse permits
             @Schema(description = "강사 등급", example = "1")
             Integer level,
 
-            @Schema(description = "강사 프로필 이미지 URL", example = "https://example.com/instructors/9003.jpg")
+            @Schema(
+                    description = "강사 프로필 이미지 URL. 등록된 이미지가 없으면 기본 이미지 URL",
+                    example = "https://example.com/instructors/9003.jpg"
+            )
             String profileImageUrl
     ) {
 

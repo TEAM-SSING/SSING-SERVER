@@ -53,6 +53,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class LessonDetailServiceTest {
 
+    private static final String DEFAULT_INSTRUCTOR_PROFILE_IMAGE_URL =
+            "https://placehold.co/256x256/E7F0FF/8FA8C8?text=SSING";
+
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
 
     private static final Clock FIXED_CLOCK = Clock.fixed(
@@ -139,6 +142,20 @@ class LessonDetailServiceTest {
         assertThat(response.matchingRequests()).hasSize(2);
         assertThat(response.matchingRequests().get(0))
                 .isInstanceOf(ConsumerLessonDetailResponse.MatchingRequestResponse.class);
+    }
+
+    @Test
+    void getDetail은_강사_프로필이미지가_없으면_기본이미지_URL을_반환한다() {
+        LessonDetailService service = createService();
+        Fixture fixture = fixture(LessonStatus.CONFIRMED);
+        ReflectionTestUtils.setField(fixture.instructorMember(), "profileImageUrl", null);
+        givenAccessibleLesson(fixture);
+        when(lessonStartConfirmationRepository.findByLessonId(500L)).thenReturn(List.of());
+
+        ConsumerLessonDetailResponse response = service.getConsumerDetail(1L, 500L);
+
+        assertThat(response.instructorProfile().profileImageUrl())
+                .isEqualTo(DEFAULT_INSTRUCTOR_PROFILE_IMAGE_URL);
     }
 
     @Test
