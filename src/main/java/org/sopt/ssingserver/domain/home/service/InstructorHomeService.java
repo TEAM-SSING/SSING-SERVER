@@ -32,6 +32,8 @@ import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.domain.matching.service.MatchingStatusResolver;
+import org.sopt.ssingserver.domain.notification.enums.ClientApp;
+import org.sopt.ssingserver.domain.notification.service.NotificationService;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.domain.review.repository.ReviewRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -66,6 +68,7 @@ public class InstructorHomeService {
     private final InstructorProfileRepository instructorProfileRepository;
     private final ReviewRepository reviewRepository;
     private final MatchingStatusResolver matchingStatusResolver;
+    private final NotificationService notificationService;
     private final Clock clock;
 
     // 강사 홈에 표시할 매칭중, 제안, 예약/진행 강습 카드 구성함
@@ -125,8 +128,7 @@ public class InstructorHomeService {
                 ))
                 .forEach(homeCards::add);
 
-        // TODO: 알림 읽음 여부 정책 확정 후 실제 조회로 교체함
-        boolean hasUnreadNotification = false;
+        boolean hasUnreadNotification = notificationService.hasUnreadNotification(memberId, ClientApp.INSTRUCTOR);
         long matchingConsumerCount = matchingRequestRepository.sumHeadcountByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES);
         long matchingInstructorCount = instructorMatchingSettingRepository.countByIsExposedTrue();
         long matchingPeopleCount = matchingConsumerCount + matchingInstructorCount;

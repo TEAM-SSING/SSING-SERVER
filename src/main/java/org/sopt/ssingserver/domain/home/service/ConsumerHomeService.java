@@ -14,6 +14,8 @@ import org.sopt.ssingserver.domain.lesson.repository.LessonParticipantRepository
 import org.sopt.ssingserver.domain.lesson.repository.projection.HomeLessonCardProjection;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
+import org.sopt.ssingserver.domain.notification.enums.ClientApp;
+import org.sopt.ssingserver.domain.notification.service.NotificationService;
 import org.sopt.ssingserver.global.time.AppZoneId;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +37,7 @@ public class ConsumerHomeService {
     private final LessonParticipantRepository lessonParticipantRepository;
     private final MatchingRequestRepository matchingRequestRepository;
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+    private final NotificationService notificationService;
     private final Clock clock;
 
     // 소비자 홈에 표시할 예약/진행 강습 카드 조회함
@@ -52,8 +55,7 @@ public class ConsumerHomeService {
                 ))
                 .toList();
 
-        // TODO: 알림 읽음 여부 정책 확정 후 실제 조회로 교체함
-        boolean hasUnreadNotification = false;
+        boolean hasUnreadNotification = notificationService.hasUnreadNotification(memberId, ClientApp.CONSUMER);
         long matchingConsumerCount = matchingRequestRepository.sumHeadcountByStatusIn(MATCHING_CONSUMER_COUNT_STATUSES);
         long matchingInstructorCount = instructorMatchingSettingRepository.countByIsExposedTrue();
         long matchingPeopleCount = matchingConsumerCount + matchingInstructorCount;

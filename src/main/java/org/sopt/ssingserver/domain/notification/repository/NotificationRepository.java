@@ -11,6 +11,12 @@ import org.springframework.data.repository.query.Param;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
+    boolean existsByMemberIdAndClientAppAndReadAtIsNullAndCreatedAtGreaterThanEqual(
+            Long memberId,
+            ClientApp clientApp,
+            Instant since
+    );
+
     @Query("""
             select notification
             from Notification notification

@@ -44,6 +44,8 @@ import org.sopt.ssingserver.domain.member.entity.Member;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
+import org.sopt.ssingserver.domain.notification.enums.ClientApp;
+import org.sopt.ssingserver.domain.notification.service.NotificationService;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.domain.review.repository.ReviewRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -86,6 +88,9 @@ class InstructorHomeServiceTest {
 
     @Mock
     private ReviewRepository reviewRepository;
+
+    @Mock
+    private NotificationService notificationService;
 
     @Test
     void getInstructorHome은_리뷰가_없으면_리뷰_요약을_빈_객체로_반환한다() {
@@ -423,6 +428,31 @@ class InstructorHomeServiceTest {
                         .isSameAs(HomeErrorCode.INSTRUCTOR_HOME_GROUP_ITEM_NOT_FOUND));
     }
 
+    @Test
+    void getInstructorHome은_강사_앱의_안읽은_알림이_있으면_true를_반환한다() {
+        InstructorHomeService service = createService();
+        when(instructorProfileRepository.findByMemberId(1L))
+                .thenReturn(Optional.of(instructorProfile()));
+        when(matchingOfferRepository.findInstructorHomeOffers(
+                1L,
+                MatchingOfferStatus.OFFERED,
+                MatchingOfferStatus.ACCEPTED,
+                List.of(
+                        MatchingRequestGroupStatus.INSTRUCTOR_ACCEPTED,
+                        MatchingRequestGroupStatus.PAYMENT_PENDING
+                )
+        )).thenReturn(List.of());
+        when(lessonRepository.findByInstructorProfileIdAndStatusInOrderByScheduledAtAscIdAsc(
+                1L,
+                UPCOMING_LESSON_STATUSES
+        )).thenReturn(List.of());
+        when(notificationService.hasUnreadNotification(1L, ClientApp.INSTRUCTOR)).thenReturn(true);
+
+        InstructorHomeResponse response = service.getInstructorHome(1L);
+
+        assertThat(response.hasUnreadNotification()).isTrue();
+    }
+
     private InstructorHomeService createService() {
         return new InstructorHomeService(
                 lessonRepository,
@@ -433,6 +463,7 @@ class InstructorHomeServiceTest {
                 instructorProfileRepository,
                 reviewRepository,
                 new MatchingStatusResolver(),
+                notificationService,
                 FIXED_CLOCK
         );
     }
