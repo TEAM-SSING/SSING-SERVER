@@ -81,6 +81,17 @@ SELECT (
     AND
     (SELECT COUNT(*) FROM instructor_price_policies WHERE is_active = b'1') = 4
     AND
+    (SELECT COUNT(*)
+     FROM (
+         SELECT profile.id
+         FROM instructor_profiles profile
+         LEFT JOIN instructor_price_policies policy
+           ON policy.instructor_profile_id = profile.id
+          AND policy.is_active = b'1'
+         GROUP BY profile.id
+         HAVING COUNT(policy.id) <> 1
+     ) invalid_active_price_policy) = 0
+    AND
     (SELECT COUNT(*) FROM matching_requests) = 16
     AND
     (SELECT COUNT(*) FROM matching_requests WHERE status = 'REQUESTED' AND status_reason IS NULL) = 9

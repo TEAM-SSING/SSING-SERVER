@@ -208,7 +208,16 @@ class SeedRealtimeFlowIntegrationTest {
         mockMvc.perform(get("/api/v1/consumer/lessons/{lessonId}", lessonId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.lessonStatus").value("COMPLETED"));
+                .andExpect(jsonPath("$.data.lessonStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.lessonInfo.priceSummary.lessonPriceAmount").value(60_000))
+                .andExpect(jsonPath("$.data.lessonInfo.priceSummary.resortPassFeeAmount").value(25_000))
+                .andExpect(jsonPath("$.data.lessonInfo.priceSummary.totalPaymentAmount").value(85_000));
+        mockMvc.perform(get("/api/v1/instructor/lessons/{lessonId}", lessonId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lessonStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.lessonInfo.instructorSettlementAmount").value(60_000))
+                .andExpect(jsonPath("$.data.lessonInfo.resortPassFeeAmount").doesNotExist());
     }
 
     private EventSubscription subscribe(String token, String destination) throws Exception {
@@ -307,7 +316,7 @@ class SeedRealtimeFlowIntegrationTest {
                 .andExpect(jsonPath("$.data.recoveryState").value("AVAILABLE"))
                 .andExpect(jsonPath("$.data.offerId").value(offerId))
                 .andExpect(jsonPath("$.data.groupId").value(groupId))
-                .andExpect(jsonPath("$.data.priceSummary.totalPaymentAmount").value(85_000));
+                .andExpect(jsonPath("$.data.priceSummary.instructorSettlementAmount").value(60_000));
     }
 
     private void acceptInstructorOffer(String instructorToken, long offerId) throws Exception {

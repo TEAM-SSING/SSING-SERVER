@@ -18,7 +18,7 @@ public sealed interface InstructorMatchingOfferDetailResult permits
             MatchingStatus matchingStatus,
             InstructorMatchingOffersResult.RequestSummaryResult requestSummary,
             InstructorMatchingOffersResult.LessonSummaryResult lessonSummary,
-            MatchingPriceSummaryResult priceSummary,
+            InstructorPriceSummaryResult priceSummary,
             List<ParticipantResult> participants
     ) {
         return new Available(
@@ -42,7 +42,7 @@ public sealed interface InstructorMatchingOfferDetailResult permits
             MatchingStatus matchingStatus,
             InstructorMatchingOffersResult.RequestSummaryResult requestSummary,
             InstructorMatchingOffersResult.LessonSummaryResult lessonSummary,
-            MatchingPriceSummaryResult priceSummary,
+            InstructorPriceSummaryResult priceSummary,
             List<ParticipantResult> participants
     ) implements InstructorMatchingOfferDetailResult {
     }

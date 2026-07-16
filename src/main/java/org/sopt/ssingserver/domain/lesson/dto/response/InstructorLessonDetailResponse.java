@@ -321,8 +321,11 @@ public sealed interface InstructorLessonDetailResponse permits
             @Schema(description = "예정 강습 시간", example = "120")
             int scheduledDurationMinutes,
 
-            @Schema(description = "전체 강습 가격", example = "80000")
-            int totalLessonPrice
+            @Schema(description = "호환용 강사 정산 금액. instructorSettlementAmount와 동일", example = "80000", deprecated = true)
+            int totalLessonPrice,
+
+            @Schema(description = "패찰비를 제외한 강사 자기 정산 금액", example = "80000")
+            int instructorSettlementAmount
     ) implements LessonInfo {
 
         public static LessonInfoResponse of(
@@ -333,7 +336,7 @@ public sealed interface InstructorLessonDetailResponse permits
                 LessonLevel lessonLevel,
                 OffsetDateTime scheduledAt,
                 int scheduledDurationMinutes,
-                int totalLessonPrice
+                int instructorSettlementAmount
         ) {
             return new LessonInfoResponse(
                     representativeConsumerNames,
@@ -343,7 +346,8 @@ public sealed interface InstructorLessonDetailResponse permits
                     lessonLevel,
                     scheduledAt,
                     scheduledDurationMinutes,
-                    totalLessonPrice
+                    instructorSettlementAmount,
+                    instructorSettlementAmount
             );
         }
     }
@@ -376,8 +380,11 @@ public sealed interface InstructorLessonDetailResponse permits
             @Schema(description = "실제 강습 진행 시간", example = "118")
             int actualDurationMinutes,
 
-            @Schema(description = "전체 강습 가격", example = "80000")
-            int totalLessonPrice
+            @Schema(description = "호환용 강사 정산 금액. instructorSettlementAmount와 동일", example = "80000", deprecated = true)
+            int totalLessonPrice,
+
+            @Schema(description = "패찰비를 제외한 강사 자기 정산 금액", example = "80000")
+            int instructorSettlementAmount
     ) implements LessonInfo {
 
         public static CompletedLessonInfoResponse of(
@@ -390,7 +397,7 @@ public sealed interface InstructorLessonDetailResponse permits
                 OffsetDateTime actualStartedAt,
                 OffsetDateTime actualEndedAt,
                 int actualDurationMinutes,
-                int totalLessonPrice
+                int instructorSettlementAmount
         ) {
             return new CompletedLessonInfoResponse(
                     representativeConsumerNames,
@@ -402,7 +409,8 @@ public sealed interface InstructorLessonDetailResponse permits
                     actualStartedAt,
                     actualEndedAt,
                     actualDurationMinutes,
-                    totalLessonPrice
+                    instructorSettlementAmount,
+                    instructorSettlementAmount
             );
         }
     }
@@ -426,8 +434,11 @@ public sealed interface InstructorLessonDetailResponse permits
             @Schema(description = "강습 기본 시간", example = "120")
             int lessonDurationMinutes,
 
-            @Schema(description = "전체 강습 가격", example = "80000")
-            int totalLessonPrice
+            @Schema(description = "호환용 강사 정산 금액. instructorSettlementAmount와 동일", example = "80000", deprecated = true)
+            int totalLessonPrice,
+
+            @Schema(description = "패찰비를 제외한 강사 자기 정산 금액", example = "80000")
+            int instructorSettlementAmount
     ) implements LessonInfo {
 
         public static CanceledLessonInfoResponse of(
@@ -437,7 +448,7 @@ public sealed interface InstructorLessonDetailResponse permits
                 Sport sport,
                 LessonLevel lessonLevel,
                 int lessonDurationMinutes,
-                int totalLessonPrice
+                int instructorSettlementAmount
         ) {
             return new CanceledLessonInfoResponse(
                     representativeConsumerNames,
@@ -446,7 +457,8 @@ public sealed interface InstructorLessonDetailResponse permits
                     sport,
                     lessonLevel,
                     lessonDurationMinutes,
-                    totalLessonPrice
+                    instructorSettlementAmount,
+                    instructorSettlementAmount
             );
         }
     }
@@ -480,7 +492,7 @@ public sealed interface InstructorLessonDetailResponse permits
             @Schema(description = "해당 팀 인원 수", example = "3")
             int headcount,
 
-            @Schema(description = "해당 팀 강습 가격", example = "40000")
+            @Schema(description = "해당 팀의 패찰비 제외 강습비 snapshot", example = "40000")
             int teamLessonPrice,
 
             @Schema(description = "해당 팀의 강습 시작 준비 완료 여부", example = "true")
@@ -524,7 +536,7 @@ public sealed interface InstructorLessonDetailResponse permits
             @Schema(description = "해당 팀 인원 수", example = "3")
             int headcount,
 
-            @Schema(description = "해당 팀 강습 가격", example = "40000")
+            @Schema(description = "해당 팀의 패찰비 제외 강습비 snapshot", example = "40000")
             int teamLessonPrice,
 
             @Schema(description = "해당 팀 참여자 목록")

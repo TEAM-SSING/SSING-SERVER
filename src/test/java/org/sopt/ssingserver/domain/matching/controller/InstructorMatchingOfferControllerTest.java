@@ -119,7 +119,8 @@ class InstructorMatchingOfferControllerTest {
                         List.of(LessonLevel.FIRST_TIME, LessonLevel.INTERMEDIATE),
                         List.of(120, 240),
                         3,
-                        true
+                        true,
+                        new InstructorMatchingOffersResult.PricePolicyResult(60_000, 20_000)
                 )
         );
         when(instructorMatchingOfferService.getCurrentOffers(MEMBER_ID)).thenReturn(result);

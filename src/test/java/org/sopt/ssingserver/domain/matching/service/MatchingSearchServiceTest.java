@@ -195,16 +195,16 @@ class MatchingSearchServiceTest {
         assertThat(priceSnapshot.getTotalHeadcount()).isEqualTo(2);
         assertThat(priceSnapshot.getBasePriceAmount()).isEqualTo(70_000);
         assertThat(priceSnapshot.getAdditionalPersonPriceAmount()).isEqualTo(10_000);
-        assertThat(priceSnapshot.getConsumerTotalAmount()).isEqualTo(80_000);
-        assertThat(priceSnapshot.getLessonPriceAmount()).isEqualTo(80_000);
+        assertThat(priceSnapshot.getConsumerTotalAmount()).isEqualTo(120_000);
+        assertThat(priceSnapshot.getLessonPriceAmount()).isEqualTo(120_000);
         assertThat(priceSnapshot.getResortPassFeeAmount()).isEqualTo(30_000);
-        assertThat(priceSnapshot.getTotalPaymentAmount()).isEqualTo(110_000);
-        assertThat(priceSnapshot.getInstructorSettlementAmount()).isEqualTo(80_000);
+        assertThat(priceSnapshot.getTotalPaymentAmount()).isEqualTo(150_000);
+        assertThat(priceSnapshot.getInstructorSettlementAmount()).isEqualTo(120_000);
         assertThat(priceSnapshot.getPlatformFeeAmount()).isZero();
         assertThat(priceSnapshot.getFeeRateBps()).isZero();
         ReflectionTestUtils.setField(matchingRequest.getResort(), "passFeeAmount", 50_000);
         assertThat(priceSnapshot.getResortPassFeeAmount()).isEqualTo(30_000);
-        assertThat(priceSnapshot.getTotalPaymentAmount()).isEqualTo(110_000);
+        assertThat(priceSnapshot.getTotalPaymentAmount()).isEqualTo(150_000);
         ArgumentCaptor<MatchingOfferCreatedEvent> eventCaptor =
                 ArgumentCaptor.forClass(MatchingOfferCreatedEvent.class);
         verify(matchingEventPublisher).publish(eventCaptor.capture());

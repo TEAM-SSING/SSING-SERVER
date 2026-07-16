@@ -12,6 +12,7 @@ import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExp
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureConditionsResponse;
 import org.sopt.ssingserver.domain.instructor.dto.response.InstructorMatchingExposureResponse;
 import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
+import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.sopt.ssingserver.global.response.BaseResponse;
 import org.sopt.ssingserver.global.security.access.CurrentMember;
@@ -44,7 +45,8 @@ public interface InstructorApiDocs {
 
     @Operation(
             summary = "강사 즉시 매칭 조건 저장 및 시작",
-            description = "강사가 즉시 매칭에 노출될 조건을 저장하고 매칭을 시작합니다.",
+            description = "강사가 즉시 매칭에 노출될 조건을 저장하고 매칭을 시작합니다. "
+                    + "응답에는 매칭 대기 화면에서 사용할 120분 기준 저장 가격을 포함합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "즉시 매칭 조건 저장 및 매칭 시작 성공")
@@ -66,6 +68,7 @@ public interface InstructorApiDocs {
             type = InstructorErrorCode.class,
             names = {"INSTRUCTOR_RESORT_NOT_SET", "ACTIVE_LESSON_EXISTS"}
     )
+    @ApiErrorCodes(type = MatchingErrorCode.class, names = "MATCHING_PRICE_POLICY_NOT_FOUND")
     ResponseEntity<BaseResponse<InstructorMatchingExposureResponse>> startExposure(
             @Parameter(hidden = true)
             CurrentMember currentMember,

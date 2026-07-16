@@ -45,6 +45,9 @@ import org.sopt.ssingserver.domain.member.enums.Gender;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
+import org.sopt.ssingserver.domain.payment.entity.MatchingOfferPriceSnapshot;
+import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPriceSnapshot;
+import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshotRepository;
 import org.sopt.ssingserver.domain.payment.repository.MatchingRequestPaymentRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.global.error.BusinessException;
@@ -75,6 +78,9 @@ class InstructorLessonDetailTest {
 
     @Mock
     private MatchingRequestPaymentRepository matchingRequestPaymentRepository;
+
+    @Mock
+    private MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
 
     @Test
     void getDetail은_CONFIRMED_강습의_강사와_팀단위_준비상태와_가격을_반환한다() throws Exception {
@@ -111,9 +117,14 @@ class InstructorLessonDetailTest {
         assertThat(statusInfo.instructorConfirmed()).isTrue();
         assertThat(lessonInfo.representativeConsumerNames()).containsExactly("김소비", "박소비");
         assertThat(lessonInfo.totalLessonPrice()).isEqualTo(87_500);
+        assertThat(lessonInfo.instructorSettlementAmount()).isEqualTo(87_500);
         assertThat(response.matchingRequests()).hasSize(2);
         assertThat(data.get("matchingRequests").get(0).get("teamLessonPrice").asInt()).isEqualTo(40_000);
         assertThat(data.get("matchingRequests").get(1).get("teamLessonPrice").asInt()).isEqualTo(47_500);
+        assertThat(data.toString()).doesNotContain(
+                "resortPassFeeAmount",
+                "totalPaymentAmount"
+        );
         assertThat(data.get("statusInfo").get("currentActorConfirmed").asBoolean()).isTrue();
         assertThat(data.get("lessonInfo").has("representativeConsumerName")).isFalse();
         assertThat(data.get("lessonInfo").get("representativeConsumerNames")).hasSize(2);
@@ -155,6 +166,7 @@ class InstructorLessonDetailTest {
         assertThat(lessonInfo.actualDurationMinutes()).isEqualTo(118);
         assertThat(lessonInfo.representativeConsumerNames()).containsExactly("김소비", "박소비");
         assertThat(lessonInfo.totalLessonPrice()).isEqualTo(87_500);
+        assertThat(lessonInfo.instructorSettlementAmount()).isEqualTo(87_500);
         assertThat(response.matchingRequests()).hasSize(2);
     }
 
@@ -210,6 +222,8 @@ class InstructorLessonDetailTest {
                 .thenReturn(fixture.participants());
         when(matchingRequestPaymentRepository.findByMatchingOfferIdOrderByMatchingRequestIdAsc(300L))
                 .thenReturn(List.of(payment(fixture.firstRequest(), fixture.offer(), 40_000)));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(300L))
+                .thenReturn(Optional.of(offerPriceSnapshot(87_500)));
         when(lessonStartConfirmationRepository.findByLessonId(500L)).thenReturn(List.of());
 
         assertThatExceptionOfType(BusinessException.class)
@@ -224,7 +238,8 @@ class InstructorLessonDetailTest {
                 lessonParticipantRepository,
                 lessonCancellationRepository,
                 lessonStartConfirmationRepository,
-                matchingRequestPaymentRepository
+                matchingRequestPaymentRepository,
+                matchingOfferPriceSnapshotRepository
         );
         ConsumerLessonDetailResponseMapper consumerResponseMapper = new ConsumerLessonDetailResponseMapper(FIXED_CLOCK);
         InstructorLessonDetailResponseMapper responseMapper = new InstructorLessonDetailResponseMapper(FIXED_CLOCK);
@@ -240,6 +255,8 @@ class InstructorLessonDetailTest {
                         payment(fixture.firstRequest(), fixture.offer(), 40_000),
                         payment(fixture.secondRequest(), fixture.offer(), 47_500)
                 ));
+        when(matchingOfferPriceSnapshotRepository.findByMatchingOfferId(300L))
+                .thenReturn(Optional.of(offerPriceSnapshot(87_500)));
     }
 
     private Fixture fixture(LessonStatus lessonStatus) {
@@ -349,9 +366,20 @@ class InstructorLessonDetailTest {
         MatchingRequestPayment payment = construct(MatchingRequestPayment.class);
         ReflectionTestUtils.setField(payment, "matchingRequest", matchingRequest);
         ReflectionTestUtils.setField(payment, "matchingOffer", offer);
-        ReflectionTestUtils.setField(payment, "amount", amount);
+        MatchingRequestPriceSnapshot priceSnapshot = construct(MatchingRequestPriceSnapshot.class);
+        ReflectionTestUtils.setField(priceSnapshot, "lessonPriceAmount", amount);
+        ReflectionTestUtils.setField(priceSnapshot, "resortPassFeeAmount", 20_000);
+        ReflectionTestUtils.setField(priceSnapshot, "totalPaymentAmount", amount + 20_000);
+        ReflectionTestUtils.setField(payment, "matchingRequestPriceSnapshot", priceSnapshot);
+        ReflectionTestUtils.setField(payment, "amount", amount + 20_000);
         ReflectionTestUtils.setField(payment, "paymentRequestedAt", Instant.parse("2026-07-10T00:00:00Z"));
         return payment;
+    }
+
+    private MatchingOfferPriceSnapshot offerPriceSnapshot(int instructorSettlementAmount) {
+        MatchingOfferPriceSnapshot priceSnapshot = construct(MatchingOfferPriceSnapshot.class);
+        ReflectionTestUtils.setField(priceSnapshot, "instructorSettlementAmount", instructorSettlementAmount);
+        return priceSnapshot;
     }
 
     private InstructorProfile instructorProfile(

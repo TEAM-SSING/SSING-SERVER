@@ -79,10 +79,12 @@ public class MatchingOfferPriceSnapshot {
             InstructorPricePolicy instructorPricePolicy,
             PlatformFeePolicy platformFeePolicy,
             int totalHeadcount,
+            int durationMinutes,
             int resortPassFeeAmount
     ) {
         // 강사 제안 수락 이후에도 금액 기준이 흔들리지 않도록 제안 시점 금액 보존
         validateTotalHeadcount(totalHeadcount);
+        validateDurationMinutes(durationMinutes);
         validateResortPassFeeAmount(resortPassFeeAmount);
 
         MatchingOfferPriceSnapshot snapshot = new MatchingOfferPriceSnapshot();
@@ -92,11 +94,12 @@ public class MatchingOfferPriceSnapshot {
         snapshot.totalHeadcount = totalHeadcount;
         snapshot.basePriceAmount = instructorPricePolicy.getBasePriceAmount();
         snapshot.additionalPersonPriceAmount = instructorPricePolicy.getAdditionalPersonPriceAmount();
-        int additionalPriceAmount = Math.multiplyExact(
-                snapshot.additionalPersonPriceAmount,
+        long additionalPriceAmount = Math.multiplyExact(
+                (long) snapshot.additionalPersonPriceAmount,
                 Math.max(0, totalHeadcount - 1)
         );
-        snapshot.consumerTotalAmount = Math.addExact(snapshot.basePriceAmount, additionalPriceAmount);
+        long priceFor120Minutes = Math.addExact((long) snapshot.basePriceAmount, additionalPriceAmount);
+        snapshot.consumerTotalAmount = scaleByDuration(priceFor120Minutes, durationMinutes);
         snapshot.resortPassFeeAmount = resortPassFeeAmount;
         snapshot.totalPaymentAmount = Math.addExact(
                 snapshot.consumerTotalAmount,
@@ -124,6 +127,20 @@ public class MatchingOfferPriceSnapshot {
         if (totalHeadcount <= 0) {
             throw new IllegalArgumentException("totalHeadcount must be positive.");
         }
+    }
+
+    private static void validateDurationMinutes(int durationMinutes) {
+        if (durationMinutes <= 0) {
+            throw new IllegalArgumentException("durationMinutes must be positive.");
+        }
+    }
+
+    private static int scaleByDuration(long priceFor120Minutes, int durationMinutes) {
+        long numerator = Math.multiplyExact(priceFor120Minutes, durationMinutes);
+        long quotient = numerator / 120;
+        long remainder = numerator % 120;
+        long roundedAmount = remainder * 2 >= 120 ? Math.addExact(quotient, 1) : quotient;
+        return Math.toIntExact(roundedAmount);
     }
 
     private static void validateResortPassFeeAmount(int resortPassFeeAmount) {

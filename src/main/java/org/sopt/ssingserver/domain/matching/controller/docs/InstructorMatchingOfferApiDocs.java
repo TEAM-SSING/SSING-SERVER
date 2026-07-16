@@ -53,7 +53,7 @@ public interface InstructorMatchingOfferApiDocs {
     )
     @ApiErrorCodes(
             type = MatchingErrorCode.class,
-            names = {"MATCHING_NOT_ACTIVE"}
+            names = {"MATCHING_NOT_ACTIVE", "MATCHING_PRICE_POLICY_NOT_FOUND"}
     )
     ResponseEntity<BaseResponse<InstructorMatchingOffersResponse>> getCurrentOffers(
             @Parameter(hidden = true)

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -23,11 +24,13 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorMatchingSetting;
+import org.sopt.ssingserver.domain.instructor.entity.InstructorPricePolicy;
 import org.sopt.ssingserver.domain.instructor.entity.InstructorProfile;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
+import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
@@ -80,6 +83,9 @@ class InstructorMatchingOfferServiceTest {
 
     @Mock
     private InstructorMatchingSettingRepository instructorMatchingSettingRepository;
+
+    @Mock
+    private InstructorPricePolicyRepository instructorPricePolicyRepository;
 
     @Mock
     private MatchingOfferRepository matchingOfferRepository;
@@ -373,6 +379,8 @@ class InstructorMatchingOfferServiceTest {
         assertThat(result.matchingSetting().availableDurationMinutes()).containsExactly(120, 240);
         assertThat(result.matchingSetting().maxHeadcount()).isEqualTo(3);
         assertThat(result.matchingSetting().equipmentReady()).isTrue();
+        assertThat(result.matchingSetting().pricePolicy().basePriceAmount()).isEqualTo(60_000);
+        assertThat(result.matchingSetting().pricePolicy().additionalPersonPriceAmount()).isEqualTo(20_000);
         verifyNoInteractions(matchingRequestGroupItemRepository, matchingOfferPriceSnapshotRepository);
     }
 
@@ -519,7 +527,7 @@ class InstructorMatchingOfferServiceTest {
         assertThat(available.lessonSummary().level()).isSameAs(LessonLevel.FIRST_TIME);
         assertThat(available.lessonSummary().durationMinutes()).isEqualTo(120);
         assertThat(available.lessonSummary().totalHeadcount()).isEqualTo(4);
-        assertThat(available.priceSummary().totalPaymentAmount()).isEqualTo(100_000);
+        assertThat(available.priceSummary().instructorSettlementAmount()).isEqualTo(80_000);
         assertThat(available.participants())
                 .extracting(
                         InstructorMatchingOfferDetailResult.ParticipantResult::age,
@@ -701,9 +709,13 @@ class InstructorMatchingOfferServiceTest {
     }
 
     private InstructorMatchingOfferService createService() {
+        lenient().when(instructorPricePolicyRepository
+                        .findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(10L))
+                .thenReturn(Optional.of(instructorPricePolicy()));
         return new InstructorMatchingOfferService(
                 instructorProfileRepository,
                 instructorMatchingSettingRepository,
+                instructorPricePolicyRepository,
                 matchingOfferRepository,
                 matchingRequestGroupRepository,
                 matchingRequestGroupItemRepository,
@@ -714,6 +726,14 @@ class InstructorMatchingOfferServiceTest {
                 new MatchingEventDispatcher(matchingEventPublisher, new MatchingAfterCommitExecutor()),
                 FIXED_CLOCK
         );
+    }
+
+    private InstructorPricePolicy instructorPricePolicy() {
+        InstructorPricePolicy pricePolicy = construct(InstructorPricePolicy.class);
+        ReflectionTestUtils.setField(pricePolicy, "basePriceAmount", 60_000);
+        ReflectionTestUtils.setField(pricePolicy, "additionalPersonPriceAmount", 20_000);
+        ReflectionTestUtils.setField(pricePolicy, "isActive", true);
+        return pricePolicy;
     }
 
     private void transitionOfferTo(MatchingOffer offer, MatchingOfferStatus status) {
@@ -790,6 +810,7 @@ class InstructorMatchingOfferServiceTest {
         ReflectionTestUtils.setField(snapshot, "matchingOffer", matchingOffer);
         ReflectionTestUtils.setField(snapshot, "consumerTotalAmount", lessonPriceAmount);
         ReflectionTestUtils.setField(snapshot, "resortPassFeeAmount", resortPassFeeAmount);
+        ReflectionTestUtils.setField(snapshot, "instructorSettlementAmount", lessonPriceAmount);
         ReflectionTestUtils.setField(
                 snapshot,
                 "totalPaymentAmount",

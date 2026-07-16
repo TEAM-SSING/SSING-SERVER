@@ -18,7 +18,14 @@ public record InstructorMatchingOffersResult(
             List<LessonLevel> lessonLevels,
             List<Integer> availableDurationMinutes,
             int maxHeadcount,
-            boolean equipmentReady
+            boolean equipmentReady,
+            PricePolicyResult pricePolicy
+    ) {
+    }
+
+    public record PricePolicyResult(
+            int basePriceAmount,
+            int additionalPersonPriceAmount
     ) {
     }
 
@@ -29,7 +36,7 @@ public record InstructorMatchingOffersResult(
             Instant expiresAt,
             RequestSummaryResult requestSummary,
             LessonSummaryResult lessonSummary,
-            MatchingPriceSummaryResult priceSummary
+            InstructorPriceSummaryResult priceSummary
     ) {
     }
 

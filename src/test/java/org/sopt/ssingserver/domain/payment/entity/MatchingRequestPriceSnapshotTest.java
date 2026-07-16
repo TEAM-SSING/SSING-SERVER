@@ -85,6 +85,7 @@ class MatchingRequestPriceSnapshotTest {
                 instructorPricePolicy,
                 platformFeePolicy,
                 2,
+                120,
                 20_000
         );
     }

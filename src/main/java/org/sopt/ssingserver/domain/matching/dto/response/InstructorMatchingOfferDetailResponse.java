@@ -61,8 +61,8 @@ public record InstructorMatchingOfferDetailResponse(
         @Schema(description = "강습 조건 요약", requiredMode = Schema.RequiredMode.REQUIRED)
         InstructorMatchingOffersResponse.LessonSummaryResponse lessonSummary,
 
-        @Schema(description = "제안 생성 시점에 고정된 예상 가격", requiredMode = Schema.RequiredMode.REQUIRED)
-        MatchingPriceSummaryResponse priceSummary,
+        @Schema(description = "제안 생성 시점에 고정된 강사 자기 정산 금액", requiredMode = Schema.RequiredMode.REQUIRED)
+        InstructorPriceSummaryResponse priceSummary,
 
         @Schema(description = "그룹 전체 강습생 목록(최소 1명). 각 항목은 age와 gender만 반환하며, "
                 + "매칭 요청 ID와 참여자 ID 오름차순으로 정렬합니다. 같은 나이와 성별도 서로 다른 참여자면 유지합니다.",
@@ -81,7 +81,7 @@ public record InstructorMatchingOfferDetailResponse(
                     available.matchingStatus(),
                     InstructorMatchingOffersResponse.RequestSummaryResponse.from(available.requestSummary()),
                     InstructorMatchingOffersResponse.LessonSummaryResponse.from(available.lessonSummary()),
-                    MatchingPriceSummaryResponse.from(available.priceSummary()),
+                    InstructorPriceSummaryResponse.from(available.priceSummary()),
                     available.participants().stream()
                             .map(ParticipantResponse::from)
                             .toList()

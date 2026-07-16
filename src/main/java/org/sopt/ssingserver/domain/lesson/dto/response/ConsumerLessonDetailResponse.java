@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
+import org.sopt.ssingserver.domain.lesson.dto.result.LessonPriceSummaryResult;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.member.enums.Gender;
 
@@ -313,6 +314,27 @@ public sealed interface ConsumerLessonDetailResponse permits
         }
     }
 
+    @Schema(name = "ConsumerLessonPriceSummary", description = "내 팀의 snapshot 기준 강습비·패찰비·총 결제금액")
+    record PriceSummaryResponse(
+            @Schema(description = "패찰비를 제외한 강습비", example = "80000")
+            int lessonPriceAmount,
+
+            @Schema(description = "리조트 패찰비", example = "25000")
+            int resortPassFeeAmount,
+
+            @Schema(description = "강습비와 패찰비를 합한 총 결제금액", example = "105000")
+            int totalPaymentAmount
+    ) {
+
+        public static PriceSummaryResponse from(LessonPriceSummaryResult result) {
+            return new PriceSummaryResponse(
+                    result.lessonPriceAmount(),
+                    result.resortPassFeeAmount(),
+                    result.totalPaymentAmount()
+            );
+        }
+    }
+
     record LessonInfoResponse(
             @Schema(description = "팀 대표 소비자 이름 목록", example = "[\"김OO\", \"홍지민\"]")
             List<String> representativeConsumerNames,
@@ -335,8 +357,11 @@ public sealed interface ConsumerLessonDetailResponse permits
             @Schema(description = "예정 강습 시간", example = "120")
             int scheduledDurationMinutes,
 
-            @Schema(description = "내 팀 강습 가격", example = "40000")
-            int myTeamLessonPrice
+            @Schema(description = "호환용 내 팀 강습비. priceSummary.lessonPriceAmount와 동일", example = "40000", deprecated = true)
+            int myTeamLessonPrice,
+
+            @Schema(description = "내 팀의 강습비·패찰비·총 결제금액")
+            PriceSummaryResponse priceSummary
     ) implements LessonInfo {
 
         public static LessonInfoResponse of(
@@ -347,7 +372,7 @@ public sealed interface ConsumerLessonDetailResponse permits
                 LessonLevel lessonLevel,
                 OffsetDateTime scheduledAt,
                 int scheduledDurationMinutes,
-                int myTeamLessonPrice
+                LessonPriceSummaryResult myTeamPriceSummary
         ) {
             return new LessonInfoResponse(
                     representativeConsumerNames,
@@ -357,7 +382,8 @@ public sealed interface ConsumerLessonDetailResponse permits
                     lessonLevel,
                     scheduledAt,
                     scheduledDurationMinutes,
-                    myTeamLessonPrice
+                    myTeamPriceSummary.lessonPriceAmount(),
+                    PriceSummaryResponse.from(myTeamPriceSummary)
             );
         }
     }
@@ -390,8 +416,11 @@ public sealed interface ConsumerLessonDetailResponse permits
             @Schema(description = "실제 강습 진행 시간", example = "118")
             int actualDurationMinutes,
 
-            @Schema(description = "내 팀 강습 가격", example = "40000")
-            int myTeamLessonPrice
+            @Schema(description = "호환용 내 팀 강습비. priceSummary.lessonPriceAmount와 동일", example = "40000", deprecated = true)
+            int myTeamLessonPrice,
+
+            @Schema(description = "내 팀의 강습비·패찰비·총 결제금액")
+            PriceSummaryResponse priceSummary
     ) implements LessonInfo {
 
         public static CompletedLessonInfoResponse of(
@@ -404,7 +433,7 @@ public sealed interface ConsumerLessonDetailResponse permits
                 OffsetDateTime actualStartedAt,
                 OffsetDateTime actualEndedAt,
                 int actualDurationMinutes,
-                int myTeamLessonPrice
+                LessonPriceSummaryResult myTeamPriceSummary
         ) {
             return new CompletedLessonInfoResponse(
                     representativeConsumerNames,
@@ -416,7 +445,8 @@ public sealed interface ConsumerLessonDetailResponse permits
                     actualStartedAt,
                     actualEndedAt,
                     actualDurationMinutes,
-                    myTeamLessonPrice
+                    myTeamPriceSummary.lessonPriceAmount(),
+                    PriceSummaryResponse.from(myTeamPriceSummary)
             );
         }
     }
@@ -440,8 +470,11 @@ public sealed interface ConsumerLessonDetailResponse permits
             @Schema(description = "예정 강습 시간", example = "120")
             int lessonDurationMinutes,
 
-            @Schema(description = "내 팀 강습 가격", example = "40000")
-            int myTeamLessonPrice
+            @Schema(description = "호환용 내 팀 강습비. priceSummary.lessonPriceAmount와 동일", example = "40000", deprecated = true)
+            int myTeamLessonPrice,
+
+            @Schema(description = "내 팀의 강습비·패찰비·총 결제금액")
+            PriceSummaryResponse priceSummary
     ) implements LessonInfo {
 
         public static CanceledLessonInfoResponse of(
@@ -451,7 +484,7 @@ public sealed interface ConsumerLessonDetailResponse permits
                 Sport sport,
                 LessonLevel lessonLevel,
                 int lessonDurationMinutes,
-                int myTeamLessonPrice
+                LessonPriceSummaryResult myTeamPriceSummary
         ) {
             return new CanceledLessonInfoResponse(
                     representativeConsumerNames,
@@ -460,7 +493,8 @@ public sealed interface ConsumerLessonDetailResponse permits
                     sport,
                     lessonLevel,
                     lessonDurationMinutes,
-                    myTeamLessonPrice
+                    myTeamPriceSummary.lessonPriceAmount(),
+                    PriceSummaryResponse.from(myTeamPriceSummary)
             );
         }
     }
