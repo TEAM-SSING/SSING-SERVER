@@ -59,8 +59,15 @@ final class PmSeedSnapshotContract {
     // DB에 원본 source key를 저장하지 않으므로 가변 ID·시각을 뺀 aggregate 값의 multiset을 비교한다.
     private void assertMatches() throws IOException {
         List<ExpectedAggregate> expected = readExpectedAggregates();
+        Set<String> pmResortCodes = Set.copyOf(expected.stream()
+                .filter(aggregate -> aggregate.type().equals("RESORT"))
+                .map(aggregate -> aggregate.json().path("code").asText())
+                .toList());
         List<ActualAggregate> actual = new ArrayList<>();
-        actual.addAll(readActualResorts());
+        // Base-only 리조트는 PM 시트의 9개 원본 aggregate 계약에 포함하지 않는다.
+        actual.addAll(readActualResorts().stream()
+                .filter(aggregate -> pmResortCodes.contains(aggregate.json().path("code").asText()))
+                .toList());
         actual.addAll(readActualConsumers().stream()
                 .filter(aggregate -> !ignoredConsumerPersonaKeys.contains(
                         aggregate.json().path("personaKey").asText()

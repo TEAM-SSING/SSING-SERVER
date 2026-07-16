@@ -17,7 +17,7 @@ source:
   participants: matching_request_participants!A14:E29
 personas:
   consumer:
-    persona_key: pm-consumer-007
+    persona_key: 도파민풀충-나현-일반강습생
     template: GENERAL_CONSUMER
     source_key: member_consumer_007
 start_state:

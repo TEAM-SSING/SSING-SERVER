@@ -12,8 +12,8 @@ SELECT (
     (SELECT HEX(member.nickname)
      FROM members member
      JOIN dev_personas persona ON persona.member_id = member.id
-     WHERE persona.persona_key = 'consumer-default')
-        = 'EAB080EAB2A9EAB280ECA69DEC868CEBB984EC9E90'
+     WHERE persona.persona_key = '대뜸GOAT-성빈-일반강습생')
+        = 'EB8C80EB9CB820474F415420EC84B1EBB988'
 );
 
 DROP TEMPORARY TABLE seed_utf8_contract_assertion;

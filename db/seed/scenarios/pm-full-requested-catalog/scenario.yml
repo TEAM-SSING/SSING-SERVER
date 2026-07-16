@@ -32,7 +32,7 @@ source:
   mapping: source-mapping.tsv
   snapshot_contract: expected-snapshot.tsv
 expected_rows:
-  resorts: 9
+  resorts: 11
   dev_personas: 13
   instructor_profiles: 4
   instructor_matching_settings: 4
@@ -74,12 +74,14 @@ excluded_sources:
     reason: ATHLETE_CAREER는 현재 certificate enum으로 표현할 수 없다.
 notes:
   - 이 SNAPSHOT은 앱 정상 FLOW로 도달했다는 뜻이 아니라 PM 입력 catalog를 보존한다.
+  - PM 원본 snapshot은 resorts!A4:C12의 9종만 비교하고, Base seed는 최종 API 계약에 맞춰 O2_RESORT와 MUJU_DEOGYUSAN_RESORT를 더한 11종을 제공한다.
+  - O2_RESORT와 MUJU_DEOGYUSAN_RESORT의 passFeeAmount 30000원은 운영 가격이 아닌 local/dev 합성 fixture다.
   - 같은 소비자의 반복 입력은 각 `_a` 요청만 REQUESTED로 두고 나머지는 CANCELED 이력으로 정규화해 활성 협상 1건 정책을 지킨다.
   - scheduler를 켜면 조건이 맞는 REQUESTED 요청이 GROUPED로 전이될 수 있다.
   - 통합 테스트는 @Scheduled 자동 등록을 끄고 실제 MatchingSearchScheduler.runScheduledSearch()를 수동 호출해 전이를 검증한다.
   - local/CI는 원본 snapshot만 검증하고 dev reset은 그 뒤 dev-playground.sql을 적용한다.
   - dev 앱은 scheduler를 정상 설정으로 재기동하므로 일부 REQUESTED 요청은 자연스럽게 GROUPED로 전이될 수 있다.
-  - qa-free-consumer는 활성 요청이 없는 GENERAL_CONSUMER 시작점이며 PM 원본 snapshot 소유권에 포함하지 않는다.
+  - 냅다레전드-유빈-일반강습생은 활성 요청이 없는 GENERAL_CONSUMER 시작점이며 PM 원본 snapshot 소유권에 포함하지 않는다.
   - WebSocket event와 계산 상태는 seed하지 않는다.
 deferred_checks:
   - key: instructor-realtime-reconnect-recovery

@@ -6,7 +6,7 @@ SET @instructor_profile_id = (
     SELECT profile.id
     FROM instructor_profiles profile
     JOIN dev_personas persona ON persona.member_id = profile.member_id
-    WHERE persona.persona_key = 'instructor-approved-default'
+    WHERE persona.persona_key = '보법다른-유정-승인강사'
 );
 
 INSERT INTO instructor_price_policies (
@@ -35,7 +35,7 @@ INSERT INTO members (
     updated_at
 ) VALUES (
     @scenario_member_id,
-    '다중요청소비자',
+    '도파민 풀충 나현',
     NULL,
     'CONSUMER',
     'ACTIVE',
@@ -50,7 +50,7 @@ INSERT INTO dev_personas (
     created_at,
     updated_at
 ) VALUES (
-    'pm-consumer-007',
+    '도파민풀충-나현-일반강습생',
     @scenario_member_id,
     'GENERAL_CONSUMER',
     @seed_now,

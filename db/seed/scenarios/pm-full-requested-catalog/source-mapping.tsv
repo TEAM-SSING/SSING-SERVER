@@ -8,19 +8,19 @@ resort	VIVALDI_PARK	MAPPED	resorts.code=VIVALDI_PARK	-
 resort	OAK_VALLEY	MAPPED	resorts.code=OAK_VALLEY	-
 resort	ELYSIAN_GANGCHON	MAPPED	resorts.code=ELYSIAN_GANGCHON	-
 resort	WELLI_HILLI_PARK	MAPPED	resorts.code=WELLI_HILLI_PARK	-
-member	member_consumer_001	MAPPED	dev_personas.persona_key=pm-consumer-001	익명화
-member	member_consumer_002	MAPPED	dev_personas.persona_key=pm-consumer-002	익명화
-member	member_consumer_003	MAPPED	dev_personas.persona_key=pm-consumer-003	익명화
-member	member_consumer_004	MAPPED	dev_personas.persona_key=pm-consumer-004	익명화
-member	member_consumer_005	MAPPED	dev_personas.persona_key=pm-consumer-005	익명화
-member	member_consumer_006	MAPPED	dev_personas.persona_key=consumer-default	기존 golden persona 재사용
-member	member_consumer_007	MAPPED	dev_personas.persona_key=pm-consumer-007	익명화
-member	member_consumer_008	MAPPED	dev_personas.persona_key=pm-consumer-008	익명화
-member	member_consumer_009	MAPPED	dev_personas.persona_key=pm-consumer-009	익명화
-member	member_instructor_001	MAPPED_REVIEW_REQUIRED	dev_personas.persona_key=pm-instructor-approved-001	구조화 승인값과 PM 서사 모순
-member	member_instructor_002	MAPPED	dev_personas.persona_key=pm-instructor-approved-002	익명화
-member	member_instructor_003	MAPPED	dev_personas.persona_key=pm-instructor-approved-003	익명화
-member	member_instructor_004	MAPPED	dev_personas.persona_key=instructor-approved-default	기존 golden persona 재사용
+member	member_consumer_001	MAPPED	dev_personas.persona_key=폭룡적-예지-일반강습생	익명화
+member	member_consumer_002	MAPPED	dev_personas.persona_key=느좋그자체-예림-일반강습생	익명화
+member	member_consumer_003	MAPPED	dev_personas.persona_key=감다살-유빈-일반강습생	익명화
+member	member_consumer_004	MAPPED	dev_personas.persona_key=야르-선문-일반강습생	익명화
+member	member_consumer_005	MAPPED	dev_personas.persona_key=난리자베스-채원-일반강습생	익명화
+member	member_consumer_006	MAPPED	dev_personas.persona_key=대뜸GOAT-성빈-일반강습생	기존 golden persona 재사용
+member	member_consumer_007	MAPPED	dev_personas.persona_key=도파민풀충-나현-일반강습생	익명화
+member	member_consumer_008	MAPPED	dev_personas.persona_key=레전드갱신중인-지환-일반강습생	익명화
+member	member_consumer_009	MAPPED	dev_personas.persona_key=갑차기스러운-예슬-일반강습생	익명화
+member	member_instructor_001	MAPPED_REVIEW_REQUIRED	dev_personas.persona_key=기세로다해먹는-도연-승인강사	구조화 승인값과 PM 서사 모순
+member	member_instructor_002	MAPPED	dev_personas.persona_key=폼미친-성빈-승인강사	익명화
+member	member_instructor_003	MAPPED	dev_personas.persona_key=뉴런공유중인-유정-승인강사	익명화
+member	member_instructor_004	MAPPED	dev_personas.persona_key=보법다른-유정-승인강사	기존 golden persona 재사용
 matching_request	request_001_a	MAPPED	matching_requests(snapshot)	-
 matching_request	request_002_a	MAPPED	matching_requests(snapshot)	-
 matching_request	request_003_a	MAPPED	matching_requests(snapshot)	-

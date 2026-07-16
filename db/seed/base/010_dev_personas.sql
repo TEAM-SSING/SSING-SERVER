@@ -1,4 +1,5 @@
--- Local/CI-only personas. Names and phone are anonymized seed values.
+-- Local/CI-only personas. Familiar Korean names are borrowed only as memory aids, not as owners.
+-- Phone, birth date, and profile details remain synthetic seed values.
 START TRANSACTION;
 
 SET @seed_now = UTC_TIMESTAMP(6);
@@ -15,7 +16,7 @@ INSERT INTO members (
 ) VALUES
 (
     @seed_member_id_base + 1,
-    '가격검증소비자',
+    '대뜸 GOAT 성빈',
     NULL,
     'CONSUMER',
     'ACTIVE',
@@ -24,7 +25,7 @@ INSERT INTO members (
 ),
 (
     @seed_member_id_base + 2,
-    '가격검증강사',
+    '보법 다른 유정',
     NULL,
     'INSTRUCTOR',
     'ACTIVE',
@@ -40,14 +41,14 @@ INSERT INTO dev_personas (
     updated_at
 ) VALUES
 (
-    'consumer-default',
+    '대뜸GOAT-성빈-일반강습생',
     @seed_member_id_base + 1,
     'GENERAL_CONSUMER',
     @seed_now,
     @seed_now
 ),
 (
-    'instructor-approved-default',
+    '보법다른-유정-승인강사',
     @seed_member_id_base + 2,
     'INSTRUCTOR_APPROVED',
     @seed_now,
@@ -79,7 +80,7 @@ INSERT INTO instructor_profiles (
 ) VALUES (
     @seed_member_id_base + 2,
     @vivaldi_resort_id,
-    '가격검증강사',
+    '보법 다른 유정',
     '010-0000-0000',
     'MALE',
     '2000-01-04',

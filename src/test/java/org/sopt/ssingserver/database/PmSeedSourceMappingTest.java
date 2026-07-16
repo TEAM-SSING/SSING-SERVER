@@ -36,6 +36,25 @@ class PmSeedSourceMappingTest {
             "REQUEST", 16L
     );
 
+    private static final Map<String, String> EXPECTED_CONSUMER_NICKNAMES = Map.of(
+            "폭룡적-예지-일반강습생", "폭룡적 예지",
+            "느좋그자체-예림-일반강습생", "느좋 그 자체 예림",
+            "감다살-유빈-일반강습생", "감다살 유빈",
+            "야르-선문-일반강습생", "야르 선문",
+            "난리자베스-채원-일반강습생", "난리자베스 채원",
+            "대뜸GOAT-성빈-일반강습생", "대뜸 GOAT 성빈",
+            "도파민풀충-나현-일반강습생", "도파민 풀충 나현",
+            "레전드갱신중인-지환-일반강습생", "레전드 갱신 중인 지환",
+            "갑차기스러운-예슬-일반강습생", "갑차기스러운 예슬"
+    );
+
+    private static final Map<String, String> EXPECTED_INSTRUCTOR_NICKNAMES = Map.of(
+            "기세로다해먹는-도연-승인강사", "기세로 다 해먹는 도연",
+            "폼미친-성빈-승인강사", "폼 미친 성빈",
+            "뉴런공유중인-유정-승인강사", "뉴런 공유 중인 유정",
+            "보법다른-유정-승인강사", "보법 다른 유정"
+    );
+
     private static final Set<String> ALLOWED_DISPOSITIONS = Set.of(
             "MAPPED",
             "MAPPED_REVIEW_REQUIRED",
@@ -100,20 +119,21 @@ class PmSeedSourceMappingTest {
 
         consumers.forEach(aggregate -> {
             JsonNode json = aggregate.expectedJson();
-            if (aggregate.aggregateKey().startsWith("pm-")) {
-                assertThat(json.path("nickname").asText()).matches("목데이터소비자\\d{2}");
-            } else {
-                assertThat(json.path("nickname").asText()).isEqualTo("가격검증소비자");
-            }
+            assertThat(EXPECTED_CONSUMER_NICKNAMES).containsKey(aggregate.aggregateKey());
+            assertThat(json.path("nickname").asText())
+                    .isEqualTo(EXPECTED_CONSUMER_NICKNAMES.get(aggregate.aggregateKey()));
             assertThat(json.path("profileImageUrl").isNull()).isTrue();
         });
 
         instructors.forEach(aggregate -> {
             JsonNode json = aggregate.expectedJson();
             JsonNode profile = json.path("profile");
-            if (aggregate.aggregateKey().startsWith("pm-")) {
-                assertThat(json.path("nickname").asText()).matches("목데이터강사\\d{2}");
-                assertThat(profile.path("realName").asText()).isEqualTo(json.path("nickname").asText());
+            assertThat(EXPECTED_INSTRUCTOR_NICKNAMES).containsKey(aggregate.aggregateKey());
+            assertThat(json.path("nickname").asText())
+                    .isEqualTo(EXPECTED_INSTRUCTOR_NICKNAMES.get(aggregate.aggregateKey()));
+            assertThat(profile.path("realName").asText()).isEqualTo(json.path("nickname").asText());
+
+            if (!aggregate.aggregateKey().equals("보법다른-유정-승인강사")) {
                 assertThat(profile.path("phone").asText()).matches("010-0000-\\d{4}");
                 assertThat(profile.path("birthDate").asText()).isIn(
                         "2000-01-01",
@@ -124,8 +144,6 @@ class PmSeedSourceMappingTest {
                         .startsWith("PM 구조화 값을 익명화한 ")
                         .endsWith(" fixture입니다.");
             } else {
-                assertThat(json.path("nickname").asText()).isEqualTo("가격검증강사");
-                assertThat(profile.path("realName").asText()).isEqualTo("가격검증강사");
                 assertThat(profile.path("phone").asText()).isEqualTo("010-0000-0000");
                 assertThat(profile.path("birthDate").asText()).isEqualTo("2000-01-04");
                 assertThat(profile.path("intro").asText())

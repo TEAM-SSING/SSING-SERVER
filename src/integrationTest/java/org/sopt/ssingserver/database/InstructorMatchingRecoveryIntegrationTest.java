@@ -154,8 +154,8 @@ class InstructorMatchingRecoveryIntegrationTest {
 
     @Test
     void WebSocket이끊긴강사는_재접속후홈과상세REST로_PAYMENT_PENDING_협상을복구한다() throws Exception {
-        Long consumerMemberId = personaMemberId("consumer-default");
-        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
@@ -218,8 +218,8 @@ class InstructorMatchingRecoveryIntegrationTest {
     @Test
     void WebSocket이끊긴강사는_강사수락직후_WAITING_FOR_CONFIRMATION을복구하고_확정후홈으로전환한다()
             throws Exception {
-        Long consumerMemberId = personaMemberId("consumer-default");
-        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
@@ -278,8 +278,8 @@ class InstructorMatchingRecoveryIntegrationTest {
 
     @Test
     void 다른강사와_없는제안은_404이고_본인종료제안은_MATCHING_NOT_ACTIVE를_반환한다() throws Exception {
-        Long consumerMemberId = personaMemberId("consumer-default");
-        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
@@ -315,8 +315,8 @@ class InstructorMatchingRecoveryIntegrationTest {
 
     @Test
     void ID없는_재확인API는_OFFERED여도_EXPOSED가_아닌_그룹의_제안을_제외한다() throws Exception {
-        Long consumerMemberId = personaMemberId("consumer-default");
-        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
@@ -456,7 +456,7 @@ class InstructorMatchingRecoveryIntegrationTest {
                 """,
                 nickname
         );
-        Long sourceInstructorMemberId = personaMemberId("instructor-approved-default");
+        Long sourceInstructorMemberId = personaMemberId("보법다른-유정-승인강사");
         int insertedProfiles = jdbcTemplate.update(
                 """
                 INSERT INTO instructor_profiles (

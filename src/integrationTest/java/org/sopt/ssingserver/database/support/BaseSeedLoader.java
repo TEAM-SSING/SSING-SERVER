@@ -32,20 +32,39 @@ public final class BaseSeedLoader {
                 Integer.class
         );
         Integer requiredResorts = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM resorts WHERE code IN ('HIGH1', 'VIVALDI_PARK')",
+                """
+                SELECT COUNT(*)
+                FROM resorts
+                WHERE code IN (
+                    'HIGH1',
+                    'PHOENIX_PARK',
+                    'VIVALDI_PARK',
+                    'WELLI_HILLI_PARK',
+                    'ELYSIAN_GANGCHON',
+                    'OAK_VALLEY',
+                    'ALPENSIA',
+                    'O2_RESORT',
+                    'KONJIAM_RESORT',
+                    'JISAN_FOREST_RESORT',
+                    'MUJU_DEOGYUSAN_RESORT'
+                )
+                """,
                 Integer.class
         );
         Integer requiredPersonas = jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*)
                 FROM dev_personas
-                WHERE persona_key IN ('consumer-default', 'instructor-approved-default')
+                WHERE persona_key IN (
+                    '대뜸GOAT-성빈-일반강습생',
+                    '보법다른-유정-승인강사'
+                )
                 """,
                 Integer.class
         );
 
         if (activeFeePolicies == null || activeFeePolicies != 1
-                || requiredResorts == null || requiredResorts != 2
+                || requiredResorts == null || requiredResorts != 11
                 || requiredPersonas == null || requiredPersonas != 2) {
             throw new IllegalStateException("migration 필수 데이터 또는 base seed 계약이 충족되지 않았습니다.");
         }

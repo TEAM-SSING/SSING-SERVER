@@ -8,9 +8,23 @@ INSERT INTO seed_contract_assertion (ok)
 SELECT (
     (SELECT COUNT(*) FROM platform_fee_policies WHERE is_active = b'1' AND fee_rate_bps = 0) = 1
     AND
-    (SELECT COUNT(*) FROM resorts) = 9
+    (SELECT COUNT(*) FROM resorts) = 11
     AND
-    (SELECT SUM(pass_fee_amount) FROM resorts) = 245000
+    (SELECT SUM(pass_fee_amount) FROM resorts) = 305000
+    AND
+    (SELECT COUNT(*)
+     FROM resorts
+     WHERE code = 'O2_RESORT'
+       AND name = '오투리조트'
+       AND display_name = '오투리조트'
+       AND pass_fee_amount = 30000) = 1
+    AND
+    (SELECT COUNT(*)
+     FROM resorts
+     WHERE code = 'MUJU_DEOGYUSAN_RESORT'
+       AND name = '무주덕유산리조트'
+       AND display_name = '무주덕유산리조트'
+       AND pass_fee_amount = 30000) = 1
     AND
     (SELECT COUNT(*) FROM dev_personas) = 13
     AND
@@ -18,12 +32,16 @@ SELECT (
      FROM dev_personas persona
      JOIN members member ON member.id = persona.member_id
      WHERE member.role = 'CONSUMER'
-       AND (
-           (persona.persona_key LIKE 'pm-consumer-%'
-            AND member.nickname REGEXP '^목데이터소비자[0-9]{2}$')
-           OR
-           (persona.persona_key = 'consumer-default'
-            AND member.nickname = '가격검증소비자')
+       AND (persona.persona_key, member.nickname) IN (
+           ('폭룡적-예지-일반강습생', '폭룡적 예지'),
+           ('느좋그자체-예림-일반강습생', '느좋 그 자체 예림'),
+           ('감다살-유빈-일반강습생', '감다살 유빈'),
+           ('야르-선문-일반강습생', '야르 선문'),
+           ('난리자베스-채원-일반강습생', '난리자베스 채원'),
+           ('대뜸GOAT-성빈-일반강습생', '대뜸 GOAT 성빈'),
+           ('도파민풀충-나현-일반강습생', '도파민 풀충 나현'),
+           ('레전드갱신중인-지환-일반강습생', '레전드 갱신 중인 지환'),
+           ('갑차기스러운-예슬-일반강습생', '갑차기스러운 예슬')
        )) = 9
     AND
     (SELECT COUNT(*)
@@ -49,19 +67,22 @@ SELECT (
      FROM instructor_profiles profile
      JOIN dev_personas persona ON persona.member_id = profile.member_id
      JOIN members member ON member.id = profile.member_id
-     WHERE (
-         (persona.persona_key LIKE 'pm-instructor-approved-%'
-          AND member.nickname REGEXP '^목데이터강사[0-9]{2}$'
-          AND profile.real_name = member.nickname
-          AND profile.phone REGEXP '^010-0000-[0-9]{4}$'
-          AND profile.birth_date IN ('2000-01-01', '2000-01-02', '2000-01-03'))
-         OR
-         (persona.persona_key = 'instructor-approved-default'
-          AND member.nickname = '가격검증강사'
-          AND profile.real_name = '가격검증강사'
-          AND profile.phone = '010-0000-0000'
-          AND profile.birth_date = '2000-01-04')
-     )) = 4
+     WHERE profile.real_name = member.nickname
+       AND (persona.persona_key, member.nickname) IN (
+           ('기세로다해먹는-도연-승인강사', '기세로 다 해먹는 도연'),
+           ('폼미친-성빈-승인강사', '폼 미친 성빈'),
+           ('뉴런공유중인-유정-승인강사', '뉴런 공유 중인 유정'),
+           ('보법다른-유정-승인강사', '보법 다른 유정')
+       )
+       AND (
+           (persona.persona_key = '보법다른-유정-승인강사'
+            AND profile.phone = '010-0000-0000'
+            AND profile.birth_date = '2000-01-04')
+           OR
+           (persona.persona_key <> '보법다른-유정-승인강사'
+            AND profile.phone REGEXP '^010-0000-[0-9]{4}$'
+            AND profile.birth_date IN ('2000-01-01', '2000-01-02', '2000-01-03'))
+       )) = 4
     AND
     (SELECT COUNT(*) FROM instructor_profile_certificates) = 4
     AND
@@ -138,17 +159,17 @@ SELECT (
     (SELECT COUNT(*)
      FROM matching_requests request
      JOIN dev_personas persona ON persona.member_id = request.member_id
-     WHERE persona.persona_key = 'pm-consumer-007') = 4
+     WHERE persona.persona_key = '도파민풀충-나현-일반강습생') = 4
     AND
     (SELECT COUNT(*)
      FROM matching_requests request
      JOIN dev_personas persona ON persona.member_id = request.member_id
-     WHERE persona.persona_key = 'pm-consumer-008') = 4
+     WHERE persona.persona_key = '레전드갱신중인-지환-일반강습생') = 4
     AND
     (SELECT COUNT(*)
      FROM matching_requests request
      JOIN dev_personas persona ON persona.member_id = request.member_id
-     WHERE persona.persona_key = 'pm-consumer-009') = 2
+     WHERE persona.persona_key = '갑차기스러운-예슬-일반강습생') = 2
     AND
     (SELECT COUNT(*) FROM matching_request_groups) = 0
     AND

@@ -292,15 +292,15 @@ APP_STATE="정상 실행(health UP)"
 LAST_SUCCESS_STAGE="health 확인"
 
 CURRENT_STAGE="persona 한글 읽기 smoke"
-smoke_persona="consumer-default"
+smoke_persona="대뜸GOAT-성빈-일반강습생"
 if [[ "$SAFE_SCENARIO" == "pm-full-requested-catalog" ]]; then
-  smoke_persona="qa-free-consumer"
+  smoke_persona="냅다레전드-유빈-일반강습생"
 fi
 persona_response="$(curl -fsS --max-time 10 http://127.0.0.1:8080/dev/auth/personas)"
 grep -Fq "$smoke_persona" <<< "$persona_response" \
   || dev_fail "기대 persona를 dev 인증 목록에서 읽지 못했습니다."
-grep -Fq '"nickname":"가격검증소비자"' <<< "$persona_response" \
-  || dev_fail "dev 인증 목록에서 consumer-default의 정확한 한글 닉네임을 읽지 못했습니다. Seed 문자셋을 확인하세요."
+grep -Fq '"nickname":"대뜸 GOAT 성빈"' <<< "$persona_response" \
+  || dev_fail "dev 인증 목록에서 대뜸GOAT-성빈-일반강습생의 정확한 한글 닉네임을 읽지 못했습니다. Seed 문자셋을 확인하세요."
 LAST_SUCCESS_STAGE="persona 한글 읽기 smoke"
 
 CURRENT_STAGE="완료"

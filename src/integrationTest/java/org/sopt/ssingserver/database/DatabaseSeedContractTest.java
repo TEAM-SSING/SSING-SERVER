@@ -28,6 +28,7 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sopt.ssingserver.database.support.BaseSeedLoader;
 import org.sopt.ssingserver.database.support.DatabaseCleaner;
 import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
@@ -108,6 +109,73 @@ class DatabaseSeedContractTest {
     }
 
     @Test
+    void base_seed는_최종_API_계약의_리조트_11종을_제공한다() {
+        List<String> resorts = jdbcTemplate.query(
+                """
+                SELECT CONCAT(code, '|', name, '|', display_name, '|', pass_fee_amount)
+                FROM resorts
+                ORDER BY code
+                """,
+                (resultSet, rowNumber) -> resultSet.getString(1)
+        );
+
+        assertThat(resorts).containsExactlyInAnyOrder(
+                "HIGH1|하이원리조트|하이원리조트|0",
+                "PHOENIX_PARK|휘닉스파크|휘닉스파크|30000",
+                "VIVALDI_PARK|비발디파크|비발디파크|25000",
+                "WELLI_HILLI_PARK|웰리힐리파크|웰리힐리파크|30000",
+                "ELYSIAN_GANGCHON|엘리시안 강촌|엘리시안 강촌|35000",
+                "OAK_VALLEY|오크밸리|오크밸리|30000",
+                "ALPENSIA|알펜시아|알펜시아|30000",
+                "O2_RESORT|오투리조트|오투리조트|30000",
+                "KONJIAM_RESORT|곤지암리조트|곤지암리조트|35000",
+                "JISAN_FOREST_RESORT|지산포레스트리조트|지산포레스트리조트|30000",
+                "MUJU_DEOGYUSAN_RESORT|무주덕유산리조트|무주덕유산리조트|30000"
+        );
+    }
+
+    @Test
+    void 자동_Dev_배포용_base_verify_SQL을_실제_MySQL에서_검증한다() {
+        runSql("db/seed/verify-base.sql");
+    }
+
+    @ParameterizedTest(name = "{0} 매칭 요청 생성")
+    @ValueSource(strings = {"O2_RESORT", "MUJU_DEOGYUSAN_RESORT"})
+    void base_only_신규_리조트로_매칭_요청을_생성할_수_있다(String resortCode) throws Exception {
+        Long memberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
+
+        mockMvc.perform(post("/api/v1/consumer/matching-requests")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "resort": "%s",
+                                  "sport": "SKI",
+                                  "lessonLevel": "FIRST_TIME",
+                                  "requestedDurationMinutes": [120],
+                                  "participants": [{"age": 24, "gender": "FEMALE"}],
+                                  "equipmentReady": true
+                                }
+                                """.formatted(resortCode)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true));
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM matching_requests request
+                JOIN resorts resort ON resort.id = request.resort_id
+                WHERE request.member_id = ?
+                  AND resort.code = ?
+                """,
+                Integer.class,
+                memberId,
+                resortCode
+        )).isEqualTo(1);
+    }
+
+    @Test
     void PM_snapshot은_원본_계약과_일치하고_명시적_scheduler_실행에서만_GROUPED로_전이한다() throws Exception {
         applyScenario("pm-full-requested-catalog");
 
@@ -138,10 +206,10 @@ class DatabaseSeedContractTest {
         PmSeedSnapshotContract.assertMatchesIgnoringConsumerPersona(
                 jdbcTemplate,
                 objectMapper,
-                "qa-free-consumer"
+                "냅다레전드-유빈-일반강습생"
         );
 
-        Long memberId = personaMemberId("qa-free-consumer");
+        Long memberId = personaMemberId("냅다레전드-유빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM matching_requests WHERE member_id = ?",
@@ -170,7 +238,7 @@ class DatabaseSeedContractTest {
     void 저장된_강사조건은_제안이_없어도_매칭대기_복구응답으로_조회된다() throws Exception {
         applyScenario("matching-price-vivaldi");
         String instructorToken = accessTokenProvider.createAccessToken(
-                personaMemberId("instructor-approved-default"),
+                personaMemberId("보법다른-유정-승인강사"),
                 MemberRole.INSTRUCTOR
         );
 
@@ -200,8 +268,8 @@ class DatabaseSeedContractTest {
         applyScenario("matching-price-vivaldi");
         assertMandatoryAndSeedInvariants();
 
-        Long consumerMemberId = personaMemberId("consumer-default");
-        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
@@ -275,7 +343,7 @@ class DatabaseSeedContractTest {
     void 후보가_없는_요청은_scheduler_실행_후에도_SEARCHING을_유지한다() throws Exception {
         applyScenario("matching-no-candidate-alpensia");
         String consumerToken = accessTokenProvider.createAccessToken(
-                personaMemberId("consumer-default"),
+                personaMemberId("대뜸GOAT-성빈-일반강습생"),
                 MemberRole.CONSUMER
         );
 
@@ -306,8 +374,8 @@ class DatabaseSeedContractTest {
     @Test
     void MATCHED인데_결제자식만_만료된_이상데이터는_active에서_NONE으로_닫는다() throws Exception {
         applyScenario("matching-price-vivaldi");
-        Long consumerMemberId = personaMemberId("consumer-default");
-        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
@@ -338,7 +406,7 @@ class DatabaseSeedContractTest {
     @Test
     void 한_소비자는_기존_활성_요청을_취소한_뒤에만_다음_요청을_생성한다() throws Exception {
         applyScenario("matching-multi-request-oak");
-        Long memberId = personaMemberId("pm-consumer-007");
+        Long memberId = personaMemberId("도파민풀충-나현-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
         List<String> requestNames = List.of("a", "b", "c", "d");
         Long[] matchingRequestIds = new Long[requestNames.size()];
@@ -424,7 +492,7 @@ class DatabaseSeedContractTest {
     @Test
     void 같은_소비자의_동시_생성_요청은_하나만_201이고_나머지는_409다() throws Exception {
         applyScenario("matching-multi-request-oak");
-        Long memberId = personaMemberId("pm-consumer-007");
+        Long memberId = personaMemberId("도파민풀충-나현-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
         String requestBody = requestJson(
                 "db/seed/scenarios/matching-multi-request-oak/request-007-a.json"
@@ -921,7 +989,7 @@ class DatabaseSeedContractTest {
                 FROM instructor_matching_settings setting
                 JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
                 JOIN dev_personas persona ON persona.member_id = profile.member_id
-                WHERE persona.persona_key = 'instructor-approved-default'
+                WHERE persona.persona_key = '보법다른-유정-승인강사'
                   AND setting.is_exposed = 1
                   AND setting.is_equipment_ready = 1
                 """,
@@ -949,8 +1017,8 @@ class DatabaseSeedContractTest {
         assertThat(relations)
                 .extracting(PmTransitionRelation::requestKey)
                 .containsExactlyInAnyOrder(
-                        "pm-consumer-001:HIGH1:SKI:BEGINNER",
-                        "consumer-default:VIVALDI_PARK:SKI:FIRST_TIME"
+                        "폭룡적-예지-일반강습생:HIGH1:SKI:BEGINNER",
+                        "대뜸GOAT-성빈-일반강습생:VIVALDI_PARK:SKI:FIRST_TIME"
                 );
         assertThat(relations).allSatisfy(relation -> {
             assertThat(relation.groupId()).isPositive();

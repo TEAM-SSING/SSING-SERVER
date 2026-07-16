@@ -23,14 +23,14 @@ SELECT (
     (SELECT COUNT(*)
      FROM dev_personas persona
      JOIN members member ON member.id = persona.member_id
-     WHERE persona.persona_key IN ('consumer-default', 'instructor-approved-default')
+     WHERE persona.persona_key IN ('대뜸GOAT-성빈-일반강습생', '보법다른-유정-승인강사')
        AND member.status = 'ACTIVE') = 2
     AND
     (SELECT COUNT(*)
      FROM instructor_profiles profile
      JOIN dev_personas persona ON persona.member_id = profile.member_id
      JOIN resorts resort ON resort.id = profile.resort_id
-     WHERE persona.persona_key = 'instructor-approved-default'
+     WHERE persona.persona_key = '보법다른-유정-승인강사'
        AND persona.template = 'INSTRUCTOR_APPROVED'
        AND profile.approval_status = 'APPROVED'
        AND profile.approved_at IS NOT NULL
@@ -40,14 +40,14 @@ SELECT (
      FROM instructor_profile_certificates certificate
      JOIN instructor_profiles profile ON profile.id = certificate.instructor_profile_id
      JOIN dev_personas persona ON persona.member_id = profile.member_id
-     WHERE persona.persona_key = 'instructor-approved-default'
+     WHERE persona.persona_key = '보법다른-유정-승인강사'
        AND certificate.certificate_type = 'KSIA_SKI_LEVEL_1') = 1
     AND
     (SELECT COUNT(*)
      FROM instructor_matching_settings setting
      JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
      JOIN dev_personas persona ON persona.member_id = profile.member_id
-     WHERE persona.persona_key = 'instructor-approved-default'
+     WHERE persona.persona_key = '보법다른-유정-승인강사'
        AND setting.sport = 'SKI'
        AND setting.max_headcount = 3
        AND setting.is_equipment_ready = b'1'
@@ -59,7 +59,7 @@ SELECT (
        ON setting.id = level.instructor_matching_setting_id
      JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
      JOIN dev_personas persona ON persona.member_id = profile.member_id
-     WHERE persona.persona_key = 'instructor-approved-default'
+     WHERE persona.persona_key = '보법다른-유정-승인강사'
        AND level.lesson_level IN ('FIRST_TIME', 'BEGINNER')) = 2
     AND
     (SELECT COUNT(*)
@@ -68,14 +68,14 @@ SELECT (
        ON setting.id = duration.instructor_matching_setting_id
      JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
      JOIN dev_personas persona ON persona.member_id = profile.member_id
-     WHERE persona.persona_key = 'instructor-approved-default'
+     WHERE persona.persona_key = '보법다른-유정-승인강사'
        AND duration.available_duration_minutes = 120) = 1
     AND
     (SELECT COUNT(*)
      FROM instructor_price_policies policy
      JOIN instructor_profiles profile ON profile.id = policy.instructor_profile_id
      JOIN dev_personas persona ON persona.member_id = profile.member_id
-     WHERE persona.persona_key = 'instructor-approved-default'
+     WHERE persona.persona_key = '보법다른-유정-승인강사'
        AND policy.is_active = b'1'
        AND policy.base_price_amount = 60000
        AND policy.additional_person_price_amount = 20000) = 1

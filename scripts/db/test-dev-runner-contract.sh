@@ -201,9 +201,9 @@ curl() {
   if [[ "$joined" == *"/dev/auth/personas"* ]]; then
     [[ "${FAKE_FAIL_STAGE:-}" != "persona" ]] || return 22
     if [[ "${FAKE_FAIL_STAGE:-}" == "persona-encoding" ]]; then
-      printf '{"data":{"personas":[{"personaKey":"qa-free-consumer","nickname":"QA 자유 소비자"},{"personaKey":"consumer-default","nickname":"ê°€ê²©ê²€ì¦ì†œë¹„ìž"}]}}\n'
+      printf '{"data":{"personas":[{"personaKey":"냅다레전드-유빈-일반강습생","nickname":"냅다 레전드 유빈"},{"personaKey":"대뜸GOAT-성빈-일반강습생","nickname":"ëë¸ GOAT ì±ë¹"}]}}\n'
     else
-      printf '{"data":{"personas":[{"personaKey":"qa-free-consumer","nickname":"QA 자유 소비자"},{"personaKey":"consumer-default","nickname":"가격검증소비자"}]}}\n'
+      printf '{"data":{"personas":[{"personaKey":"냅다레전드-유빈-일반강습생","nickname":"냅다 레전드 유빈"},{"personaKey":"대뜸GOAT-성빈-일반강습생","nickname":"대뜸 GOAT 성빈"}]}}\n'
     fi
     return 0
   fi
