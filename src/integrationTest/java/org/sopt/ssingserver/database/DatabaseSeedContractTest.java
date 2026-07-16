@@ -134,6 +134,11 @@ class DatabaseSeedContractTest {
         );
     }
 
+    @Test
+    void 자동_Dev_배포용_base_verify_SQL을_실제_MySQL에서_검증한다() {
+        runSql("db/seed/verify-base.sql");
+    }
+
     @ParameterizedTest(name = "{0} 매칭 요청 생성")
     @ValueSource(strings = {"O2_RESORT", "MUJU_DEOGYUSAN_RESORT"})
     void base_only_신규_리조트로_매칭_요청을_생성할_수_있다(String resortCode) throws Exception {
