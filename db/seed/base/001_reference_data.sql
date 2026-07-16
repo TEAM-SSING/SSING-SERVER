@@ -1,4 +1,5 @@
--- Source: PM sheet resorts!A4:C12. display_name is normalized from name.
+-- Source: PM sheet resorts!A4:C12 plus the final API contract's Base-only resort catalog.
+-- O2/Muju pass fees are synthetic local/dev fixture values, not confirmed operating prices.
 START TRANSACTION;
 
 SET @seed_now = UTC_TIMESTAMP(6);
@@ -19,6 +20,8 @@ INSERT INTO resorts (
     ('VIVALDI_PARK', '비발디파크', '비발디파크', 25000, @seed_now, @seed_now),
     ('OAK_VALLEY', '오크밸리', '오크밸리', 30000, @seed_now, @seed_now),
     ('ELYSIAN_GANGCHON', '엘리시안 강촌', '엘리시안 강촌', 35000, @seed_now, @seed_now),
-    ('WELLI_HILLI_PARK', '웰리힐리파크', '웰리힐리파크', 30000, @seed_now, @seed_now);
+    ('WELLI_HILLI_PARK', '웰리힐리파크', '웰리힐리파크', 30000, @seed_now, @seed_now),
+    ('O2_RESORT', '오투리조트', '오투리조트', 30000, @seed_now, @seed_now),
+    ('MUJU_DEOGYUSAN_RESORT', '무주덕유산리조트', '무주덕유산리조트', 30000, @seed_now, @seed_now);
 
 COMMIT;

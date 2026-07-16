@@ -16,7 +16,7 @@ source:
   participant: matching_request_participants!A12:E12
 personas:
   consumer:
-    persona_key: consumer-default
+    persona_key: 대뜸GOAT-성빈-비발디가격결제-강습생
     template: GENERAL_CONSUMER
     technical_source: member_consumer_005
 start_state:

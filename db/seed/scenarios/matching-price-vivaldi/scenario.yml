@@ -19,11 +19,11 @@ source:
   price: instructor_price_policies!A7:G7
 personas:
   consumer:
-    persona_key: consumer-default
+    persona_key: 대뜸GOAT-성빈-비발디가격결제-강습생
     template: GENERAL_CONSUMER
     source_key: member_consumer_006
   instructor:
-    persona_key: instructor-approved-default
+    persona_key: 보법다른-유정-비발디가격결제-강사
     template: INSTRUCTOR_APPROVED
     source_key: member_instructor_004
 start_state:

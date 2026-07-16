@@ -13,17 +13,17 @@ INSERT INTO members (
     created_at,
     updated_at
 ) VALUES
-    (@catalog_member_id_base + 1, '목데이터소비자01', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 2, '목데이터소비자02', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 3, '목데이터소비자03', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 4, '목데이터소비자04', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 5, '목데이터소비자05', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 6, '목데이터소비자07', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 7, '목데이터소비자08', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 8, '목데이터소비자09', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 9, '목데이터강사01', NULL, 'INSTRUCTOR', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 10, '목데이터강사02', NULL, 'INSTRUCTOR', 'ACTIVE', @seed_now, @seed_now),
-    (@catalog_member_id_base + 11, '목데이터강사03', NULL, 'INSTRUCTOR', 'ACTIVE', @seed_now, @seed_now);
+    (@catalog_member_id_base + 1, '폭룡적 예지', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 2, '느좋 그 자체 예림', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 3, '감다살 유빈', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 4, '야르 선문', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 5, '난리자베스 채원', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 6, '도파민 풀충 나현', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 7, '레전드 갱신 중인 지환', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 8, '갑차기스러운 예슬', NULL, 'CONSUMER', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 9, '기세로 다 해먹는 도연', NULL, 'INSTRUCTOR', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 10, '폼 미친 성빈', NULL, 'INSTRUCTOR', 'ACTIVE', @seed_now, @seed_now),
+    (@catalog_member_id_base + 11, '뉴런 공유 중인 유정', NULL, 'INSTRUCTOR', 'ACTIVE', @seed_now, @seed_now);
 
 INSERT INTO dev_personas (
     persona_key,
@@ -32,17 +32,17 @@ INSERT INTO dev_personas (
     created_at,
     updated_at
 ) VALUES
-    ('pm-consumer-001', @catalog_member_id_base + 1, 'GENERAL_CONSUMER', @seed_now, @seed_now),
-    ('pm-consumer-002', @catalog_member_id_base + 2, 'GENERAL_CONSUMER', @seed_now, @seed_now),
-    ('pm-consumer-003', @catalog_member_id_base + 3, 'GENERAL_CONSUMER', @seed_now, @seed_now),
-    ('pm-consumer-004', @catalog_member_id_base + 4, 'GENERAL_CONSUMER', @seed_now, @seed_now),
-    ('pm-consumer-005', @catalog_member_id_base + 5, 'GENERAL_CONSUMER', @seed_now, @seed_now),
-    ('pm-consumer-007', @catalog_member_id_base + 6, 'GENERAL_CONSUMER', @seed_now, @seed_now),
-    ('pm-consumer-008', @catalog_member_id_base + 7, 'GENERAL_CONSUMER', @seed_now, @seed_now),
-    ('pm-consumer-009', @catalog_member_id_base + 8, 'GENERAL_CONSUMER', @seed_now, @seed_now),
-    ('pm-instructor-approved-001', @catalog_member_id_base + 9, 'INSTRUCTOR_APPROVED', @seed_now, @seed_now),
-    ('pm-instructor-approved-002', @catalog_member_id_base + 10, 'INSTRUCTOR_APPROVED', @seed_now, @seed_now),
-    ('pm-instructor-approved-003', @catalog_member_id_base + 11, 'INSTRUCTOR_APPROVED', @seed_now, @seed_now);
+    ('폭룡적-예지-하이원초급2인-강습생', @catalog_member_id_base + 1, 'GENERAL_CONSUMER', @seed_now, @seed_now),
+    ('느좋그자체-예림-휘닉스보드4인-강습생', @catalog_member_id_base + 2, 'GENERAL_CONSUMER', @seed_now, @seed_now),
+    ('감다살-유빈-곤지암첫스키-강습생', @catalog_member_id_base + 3, 'GENERAL_CONSUMER', @seed_now, @seed_now),
+    ('야르-선문-지산중급보드-강습생', @catalog_member_id_base + 4, 'GENERAL_CONSUMER', @seed_now, @seed_now),
+    ('난리자베스-채원-알펜시아무후보-강습생', @catalog_member_id_base + 5, 'GENERAL_CONSUMER', @seed_now, @seed_now),
+    ('도파민풀충-나현-오크다중요청-강습생', @catalog_member_id_base + 6, 'GENERAL_CONSUMER', @seed_now, @seed_now),
+    ('레전드갱신중인-지환-엘리시안아동5인-강습생', @catalog_member_id_base + 7, 'GENERAL_CONSUMER', @seed_now, @seed_now),
+    ('갑차기스러운-예슬-웰리힐리복수종목-강습생', @catalog_member_id_base + 8, 'GENERAL_CONSUMER', @seed_now, @seed_now),
+    ('기세로다해먹는-도연-하이원초급2인-강사', @catalog_member_id_base + 9, 'INSTRUCTOR_APPROVED', @seed_now, @seed_now),
+    ('폼미친-성빈-하이원5인-강사', @catalog_member_id_base + 10, 'INSTRUCTOR_APPROVED', @seed_now, @seed_now),
+    ('뉴런공유중인-유정-곤지암중상급-강사', @catalog_member_id_base + 11, 'INSTRUCTOR_APPROVED', @seed_now, @seed_now);
 
 SET @high1_resort_id = (SELECT id FROM resorts WHERE code = 'HIGH1');
 SET @konjiam_resort_id = (SELECT id FROM resorts WHERE code = 'KONJIAM_RESORT');
@@ -68,7 +68,7 @@ INSERT INTO instructor_profiles (
     (
         @catalog_member_id_base + 9,
         @high1_resort_id,
-        '목데이터강사01',
+        '기세로 다 해먹는 도연',
         '010-0000-0101',
         'FEMALE',
         '2000-01-01',
@@ -85,7 +85,7 @@ INSERT INTO instructor_profiles (
     (
         @catalog_member_id_base + 10,
         @high1_resort_id,
-        '목데이터강사02',
+        '폼 미친 성빈',
         '010-0000-0102',
         'MALE',
         '2000-01-02',
@@ -102,7 +102,7 @@ INSERT INTO instructor_profiles (
     (
         @catalog_member_id_base + 11,
         @konjiam_resort_id,
-        '목데이터강사03',
+        '뉴런 공유 중인 유정',
         '010-0000-0103',
         'MALE',
         '2000-01-03',
@@ -121,25 +121,25 @@ SET @instructor_profile_001_id = (
     SELECT profile.id
     FROM instructor_profiles profile
     JOIN dev_personas persona ON persona.member_id = profile.member_id
-    WHERE persona.persona_key = 'pm-instructor-approved-001'
+    WHERE persona.persona_key = '기세로다해먹는-도연-하이원초급2인-강사'
 );
 SET @instructor_profile_002_id = (
     SELECT profile.id
     FROM instructor_profiles profile
     JOIN dev_personas persona ON persona.member_id = profile.member_id
-    WHERE persona.persona_key = 'pm-instructor-approved-002'
+    WHERE persona.persona_key = '폼미친-성빈-하이원5인-강사'
 );
 SET @instructor_profile_003_id = (
     SELECT profile.id
     FROM instructor_profiles profile
     JOIN dev_personas persona ON persona.member_id = profile.member_id
-    WHERE persona.persona_key = 'pm-instructor-approved-003'
+    WHERE persona.persona_key = '뉴런공유중인-유정-곤지암중상급-강사'
 );
 SET @instructor_profile_004_id = (
     SELECT profile.id
     FROM instructor_profiles profile
     JOIN dev_personas persona ON persona.member_id = profile.member_id
-    WHERE persona.persona_key = 'instructor-approved-default'
+    WHERE persona.persona_key = '보법다른-유정-비발디가격결제-강사'
 );
 
 INSERT INTO instructor_profile_certificates (
@@ -213,15 +213,15 @@ INSERT INTO instructor_price_policies (
     (@instructor_profile_003_id, 200000, 50000, b'1', @seed_now, @seed_now),
     (@instructor_profile_004_id, 60000, 20000, b'1', @seed_now, @seed_now);
 
-SET @member_consumer_001_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'pm-consumer-001');
-SET @member_consumer_002_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'pm-consumer-002');
-SET @member_consumer_003_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'pm-consumer-003');
-SET @member_consumer_004_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'pm-consumer-004');
-SET @member_consumer_005_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'pm-consumer-005');
-SET @member_consumer_006_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'consumer-default');
-SET @member_consumer_007_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'pm-consumer-007');
-SET @member_consumer_008_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'pm-consumer-008');
-SET @member_consumer_009_id = (SELECT member_id FROM dev_personas WHERE persona_key = 'pm-consumer-009');
+SET @member_consumer_001_id = (SELECT member_id FROM dev_personas WHERE persona_key = '폭룡적-예지-하이원초급2인-강습생');
+SET @member_consumer_002_id = (SELECT member_id FROM dev_personas WHERE persona_key = '느좋그자체-예림-휘닉스보드4인-강습생');
+SET @member_consumer_003_id = (SELECT member_id FROM dev_personas WHERE persona_key = '감다살-유빈-곤지암첫스키-강습생');
+SET @member_consumer_004_id = (SELECT member_id FROM dev_personas WHERE persona_key = '야르-선문-지산중급보드-강습생');
+SET @member_consumer_005_id = (SELECT member_id FROM dev_personas WHERE persona_key = '난리자베스-채원-알펜시아무후보-강습생');
+SET @member_consumer_006_id = (SELECT member_id FROM dev_personas WHERE persona_key = '대뜸GOAT-성빈-비발디가격결제-강습생');
+SET @member_consumer_007_id = (SELECT member_id FROM dev_personas WHERE persona_key = '도파민풀충-나현-오크다중요청-강습생');
+SET @member_consumer_008_id = (SELECT member_id FROM dev_personas WHERE persona_key = '레전드갱신중인-지환-엘리시안아동5인-강습생');
+SET @member_consumer_009_id = (SELECT member_id FROM dev_personas WHERE persona_key = '갑차기스러운-예슬-웰리힐리복수종목-강습생');
 
 SET @phoenix_resort_id = (SELECT id FROM resorts WHERE code = 'PHOENIX_PARK');
 SET @jisan_resort_id = (SELECT id FROM resorts WHERE code = 'JISAN_FOREST_RESORT');

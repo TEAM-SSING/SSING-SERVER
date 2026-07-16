@@ -50,7 +50,7 @@ INSERT INTO dev_personas (
     created_at,
     updated_at
 ) VALUES (
-    'pm-consumer-007',
+    '도파민풀충-나현-오크다중요청-강습생',
     @scenario_member_id,
     'GENERAL_CONSUMER',
     @seed_now,

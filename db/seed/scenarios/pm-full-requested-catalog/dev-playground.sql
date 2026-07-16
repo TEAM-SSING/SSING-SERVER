@@ -11,7 +11,7 @@ INSERT INTO members (
     created_at,
     updated_at
 ) VALUES (
-    'QA 자유 소비자',
+    '냅다 레전드 유빈',
     NULL,
     'CONSUMER',
     'ACTIVE',
@@ -28,7 +28,7 @@ INSERT INTO dev_personas (
     created_at,
     updated_at
 ) VALUES (
-    'qa-free-consumer',
+    '냅다레전드-유빈-자유QA-강습생',
     @qa_free_consumer_member_id,
     'GENERAL_CONSUMER',
     @qa_seed_now,

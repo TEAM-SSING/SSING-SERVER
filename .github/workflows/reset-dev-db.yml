@@ -321,7 +321,7 @@ jobs:
             fi
             if [ "$SCENARIO_KEY" = "pm-full-requested-catalog" ]; then
               echo ""
-              echo "> 이 시나리오는 앱 재기동 뒤 scheduler에 따라 자연스럽게 바뀔 수 있습니다. 새 QA는 \`qa-free-consumer\`로 시작하세요."
+              echo "> 이 시나리오는 앱 재기동 뒤 scheduler에 따라 자연스럽게 바뀔 수 있습니다. 새 QA는 \`냅다레전드-유빈-자유QA-강습생\`으로 시작하세요."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 

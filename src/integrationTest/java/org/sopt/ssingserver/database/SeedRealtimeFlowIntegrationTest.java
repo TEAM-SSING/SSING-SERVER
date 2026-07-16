@@ -149,8 +149,8 @@ class SeedRealtimeFlowIntegrationTest {
     // 실제 네트워크 구독부터 REST 상태 변경, 개인 큐 이벤트, 최종 DB 조회까지 한 흐름으로 증명한다.
     @Test
     void seed_사용자들이_실제_STOMP로_매칭과_강습_이벤트를_받고_REST_DB_상태도_일치한다() throws Exception {
-        Long consumerMemberId = personaMemberId("consumer-default");
-        Long instructorMemberId = personaMemberId("instructor-approved-default");
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-비발디가격결제-강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-비발디가격결제-강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
 
