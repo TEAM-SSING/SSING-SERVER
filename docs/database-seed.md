@@ -22,13 +22,55 @@
 
 ### Base seed
 
-- 스키장 9곳과 리프트권 금액
-- API 흐름 검증용 익명 소비자 `consumer-default`
-- 승인 강사 `instructor-approved-default`
+- 최종 API 계약의 리조트 11곳과 패스비
+- 가격·결제 흐름 검증용 강습생 `대뜸GOAT-성빈-비발디가격결제-강습생`
+- 가격·결제 흐름 검증용 승인 강사 `보법다른-유정-비발디가격결제-강사`
+
+리조트 코드는 클라이언트가 매칭 요청에 보내는 값이다.
+
+| code | 표시 이름 | passFeeAmount | 출처 |
+| --- | --- | ---: | --- |
+| `HIGH1` | 하이원리조트 | 0 | PM 원본 |
+| `PHOENIX_PARK` | 휘닉스파크 | 30,000 | PM 원본 |
+| `VIVALDI_PARK` | 비발디파크 | 25,000 | PM 원본 |
+| `WELLI_HILLI_PARK` | 웰리힐리파크 | 30,000 | PM 원본 |
+| `ELYSIAN_GANGCHON` | 엘리시안 강촌 | 35,000 | PM 원본 |
+| `OAK_VALLEY` | 오크밸리 | 30,000 | PM 원본 |
+| `ALPENSIA` | 알펜시아 | 30,000 | PM 원본 |
+| `O2_RESORT` | 오투리조트 | 30,000 | Base-only 합성 fixture |
+| `KONJIAM_RESORT` | 곤지암리조트 | 35,000 | PM 원본 |
+| `JISAN_FOREST_RESORT` | 지산포레스트리조트 | 30,000 | PM 원본 |
+| `MUJU_DEOGYUSAN_RESORT` | 무주덕유산리조트 | 30,000 | Base-only 합성 fixture |
+
+오투·무주의 30,000원은 local/dev 테스트를 위한 합성값이며 운영 가격으로 간주하지 않는다.
 
 활성 플랫폼 수수료 정책 1건(현재 0%)은 Base seed가 아니라 Flyway migration이 소유한다.
 따라서 새 DB는 migration만 실행해도 필수 정책이 생기고, Base seed는 그 이후 테스트
 시나리오가 공통으로 참조할 데이터만 넣는다.
+
+### 페르소나 명명 규칙
+
+- `nickname`은 개발자 콘솔 목록에서 빠르게 기억하기 위한 짧은 표시명이다.
+- `personaKey`는 seed 관계, API 로그인, 로그에서 시나리오와 역할을 추적하는 식별자다.
+- `personaKey`는 `재미있는수식어-한글이름-핵심시나리오-역할` 의미를 담는다.
+- 한글 이름은 팀원이 담당하거나 소유한다는 뜻이 아니라, 익숙한 이름을 기억 장치로 차용한 것이다.
+
+| nickname | personaKey | 핵심 용도 |
+| --- | --- | --- |
+| 대뜸 GOAT 성빈 | `대뜸GOAT-성빈-비발디가격결제-강습생` | 비발디 가격·결제 강습생 |
+| 보법 다른 유정 | `보법다른-유정-비발디가격결제-강사` | 비발디 가격·결제 강사 |
+| 폭룡적 예지 | `폭룡적-예지-하이원초급2인-강습생` | 하이원 초급 2인 |
+| 느좋 그 자체 예림 | `느좋그자체-예림-휘닉스보드4인-강습생` | 휘닉스 보드 4인 |
+| 감다살 유빈 | `감다살-유빈-곤지암첫스키-강습생` | 곤지암 첫 스키 |
+| 야르 선문 | `야르-선문-지산중급보드-강습생` | 지산 중급 보드 |
+| 난리자베스 채원 | `난리자베스-채원-알펜시아무후보-강습생` | 알펜시아 후보 없음 |
+| 도파민 풀충 나현 | `도파민풀충-나현-오크다중요청-강습생` | 오크밸리 다중 요청 |
+| 레전드 갱신 중인 지환 | `레전드갱신중인-지환-엘리시안아동5인-강습생` | 엘리시안 아동 5인 |
+| 갑차기스러운 예슬 | `갑차기스러운-예슬-웰리힐리복수종목-강습생` | 웰리힐리 복수 종목 |
+| 기세로 다 해먹는 도연 | `기세로다해먹는-도연-하이원초급2인-강사` | 하이원 초급 2인 강사 |
+| 폼 미친 성빈 | `폼미친-성빈-하이원5인-강사` | 하이원 5인 강사 |
+| 뉴런 공유 중인 유정 | `뉴런공유중인-유정-곤지암중상급-강사` | 곤지암 중상급 강사 |
+| 냅다 레전드 유빈 | `냅다레전드-유빈-자유QA-강습생` | 활성 요청 없는 자유 QA 시작점 |
 
 ### Scenario seed
 
@@ -93,7 +135,7 @@ workflow를 추가로 실행한다.
 
 자동 배포와 수동 reset은 dev DB 전체를 다시 만들기 때문에 기존 access token과 resource ID를
 계속 사용하면 안 된다. `pm-full-requested-catalog`를 골랐다면 새 QA는 요청이 없는
-`qa-free-consumer`로 시작한다. 이 시나리오는 canonical snapshot을 먼저 검증한 뒤 dev 전용
+`냅다레전드-유빈-자유QA-강습생`으로 시작한다. 이 시나리오는 canonical snapshot을 먼저 검증한 뒤 dev 전용
 playground 데이터를 더하고, scheduler 기본 설정을 켠 채 앱을 재기동하므로 시간이 지나면서
 상태가 자연스럽게 바뀔 수 있다.
 
@@ -137,11 +179,11 @@ cp config/application-local.example.yml application-local.yml
 ```bash
 curl -X POST http://localhost:8080/dev/auth/token \
   -H 'Content-Type: application/json' \
-  -d '{"personaKey":"consumer-default"}'
+  -d '{"personaKey":"대뜸GOAT-성빈-비발디가격결제-강습생"}'
 
 curl -X POST http://localhost:8080/dev/auth/token \
   -H 'Content-Type: application/json' \
-  -d '{"personaKey":"instructor-approved-default"}'
+  -d '{"personaKey":"보법다른-유정-비발디가격결제-강사"}'
 ```
 
 응답의 access token을 REST 요청의 `Authorization: Bearer <token>`에 넣는다.
@@ -191,6 +233,7 @@ db/seed/scenarios/pm-full-requested-catalog/expected-snapshot.tsv
 
 `source-mapping.tsv`는 원본 105행의 반영·제외 판단을 기록한다. `expected-snapshot.tsv`는
 반영된 103행을 리조트 9개, 소비자 9명, 강사 4명, 요청 16개의 38개 DB 묶음으로 연결한다.
+Base seed의 전체 리조트는 11개지만, 이 snapshot의 리조트 9개는 PM 원본 범위만 추적한다.
 통합 테스트는 이 계약과 실제 MySQL의 소비자·리조트·종목·레벨·가격·자격·참가자 관계를
 모두 비교한다. 따라서 총개수는 같아도 서로 잘못 연결된 seed는 실패한다.
 
