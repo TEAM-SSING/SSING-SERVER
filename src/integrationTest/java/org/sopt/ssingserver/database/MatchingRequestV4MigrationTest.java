@@ -7,46 +7,25 @@ import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationVersion;
-import org.flywaydb.core.api.configuration.FluentConfiguration;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
+@Tag("legacy-migration")
 class MatchingRequestV4MigrationTest {
 
     private static final long MEMBER_ID = 1L;
     private static final long RESORT_ID = 1L;
-    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
-            .withDatabaseName("ssing_matching_request_migration")
-            .withUsername("ssing")
-            .withPassword("ssing");
-
-    private static final JdbcTemplate JDBC_TEMPLATE;
-
-    static {
-        MYSQL.start();
-        JDBC_TEMPLATE = new JdbcTemplate(new DriverManagerDataSource(
-                MYSQL.getJdbcUrl(),
-                MYSQL.getUsername(),
-                MYSQL.getPassword()
-        ));
-    }
+    private static final JdbcTemplate JDBC_TEMPLATE = SharedMySqlDatabase.jdbcTemplate();
 
     @BeforeEach
     void migrateToV3AndInsertReferences() {
         flyway().clean();
         flyway(MigrationVersion.fromVersion("3")).migrate();
         insertMemberAndResort();
-    }
-
-    @AfterAll
-    static void stopMysql() {
-        MYSQL.stop();
     }
 
     @Test
@@ -108,18 +87,7 @@ class MatchingRequestV4MigrationTest {
     }
 
     private static Flyway flyway(MigrationVersion... targetVersion) {
-        FluentConfiguration configuration = Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
-                .validateMigrationNaming(true)
-                .failOnMissingLocations(true)
-                .validateOnMigrate(true)
-                .baselineOnMigrate(false)
-                .cleanDisabled(false);
-        if (targetVersion.length == 1) {
-            configuration.target(targetVersion[0]);
-        }
-        return configuration.load();
+        return SharedMySqlDatabase.newHistoricalMigrationFlyway(targetVersion);
     }
 
     private static void insertMemberAndResort() {

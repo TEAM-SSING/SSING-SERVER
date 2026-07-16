@@ -5,9 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDate;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.sopt.ssingserver.database.support.DatabaseCleaner;
+import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorApprovalStatus;
 import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
@@ -24,48 +25,31 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.transaction.BeforeTransaction;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=validate")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaAuditingConfig.class)
 class InstructorProfileJpaTest {
 
-    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"));
-
-    static {
-        MYSQL.start();
-        Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
-                .validateMigrationNaming(true)
-                .failOnMissingLocations(true)
-                .validateOnMigrate(true)
-                .baselineOnMigrate(false)
-                .cleanDisabled(true)
-                .load()
-                .migrate();
-    }
-
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private InstructorProfileRepository instructorProfileRepository;
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.datasource.driver-class-name", MYSQL::getDriverClassName);
+        SharedMySqlDatabase.configureDatasource(registry);
     }
 
-    @AfterAll
-    static void stopMysql() {
-        MYSQL.stop();
+    @BeforeTransaction
+    void cleanDatabaseBeforeTransaction() {
+        DatabaseCleaner.clean(dataSource);
     }
 
     @Test

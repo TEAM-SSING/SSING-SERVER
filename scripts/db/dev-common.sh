@@ -8,6 +8,8 @@ source "$DEV_DB_SCRIPT_DIR/common.sh"
 readonly DEV_DB_SCHEMA_ALLOWLIST="ssing"
 readonly DEV_DB_DEFAULT_DEPLOY_DIR="/home/ubuntu/ssing"
 readonly DEV_DB_RESET_MARKER_NAME=".dev-db-reset-incomplete"
+# 취소된 원격 DB 작업이 남아 있으면 같은 이름의 다음 작업을 실패시켜 중복 실행을 막는다.
+readonly DEV_DB_DOCKER_CONTAINER_NAME="ssing-dev-db-operation"
 
 dev_fail() {
   printf 'dev DB 작업 실패: %s\n' "$1" >&2
@@ -151,6 +153,7 @@ _run_dev_mysql_client() (
 
   {
     if sudo docker run --rm --interactive \
+        --name "$DEV_DB_DOCKER_CONTAINER_NAME" \
         --mount "type=bind,src=${defaults_file},dst=${MYSQL_CLIENT_DEFAULTS_PATH},readonly" \
         "$MYSQL_IMAGE" \
         mysql \
@@ -247,6 +250,7 @@ _run_dev_flyway() (
     SSING_DEV_RUNTIME_DATASOURCE_URL
 
   if sudo docker run --rm \
+      --name "$DEV_DB_DOCKER_CONTAINER_NAME" \
       --volume "$PROJECT_ROOT/src/main/resources/db/migration:/flyway/sql:ro" \
       --env-file "$flyway_env_file" \
       "$FLYWAY_IMAGE" "$@" \

@@ -3,11 +3,12 @@ package org.sopt.ssingserver.domain.matching.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.sopt.ssingserver.database.support.DatabaseCleaner;
+import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.sopt.ssingserver.domain.lesson.repository.LessonRepository;
 import org.sopt.ssingserver.domain.review.repository.ReviewRepository;
@@ -19,8 +20,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
+import org.springframework.test.context.transaction.BeforeTransaction;
 
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=validate")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -30,31 +30,14 @@ class MatchingRecoveryProfileQueryIntegrationTest {
 
     private static final long INSTRUCTOR_PROFILE_ID = 11L;
     private static final long OTHER_INSTRUCTOR_PROFILE_ID = 12L;
-    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4.8"))
-            .withDatabaseName("ssing_matching_recovery_profile_query")
-            .withUsername("ssing")
-            .withPassword("ssing");
-
-    static {
-        MYSQL.start();
-        Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
-                .validateMigrationNaming(true)
-                .failOnMissingLocations(true)
-                .validateOnMigrate(true)
-                .baselineOnMigrate(false)
-                .load()
-                .migrate();
-    }
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.datasource.driver-class-name", MYSQL::getDriverClassName);
+        SharedMySqlDatabase.configureDatasource(registry);
     }
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private LessonRepository lessonRepository;
@@ -65,9 +48,9 @@ class MatchingRecoveryProfileQueryIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @AfterAll
-    static void stopMysql() {
-        MYSQL.stop();
+    @BeforeTransaction
+    void cleanDatabaseBeforeTransaction() {
+        DatabaseCleaner.clean(dataSource);
     }
 
     @Test
