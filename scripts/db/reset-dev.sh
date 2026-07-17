@@ -15,7 +15,7 @@ MARKER_CREATED=false
 MARKER_PREEXISTED=false
 APP_STATE="기존 상태 유지"
 DB_STATE="변경 없음"
-SAFE_SCENARIO="미확정"
+SAFE_SEED_TARGET="미확정"
 REPORT_RESULT="실패"
 
 readonly DEPLOY_DIR="$(dev_deploy_dir)"
@@ -28,25 +28,24 @@ if [[ -e "$(dev_reset_marker_path)" ]]; then
 fi
 
 assert_dev_reset_artifacts() {
-  local scenario_key="$1"
-  local scenario_directory="$PROJECT_ROOT/db/seed/scenarios/$scenario_key"
+  local seed_target="$1"
+  local scenario_directory="$PROJECT_ROOT/db/seed/scenarios/$seed_target"
   local -a base_files=("$PROJECT_ROOT/db/seed/base"/*.sql)
   local -a migration_files=("$PROJECT_ROOT/src/main/resources/db/migration"/*.sql)
   local -a required_files=(
-    "$scenario_directory/seed.sql"
-    "$scenario_directory/verify.sql"
+    "$PROJECT_ROOT/db/seed/verify-base.sql"
     "$PROJECT_ROOT/db/seed/verify-utf8.sql"
   )
 
-  [[ "$scenario_key" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && -d "$scenario_directory" ]] \
-    || dev_fail "선택한 Seed 시나리오 디렉터리가 없습니다."
   [[ -s "${migration_files[0]:-}" && -s "${base_files[0]:-}" ]] \
     || dev_fail "필요한 migration 또는 Base Seed SQL 파일이 없습니다."
 
-  if [[ "$scenario_key" == "pm-full-requested-catalog" ]]; then
+  if ! is_idle_seed_target "$seed_target"; then
+    [[ "$seed_target" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && -d "$scenario_directory" ]] \
+      || dev_fail "선택한 Seed 시나리오 디렉터리가 없습니다."
     required_files+=(
-      "$scenario_directory/dev-playground.sql"
-      "$scenario_directory/verify-dev-playground.sql"
+      "$scenario_directory/seed.sql"
+      "$scenario_directory/verify.sql"
     )
   fi
 
@@ -72,7 +71,7 @@ write_report() {
     echo "### 원격 실행기 결과"
     echo ""
     echo "- 결과: \`$REPORT_RESULT\`"
-    echo "- 선택 시나리오: \`$SAFE_SCENARIO\`"
+    echo "- Seed 대상: \`$SAFE_SEED_TARGET\`"
     echo "- 실패/종료 단계: \`$CURRENT_STAGE\`"
     echo "- 마지막 성공 단계: \`$LAST_SUCCESS_STAGE\`"
     echo "- 현재 DB 상태: $DB_STATE"
@@ -154,19 +153,19 @@ trap 'on_signal TERM 143' TERM
 
 confirmation="${1:-}"
 git_ref_name="${2:-}"
-scenario_key="${3:-}"
+seed_target="${3:-}"
 
 [[ "$confirmation" == "--confirm-dev-reset" ]] \
   || dev_fail "초기화 확인값이 올바르지 않습니다." 2
 [[ "$git_ref_name" == "main" ]] \
   || dev_fail "main ref에서만 dev DB reset을 실행할 수 있습니다." 2
 
-case "$scenario_key" in
-  matching-price-vivaldi|matching-no-candidate-alpensia|matching-multi-request-oak|pm-full-requested-catalog)
-    SAFE_SCENARIO="$scenario_key"
+case "$seed_target" in
+  idle-base|matching-price-vivaldi|matching-no-candidate-alpensia|matching-multi-request-oak|pm-full-requested-catalog)
+    SAFE_SEED_TARGET="$seed_target"
     ;;
   *)
-    dev_fail "허용된 Seed 시나리오가 아닙니다." 2
+    dev_fail "허용된 Seed 대상이 아닙니다." 2
     ;;
 esac
 LAST_SUCCESS_STAGE="입력 검증"
@@ -175,7 +174,7 @@ CURRENT_STAGE="대상·권한·UTF-8 사전 검사"
 dev_require_command sudo
 dev_require_command docker
 dev_require_command curl
-assert_dev_reset_artifacts "$SAFE_SCENARIO"
+assert_dev_reset_artifacts "$SAFE_SEED_TARGET"
 assert_dev_target
 assert_dev_account_separation
 select_dev_migration_account
@@ -242,21 +241,23 @@ CURRENT_STAGE="Base Seed 적용"
 apply_dev_sql_directory "$PROJECT_ROOT/db/seed/base"
 LAST_SUCCESS_STAGE="Base Seed 적용"
 
-CURRENT_STAGE="Scenario Seed 적용"
-run_dev_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$SAFE_SCENARIO/seed.sql"
-LAST_SUCCESS_STAGE="Scenario Seed 적용"
+CURRENT_STAGE="Base Seed 검증"
+run_dev_mysql_file "$PROJECT_ROOT/db/seed/verify-base.sql"
+LAST_SUCCESS_STAGE="Base Seed 검증"
 
-CURRENT_STAGE="Scenario와 UTF-8 검증"
-run_dev_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$SAFE_SCENARIO/verify.sql"
-run_dev_mysql_file "$PROJECT_ROOT/db/seed/verify-utf8.sql"
-LAST_SUCCESS_STAGE="Scenario와 UTF-8 검증"
+if ! is_idle_seed_target "$SAFE_SEED_TARGET"; then
+  CURRENT_STAGE="Scenario Seed 적용"
+  run_dev_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$SAFE_SEED_TARGET/seed.sql"
+  LAST_SUCCESS_STAGE="Scenario Seed 적용"
 
-if [[ "$SAFE_SCENARIO" == "pm-full-requested-catalog" ]]; then
-  CURRENT_STAGE="PM dev playground 적용과 검증"
-  run_dev_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$SAFE_SCENARIO/dev-playground.sql"
-  run_dev_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$SAFE_SCENARIO/verify-dev-playground.sql"
-  LAST_SUCCESS_STAGE="PM dev playground 적용과 검증"
+  CURRENT_STAGE="Scenario 검증"
+  run_dev_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$SAFE_SEED_TARGET/verify.sql"
+  LAST_SUCCESS_STAGE="Scenario 검증"
 fi
+
+CURRENT_STAGE="UTF-8 검증"
+run_dev_mysql_file "$PROJECT_ROOT/db/seed/verify-utf8.sql"
+LAST_SUCCESS_STAGE="UTF-8 검증"
 
 CURRENT_STAGE="최종 Flyway validate와 연결 검증"
 run_dev_flyway validate
@@ -292,12 +293,8 @@ APP_STATE="정상 실행(health UP)"
 LAST_SUCCESS_STAGE="health 확인"
 
 CURRENT_STAGE="persona 한글 읽기 smoke"
-smoke_persona="대뜸GOAT-성빈-일반강습생"
-if [[ "$SAFE_SCENARIO" == "pm-full-requested-catalog" ]]; then
-  smoke_persona="냅다레전드-유빈-일반강습생"
-fi
 persona_response="$(curl -fsS --max-time 10 http://127.0.0.1:8080/dev/auth/personas)"
-grep -Fq "$smoke_persona" <<< "$persona_response" \
+grep -Fq "냅다레전드-유빈-일반강습생" <<< "$persona_response" \
   || dev_fail "기대 persona를 dev 인증 목록에서 읽지 못했습니다."
 grep -Fq '"nickname":"대뜸 GOAT 성빈"' <<< "$persona_response" \
   || dev_fail "dev 인증 목록에서 대뜸GOAT-성빈-일반강습생의 정확한 한글 닉네임을 읽지 못했습니다. Seed 문자셋을 확인하세요."

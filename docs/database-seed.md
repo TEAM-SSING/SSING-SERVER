@@ -11,7 +11,7 @@
 소유한다.
 
 로컬 DB를 초기화할 때는 SQL 파일을 직접 하나씩 실행하지 말고 reset 스크립트를 사용한다.
-스크립트가 `clean → migrate → base → scenario → verify` 순서를 보장한다.
+스크립트가 `clean → migrate → base → (선택한 scenario) → verify` 순서를 보장한다.
 
 로컬 reset 스크립트는 로컬 DB에만 사용한다. 공유 dev DB는 `main` 자동 배포 또는
 `Reset Dev DB` GitHub Actions workflow로만 초기화한다. 아직 Dev 데이터를 보존하지 않는
@@ -23,8 +23,12 @@
 ### Base seed
 
 - 최종 API 계약의 리조트 11곳과 패스비
-- 가격·결제 흐름 검증용 강습생 `대뜸GOAT-성빈-일반강습생`
-- 가격·결제 흐름 검증용 승인 강사 `보법다른-유정-승인강사`
+- 로그인 가능한 QA 페르소나 14명
+- 승인 강사 4명의 프로필·자격·가격·매칭 조건
+- 모든 강사의 매칭 노출은 `OFF`, 모든 매칭·결제·강습 상태는 0건
+
+Base는 “계정은 준비됐지만 아무도 매칭을 시작하지 않은 상태”다. 특정 화면이나 상태를
+검증해야 할 때만 scenario가 강사 노출을 켜거나 매칭 요청 이력을 추가한다.
 
 리조트 코드는 클라이언트가 매칭 요청에 보내는 값이다.
 
@@ -47,6 +51,18 @@
 활성 플랫폼 수수료 정책 1건(현재 0%)은 Base seed가 아니라 Flyway migration이 소유한다.
 따라서 새 DB는 migration만 실행해도 필수 정책이 생기고, Base seed는 그 이후 테스트
 시나리오가 공통으로 참조할 데이터만 넣는다.
+
+### 새 seed를 어디에 추가할까
+
+| 데이터 | 소유 위치 |
+| --- | --- |
+| QA 계정과 `dev_personas` | `db/seed/base/010_dev_personas.sql` |
+| 강사 프로필·자격·가격·기본 매칭 조건(`is_exposed=false`) | `db/seed/base/020_instructor_foundations.sql` |
+| 강사 노출 ON, 요청·참가자·그룹·제안 같은 테스트 상태 | 해당 `db/seed/scenarios/<key>/seed.sql` |
+| 모든 환경에 꼭 필요한 정책·기준 데이터 | Flyway migration |
+
+같은 계정·프로필·가격을 scenario에서 다시 `INSERT`하지 않는다. 새 시나리오는 base를
+그대로 참조하고, 그 시나리오가 바꾸는 상태만 적는다.
 
 ### 페르소나 명명 규칙
 
@@ -82,13 +98,13 @@
 | `matching-price-vivaldi` | FLOW / STABLE | 매칭 요청부터 85,000원 결제와 강습 확정까지 검증 | 기본 골든 플로우 |
 | `matching-no-candidate-alpensia` | FLOW / STABLE | 후보가 없을 때 `SEARCHING` 유지 검증 | 즉시 `FAILED`가 되지 않음 |
 | `matching-multi-request-oak` | FLOW / STABLE | 한 소비자가 활성 요청을 취소하며 요청 4건과 참가자 16명의 이력을 순차 생성 | 동시 활성 요청은 409로 거절 |
-| `pm-full-requested-catalog` | SNAPSHOT / TRANSITION | PM 스프레드시트 전체 입력 상태 조회와 dev QA 놀이터 | 로컬/CI snapshot은 scheduler OFF, 공유 dev는 검증 뒤 scheduler ON |
+| `pm-full-requested-catalog` | SNAPSHOT / TRANSITION | PM 스프레드시트의 강사 노출과 요청 이력 조회 | 로컬/CI snapshot은 scheduler OFF, 공유 dev는 검증 뒤 scheduler ON |
 
 `FLOW`는 SQL로 시작 조건만 만들고 REST API로 상태를 바꾼다. `SNAPSHOT`은 PM이 준
 입력을 특정 시점의 DB 상태로 바로 구성한다. 따라서 `pm-full-requested-catalog`가
 정상 API 흐름을 모두 거쳤다는 뜻은 아니다.
 
-## 로컬에서 시나리오 하나 사용하기
+## 로컬에서 idle 또는 시나리오 사용하기
 
 필수 조건:
 
@@ -96,7 +112,13 @@
 - 보존해야 할 로컬 DB 데이터가 없어야 한다.
 - 초기화 중에는 로컬 Spring 서버를 꺼야 한다.
 
-기본 골든 플로우를 적용한다.
+인자를 생략하면 모든 QA 계정이 idle인 기본 상태를 만든다.
+
+```bash
+./scripts/db/reset-local.sh --confirm-local-reset
+```
+
+특정 QA 흐름이 필요할 때만 scenario key를 명시한다.
 
 ```bash
 ./scripts/db/reset-local.sh --confirm-local-reset matching-price-vivaldi
@@ -110,7 +132,7 @@
 ./scripts/db/reset-local.sh --confirm-local-reset pm-full-requested-catalog
 ```
 
-모든 시나리오가 각각 깨끗한 DB에서 적용되는지 한 번에 확인하려면 다음 명령을 쓴다.
+idle base와 모든 시나리오가 각각 깨끗한 DB에서 적용되는지 한 번에 확인하려면 다음 명령을 쓴다.
 마지막에는 알파벳순으로 가장 뒤인 `pm-full-requested-catalog` 상태가 DB에 남는다.
 
 ```bash
@@ -126,9 +148,9 @@
 main 자동 배포 직후에는 base seed만 있는 초기 상태이며, 특정 QA 시나리오가 필요할 때 이
 workflow를 추가로 실행한다.
 
-1. `main` ref에서 실행할 시나리오를 고른다.
+1. `main` ref에서 Seed 대상을 고른다. 기본값 `idle-base`는 누구도 매칭 중이 아닌 상태다.
 2. 기존 dev 데이터를 지우는 `confirmReset`을 체크한다.
-3. workflow가 별도 승인 없이 앱 중지 → clean → migrate → base → scenario → verify → 앱 재기동을 실행한다.
+3. workflow가 앱 중지 → clean → migrate → base → 선택한 scenario(있을 때만) → verify → 앱 재기동을 실행한다.
 4. 결과 요약이 성공인지 확인한 뒤 새로 로그인해 QA를 시작한다.
 
 실행 권한은 저장소에 write 권한이 있는 사람으로 제한한다. `dev-reset` Environment는 사람
@@ -137,10 +159,8 @@ workflow를 추가로 실행한다.
 함께 수행한다.
 
 자동 배포와 수동 reset은 dev DB 전체를 다시 만들기 때문에 기존 access token과 resource ID를
-계속 사용하면 안 된다. `pm-full-requested-catalog`를 골랐다면 새 QA는 요청이 없는
-`냅다레전드-유빈-일반강습생`으로 시작한다. 이 시나리오는 canonical snapshot을 먼저 검증한 뒤 dev 전용
-playground 데이터를 더하고, scheduler 기본 설정을 켠 채 앱을 재기동하므로 시간이 지나면서
-상태가 자연스럽게 바뀔 수 있다.
+계속 사용하면 안 된다. 일반 QA는 `idle-base`로 시작한다. `pm-full-requested-catalog`처럼 요청을
+미리 넣는 scenario는 scheduler 기본 설정으로 앱을 재기동한 뒤 상태가 자연스럽게 바뀔 수 있다.
 
 결과 report에 incomplete marker가 남았다고 나오면 부분 DB일 수 있으므로 앱을 직접 켜지
 않는다. 수동 reset은 기존 marker가 있으면 중단한다. 자동 배포는 현재 main SHA와 dev DB
@@ -195,6 +215,10 @@ curl -X POST http://localhost:8080/dev/auth/token \
 ## PM 전체 스프레드시트 확인하기
 
 `pm-full-requested-catalog`는 PM 원본 105행을 모두 추적한다.
+
+계정·강사 프로필·가격·기본 조건은 idle base가 한 번만 만든다. PM scenario는 원본 계약에
+필요한 강사 4명의 노출을 켜고 요청 16건과 참가자 49건만 추가한다. `냅다레전드-유빈-일반강습생`은
+base 소유의 자유 QA 계정이므로 PM snapshot 비교 대상에서는 persona key로 제외한다.
 
 - 스키장 9건
 - 회원 13건
@@ -284,6 +308,7 @@ DB 테스트는 한 JVM 안에서 순차 실행한다.
 `DatabaseSeedContractTest`는 최신 schema를 그대로 두고 각 scenario 전에 데이터만 비운 뒤
 base seed를 다시 적용한다. 다음 조건은 그대로 검증한다.
 
+- idle base의 14개 persona, 강사 비노출, 전체 매칭 상태 0건과 scheduler 실행 후 무변화 확인
 - scenario의 `scenario.yml`, `seed.sql`, `verify.sql` 존재 확인
 - scenario SQL과 검증 SQL 실행
 - `integration-test` 공통 프로필에서 모든 `@Scheduled` 자동 실행 차단
@@ -308,8 +333,8 @@ workflow로 실행한다.
 운영 데이터가 생기기 전에는 이 두 테스트를 PR 필수 CI로 다시 올려야 한다. 새 migration과
 빈 DB V1→최신 bootstrap 검증은 계속 필수 CI에 남는다.
 
-`db-seed-check.yml`은 disposable 로컬 MySQL에 `reset-all-local.sh`을 한 번 실행해 모든
-시나리오 reset 경로를 검증한다. 같은 검증이 PR마다 세 번째 Runner로 붙어 대기 시간을 늘리지
+`db-seed-check.yml`은 disposable 로컬 MySQL에 `reset-all-local.sh`을 한 번 실행해 idle base와
+모든 시나리오 reset 경로를 검증한다. 같은 검증이 PR마다 세 번째 Runner로 붙어 대기 시간을 늘리지
 않도록 nightly와 수동 실행으로만 유지한다. 통합 테스트와 빠른 DB 실행기 계약은 CI/CD의 두
 Gradle Runner에서 계속 필수로 실행한다.
 

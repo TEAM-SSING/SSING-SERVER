@@ -61,17 +61,18 @@ class DevWorkflowContractTest(unittest.TestCase):
         cls.ci_deploy_job = indented_block(cls.ci, "deploy-dev:", 2)
         cls.deploy_job = indented_block(cls.deploy, "build-and-deploy:", 2)
 
-    def test_reset_has_only_scenario_and_boolean_confirmation_inputs(self):
+    def test_reset_has_only_seed_target_and_boolean_confirmation_inputs(self):
         workflow_dispatch = indented_block(self.reset, "workflow_dispatch:", 2)
         inputs_block = indented_block(workflow_dispatch, "inputs:", 4)
         input_names = re.findall(r"^      ([A-Za-z][A-Za-z0-9]*):$", inputs_block, re.MULTILINE)
-        scenario_block = indented_block(inputs_block, "scenarioKey:", 6)
-        scenario_options = indented_block(scenario_block, "options:", 8)
-        options = re.findall(r"^          - ([a-z0-9-]+)$", scenario_options, re.MULTILINE)
+        seed_target_block = indented_block(inputs_block, "seedTarget:", 6)
+        seed_target_options = indented_block(seed_target_block, "options:", 8)
+        options = re.findall(r"^          - ([a-z0-9-]+)$", seed_target_options, re.MULTILINE)
 
-        self.assertEqual(["scenarioKey", "confirmReset"], input_names)
+        self.assertEqual(["seedTarget", "confirmReset"], input_names)
         self.assertEqual(
             [
+                "idle-base",
                 "matching-price-vivaldi",
                 "matching-no-candidate-alpensia",
                 "matching-multi-request-oak",
@@ -79,7 +80,8 @@ class DevWorkflowContractTest(unittest.TestCase):
             ],
             options,
         )
-        self.assertRegex(scenario_block, r"(?m)^        type: choice$")
+        self.assertRegex(seed_target_block, r"(?m)^        type: choice$")
+        self.assertRegex(seed_target_block, r"(?m)^        default: idle-base$")
         confirmation_block = indented_block(inputs_block, "confirmReset:", 6)
         self.assertRegex(confirmation_block, r"(?m)^        type: boolean$")
         self.assertRegex(confirmation_block, r"(?m)^        default: false$")
@@ -95,13 +97,14 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertIn('GIT_REF: ${{ github.ref }}', preflight_step)
         self.assertIn('if [ "$CONFIRM_RESET" != "true" ]', preflight_step)
         self.assertIn('if [ "$GIT_REF" != "refs/heads/main" ]', preflight_step)
-        for scenario in (
+        for seed_target in (
+            "idle-base",
             "matching-price-vivaldi",
             "matching-no-candidate-alpensia",
             "matching-multi-request-oak",
             "pm-full-requested-catalog",
         ):
-            self.assertIn(scenario, preflight_step)
+            self.assertIn(seed_target, preflight_step)
 
         self.assertRegex(self.reset_job, r"(?m)^    environment: dev-reset$")
         self.assertNotRegex(self.reset, r"(?m)^  preflight:$")
