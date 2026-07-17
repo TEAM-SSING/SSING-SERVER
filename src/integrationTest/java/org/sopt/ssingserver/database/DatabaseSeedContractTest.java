@@ -1,6 +1,7 @@
 package org.sopt.ssingserver.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -137,6 +138,43 @@ class DatabaseSeedContractTest {
     @Test
     void 자동_Dev_배포용_base_verify_SQL을_실제_MySQL에서_검증한다() {
         runSql("db/seed/verify-base.sql");
+    }
+
+    @Test
+    void Dev_Reset_idle_base는_강사_승인가격을_유지하고_매칭상태를_만들지_않는다() {
+        runSql("db/seed/verify-dev-reset.sql");
+    }
+
+    @Test
+    void PM_snapshot은_Dev_Reset_검증을_통과하지_못한다() {
+        applyScenario("pm-full-requested-catalog");
+
+        assertThatThrownBy(() -> runSql("db/seed/verify-dev-reset.sql"))
+                .hasMessageContaining("dev_reset_contract_assertion");
+    }
+
+    @Test
+    void Dev_Reset_검증은_승인시각이_없는_강사를_거절한다() {
+        jdbcTemplate.update("UPDATE instructor_profiles SET approved_at = NULL ORDER BY id LIMIT 1");
+
+        assertThatThrownBy(() -> runSql("db/seed/verify-dev-reset.sql"))
+                .hasMessageContaining("dev_reset_contract_assertion");
+    }
+
+    @Test
+    void Dev_Reset_검증은_활성가격이_없는_강사를_거절한다() {
+        jdbcTemplate.update("UPDATE instructor_price_policies SET is_active = b'0' ORDER BY id LIMIT 1");
+
+        assertThatThrownBy(() -> runSql("db/seed/verify-dev-reset.sql"))
+                .hasMessageContaining("dev_reset_contract_assertion");
+    }
+
+    @Test
+    void Dev_Reset_검증은_매칭받기가_켜진_강사를_거절한다() {
+        jdbcTemplate.update("UPDATE instructor_matching_settings SET is_exposed = b'1' ORDER BY id LIMIT 1");
+
+        assertThatThrownBy(() -> runSql("db/seed/verify-dev-reset.sql"))
+                .hasMessageContaining("dev_reset_contract_assertion");
     }
 
     @Test

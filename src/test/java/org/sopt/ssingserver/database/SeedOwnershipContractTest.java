@@ -32,13 +32,20 @@ class SeedOwnershipContractTest {
     );
     private static final Pattern INSERT_TABLE =
             Pattern.compile("(?is)\\bINSERT\\s+INTO\\s+`?([A-Za-z0-9_]+)`?");
+    private static final Pattern DELETE_TABLE =
+            Pattern.compile("(?is)\\bDELETE\\s+FROM\\s+`?([A-Za-z0-9_]+)`?");
+    private static final Pattern UPDATE_TABLE =
+            Pattern.compile("(?is)\\bUPDATE\\s+`?([A-Za-z0-9_]+)`?");
     private static final Pattern SESSION_VARIABLE =
             Pattern.compile("(?<!@)@`?([A-Za-z0-9_]+)`?");
     private static final Pattern SESSION_VARIABLE_DEFINITION =
             Pattern.compile("(?im)^\\s*SET\\s+@`?([A-Za-z0-9_]+)`?\\s*=");
 
     @Test
-    void scenario는_base가_소유한_QA계정과_강사기반정보를_다시_생성하지_않는다() throws IOException {
+    void scenario는_base가_소유한_QA계정과_강사기반정보를_생성하거나_삭제하지_않는다() throws IOException {
+        Set<String> immutableBaseTables = new HashSet<>(BASE_OWNED_TABLES);
+        immutableBaseTables.remove("instructor_matching_settings");
+
         try (Stream<Path> scenarioDirectories = Files.list(SCENARIO_DIRECTORY)) {
             for (Path scenarioDirectory : scenarioDirectories.filter(Files::isDirectory).toList()) {
                 String executableSql = maskCommentsAndStrings(
@@ -48,6 +55,12 @@ class SeedOwnershipContractTest {
                 assertThat(findVariables(executableSql, INSERT_TABLE))
                         .as("%s seed ownership", scenarioDirectory.getFileName())
                         .doesNotContainAnyElementsOf(BASE_OWNED_TABLES);
+                assertThat(findVariables(executableSql, DELETE_TABLE))
+                        .as("%s seed delete ownership", scenarioDirectory.getFileName())
+                        .doesNotContainAnyElementsOf(BASE_OWNED_TABLES);
+                assertThat(findVariables(executableSql, UPDATE_TABLE))
+                        .as("%s seed update ownership", scenarioDirectory.getFileName())
+                        .doesNotContainAnyElementsOf(immutableBaseTables);
             }
         }
     }
@@ -63,6 +76,22 @@ class SeedOwnershipContractTest {
                 assertThat(baseDependencies)
                         .as("%s base dependencies", scenarioDirectory.getFileName())
                         .contains("db/seed/base/020_instructor_foundations.sql");
+            }
+        }
+    }
+
+    @Test
+    void 모든_scenario의_실행범위는_local과_ci로_제한한다() throws IOException {
+        try (Stream<Path> scenarioDirectories = Files.list(SCENARIO_DIRECTORY)) {
+            for (Path scenarioDirectory : scenarioDirectories.filter(Files::isDirectory).toList()) {
+                List<String> executionScope = parseYamlList(
+                        Files.readString(scenarioDirectory.resolve("scenario.yml")),
+                        "execution_scope"
+                );
+
+                assertThat(executionScope)
+                        .as("%s execution scope", scenarioDirectory.getFileName())
+                        .containsExactlyInAnyOrder("local", "ci");
             }
         }
     }
@@ -97,6 +126,8 @@ class SeedOwnershipContractTest {
                 insert
                 into `members` (id)
                 values (1);
+                delete from `dev_personas`;
+                update `instructor_profiles` set intro = 'changed';
                 """;
 
         String harmlessExecutableSql = maskCommentsAndStrings(harmlessSql);
@@ -105,33 +136,46 @@ class SeedOwnershipContractTest {
         assertThat(findVariables(harmlessExecutableSql, SESSION_VARIABLE_DEFINITION)).containsExactly("actual");
         assertThat(findVariables(maskCommentsAndStrings(forbiddenSql), INSERT_TABLE))
                 .containsExactly("members");
+        assertThat(findVariables(maskCommentsAndStrings(forbiddenSql), DELETE_TABLE))
+                .containsExactly("dev_personas");
+        assertThat(findVariables(maskCommentsAndStrings(forbiddenSql), UPDATE_TABLE))
+                .containsExactly("instructor_profiles");
     }
 
     @Test
-    void YAML_의존성_검사는_주석이_아닌_실제_목록만_인식한다() {
+    void YAML_목록_검사는_주석을_제외하고_따옴표가_있는_값도_인식한다() {
         String yaml = """
                 # base_dependencies:
                 #   - db/seed/base/020_instructor_foundations.sql
                 base_dependencies:
                   - db/seed/base/001_reference_data.sql
+                execution_scope:
+                  - local
+                  - "dev"
                 """;
 
         assertThat(parseBaseDependencies(yaml))
                 .containsExactly("db/seed/base/001_reference_data.sql");
+        assertThat(parseYamlList(yaml, "execution_scope"))
+                .containsExactly("local", "dev");
     }
 
     private List<String> parseBaseDependencies(String yamlText) {
+        return parseYamlList(yamlText, "base_dependencies");
+    }
+
+    private List<String> parseYamlList(String yamlText, String key) {
         Object document = new Yaml().load(yamlText);
         if (!(document instanceof Map<?, ?> values)) {
             return List.of();
         }
 
-        Object dependencies = values.get("base_dependencies");
-        if (!(dependencies instanceof List<?> dependencyList)) {
+        Object rawList = values.get(key);
+        if (!(rawList instanceof List<?> valuesList)) {
             return List.of();
         }
 
-        return dependencyList.stream().map(Object::toString).toList();
+        return valuesList.stream().map(Object::toString).toList();
     }
 
     private String maskCommentsAndStrings(String sql) {

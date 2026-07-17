@@ -148,14 +148,12 @@ sudo() {
     sql_payload="$(command cat)"
     if [[ "$sql_payload" == *"INSERT INTO resorts"* ]]; then
       printf ' SQL_STAGE=base\n' >> "$FAKE_COMMAND_LOG"
-    elif [[ "$sql_payload" == *"Local/CI SNAPSHOT only"* ]]; then
-      printf ' SQL_STAGE=scenario\n' >> "$FAKE_COMMAND_LOG"
     elif [[ "$sql_payload" == *"base_seed_contract_assertion"* ]]; then
       printf ' SQL_STAGE=base-verify\n' >> "$FAKE_COMMAND_LOG"
+    elif [[ "$sql_payload" == *"dev_reset_contract_assertion"* ]]; then
+      printf ' SQL_STAGE=dev-reset-verify\n' >> "$FAKE_COMMAND_LOG"
     elif [[ "$sql_payload" == *"seed_utf8_contract_assertion"* ]]; then
       printf ' SQL_STAGE=utf8\n' >> "$FAKE_COMMAND_LOG"
-    elif [[ "$sql_payload" == *"seed_contract_assertion"* ]]; then
-      printf ' SQL_STAGE=verify\n' >> "$FAKE_COMMAND_LOG"
     fi
     case "${FAKE_FAIL_STAGE:-}" in
       base)
@@ -164,12 +162,8 @@ sudo() {
       base-verify)
         [[ "$sql_payload" != *"base_seed_contract_assertion"* ]] || return 54
         ;;
-      scenario)
-        [[ "$sql_payload" != *"Local/CI SNAPSHOT only"* ]] || return 45
-        ;;
-      verify)
-        [[ "$sql_payload" != *"seed_contract_assertion"* \
-            || "$sql_payload" == *"base_seed_contract_assertion"* ]] || return 46
+      dev-reset-verify)
+        [[ "$sql_payload" != *"dev_reset_contract_assertion"* ]] || return 58
         ;;
       utf8)
         [[ "$sql_payload" != *"seed_utf8_contract_assertion"* ]] || return 47
@@ -254,32 +248,6 @@ command_position() {
     | cut -d: -f1
 }
 
-assert_pm_success_order() {
-  local command_log="$1"
-  local previous_position=0
-  local label pattern occurrence position
-  while IFS='|' read -r label pattern occurrence; do
-    position="$(command_position "$command_log" "$pattern" "$occurrence")"
-    [[ -n "$position" ]] || fail_test "PM 성공 순서에서 $label 단계가 없습니다."
-    [[ "$position" -gt "$previous_position" ]] \
-      || fail_test "PM 성공 순서가 잘못됐습니다: $label"
-    previous_position="$position"
-  done <<'EOF'
-app-stop| compose .* stop app |1
-flyway-clean| flyway/flyway:.* clean[[:space:]]*$|1
-migrate| flyway/flyway:.* migrate[[:space:]]*$|1
-base|SQL_STAGE=base|1
-base-verify|SQL_STAGE=base-verify|1
-scenario|SQL_STAGE=scenario|1
-scenario-verify|SQL_STAGE=verify|1
-utf8-verify|SQL_STAGE=utf8|1
-final-validate| flyway/flyway:.* validate[[:space:]]*$|1
-app-start| compose .* up --detach app |1
-health|/actuator/health|1
-persona|/dev/auth/personas|1
-EOF
-}
-
 assert_idle_success_order() {
   local command_log="$1"
   local previous_position=0
@@ -296,6 +264,7 @@ flyway-clean| flyway/flyway:.* clean[[:space:]]*$|1
 migrate| flyway/flyway:.* migrate[[:space:]]*$|1
 base|SQL_STAGE=base|1
 base-verify|SQL_STAGE=base-verify|1
+dev-reset-verify|SQL_STAGE=dev-reset-verify|1
 utf8-verify|SQL_STAGE=utf8|1
 final-validate| flyway/flyway:.* validate[[:space:]]*$|1
 app-start| compose .* up --detach app |1
@@ -648,8 +617,7 @@ missing_artifact_root="$TEST_TMP/missing-artifact-project"
 mkdir -p \
   "$missing_artifact_root/scripts/db" \
   "$missing_artifact_root/src/main/resources/db/migration" \
-  "$missing_artifact_root/db/seed/base" \
-  "$missing_artifact_root/db/seed/scenarios/matching-price-vivaldi"
+  "$missing_artifact_root/db/seed/base"
 cp \
   "$PROJECT_ROOT/scripts/db/common.sh" \
   "$PROJECT_ROOT/scripts/db/dev-common.sh" \
@@ -661,16 +629,14 @@ printf '%s\n' '-- base fixture' 'SELECT 1;' \
   > "$missing_artifact_root/db/seed/base/001_fixture.sql"
 printf '%s\n' '-- base verify fixture' 'SELECT 1;' \
   > "$missing_artifact_root/db/seed/verify-base.sql"
-printf '%s\n' '-- scenario fixture' 'SELECT 1;' \
-  > "$missing_artifact_root/db/seed/scenarios/matching-price-vivaldi/seed.sql"
 printf '%s\n' '-- utf8 fixture' 'SELECT 1;' \
   > "$missing_artifact_root/db/seed/verify-utf8.sql"
 
-run_case invalid-confirm "" wrong-confirm main pm-full-requested-catalog false
+run_case invalid-confirm "" wrong-confirm main idle-base false
 assert_no_mutation_command "$TEST_TMP/invalid-confirm/commands.log"
 
 run_case preexisting-marker-preserved "" wrong-confirm main \
-  pm-full-requested-catalog false "" true
+  idle-base false "" true
 assert_no_mutation_command "$TEST_TMP/preexisting-marker-preserved/commands.log"
 [[ -e "$TEST_TMP/preexisting-marker-preserved/deploy/.dev-db-reset-incomplete" ]] \
   || fail_test "이전 reset의 incomplete marker를 새 실행의 입력 실패가 삭제했습니다."
@@ -682,15 +648,29 @@ grep -Fq '이전 reset의 부분 또는 미확인 상태' \
   "$TEST_TMP/preexisting-marker-preserved/report.md" \
   || fail_test "이전 incomplete marker가 있는데 DB 무변경으로 잘못 안내했습니다."
 
-run_case invalid-ref "" --confirm-dev-reset feature pm-full-requested-catalog false
+run_case invalid-ref "" --confirm-dev-reset feature idle-base false
 assert_no_mutation_command "$TEST_TMP/invalid-ref/commands.log"
 
 run_case invalid-seed-target "" --confirm-dev-reset main not-allowed false
 assert_no_mutation_command "$TEST_TMP/invalid-seed-target/commands.log"
 
+for scenario_target in \
+  matching-price-vivaldi \
+  matching-no-candidate-alpensia \
+  matching-multi-request-oak \
+  pm-full-requested-catalog; do
+  run_case "scenario-not-allowed-${scenario_target}" "" \
+    --confirm-dev-reset main "$scenario_target" false
+  assert_no_mutation_command \
+    "$TEST_TMP/scenario-not-allowed-${scenario_target}/commands.log"
+  grep -Fq '허용된 Seed 대상이 아닙니다' \
+    "$TEST_TMP/scenario-not-allowed-${scenario_target}/output.log" \
+    || fail_test "$scenario_target 시나리오가 공유 dev reset 입력에서 clean 전에 차단되지 않았습니다."
+done
+
 (
   RUN_CASE_MISSING_COMMAND=docker \
-    run_case missing-docker "" --confirm-dev-reset main pm-full-requested-catalog false
+    run_case missing-docker "" --confirm-dev-reset main idle-base false
 )
 assert_no_mutation_command "$TEST_TMP/missing-docker/commands.log"
 grep -Fq '필수 명령 docker' "$TEST_TMP/missing-docker/output.log" \
@@ -700,37 +680,37 @@ grep -Fq '현재 DB 상태: 변경 없음' "$TEST_TMP/missing-docker/report.md" 
 
 (
   RUN_CASE_RESET_SCRIPT="$missing_artifact_root/scripts/db/reset-dev.sh" \
-    run_case missing-scenario-verify "" --confirm-dev-reset main \
-      matching-price-vivaldi false
+    run_case missing-dev-reset-verify "" --confirm-dev-reset main \
+      idle-base false
 )
-assert_no_mutation_command "$TEST_TMP/missing-scenario-verify/commands.log"
+assert_no_mutation_command "$TEST_TMP/missing-dev-reset-verify/commands.log"
 grep -Fq '필요한 reset SQL 파일이 없습니다' \
-  "$TEST_TMP/missing-scenario-verify/output.log" \
-  || fail_test "scenario verify 누락을 clean 전에 안내하지 않았습니다."
+  "$TEST_TMP/missing-dev-reset-verify/output.log" \
+  || fail_test "Dev Reset 검증 SQL 누락을 clean 전에 안내하지 않았습니다."
 
-run_case invalid-target "" --confirm-dev-reset main pm-full-requested-catalog false \
+run_case invalid-target "" --confirm-dev-reset main idle-base false \
   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 assert_no_mutation_command "$TEST_TMP/invalid-target/commands.log"
 
 run_case deployed-target-mismatch "" --confirm-dev-reset main \
-  pm-full-requested-catalog false "" false \
+  idle-base false "" false \
   "jdbc:mysql://other-dev.example:3306/ssing"
 assert_no_mutation_command "$TEST_TMP/deployed-target-mismatch/commands.log"
 
 run_case account-separation "" --confirm-dev-reset main \
-  pm-full-requested-catalog false "" false "" ssing_migration
+  idle-base false "" false "" ssing_migration
 assert_no_mutation_command "$TEST_TMP/account-separation/commands.log"
 
 run_case deployed-username-mismatch "" --confirm-dev-reset main \
-  pm-full-requested-catalog false "" false "" ssing_runtime stale_runtime
+  idle-base false "" false "" ssing_runtime stale_runtime
 assert_no_mutation_command "$TEST_TMP/deployed-username-mismatch/commands.log"
 
 run_case deployed-profile-mismatch "" --confirm-dev-reset main \
-  pm-full-requested-catalog false "" false "" ssing_runtime "" prod
+  idle-base false "" false "" ssing_runtime "" prod
 assert_no_mutation_command "$TEST_TMP/deployed-profile-mismatch/commands.log"
 
 run_case deployed-ddl-auto-mismatch "" --confirm-dev-reset main \
-  pm-full-requested-catalog false "" false "" ssing_runtime "" dev update
+  idle-base false "" false "" ssing_runtime "" dev update
 assert_no_mutation_command "$TEST_TMP/deployed-ddl-auto-mismatch/commands.log"
 
 stale_image="teamssing/server:dev-1111111111111111111111111111111111111111"
@@ -738,14 +718,14 @@ stale_image="teamssing/server:dev-1111111111111111111111111111111111111111"
   RUN_CASE_DEPLOYED_IMAGE="$stale_image" \
   RUN_CASE_RUNNING_IMAGE="$stale_image" \
     run_case deployed-commit-mismatch "" --confirm-dev-reset main \
-      pm-full-requested-catalog false
+      idle-base false
 )
 assert_no_mutation_command "$TEST_TMP/deployed-commit-mismatch/commands.log"
 
 (
   RUN_CASE_EXTRA_ENV_LINES="SSING_IMAGE=$stale_image" \
     run_case duplicate-deployed-image "" --confirm-dev-reset main \
-      pm-full-requested-catalog false
+      idle-base false
 )
 assert_no_mutation_command "$TEST_TMP/duplicate-deployed-image/commands.log"
 grep -Fq '배포된 앱 이미지 설정을 하나로 확정할 수 없습니다' \
@@ -755,7 +735,7 @@ grep -Fq '배포된 앱 이미지 설정을 하나로 확정할 수 없습니다
 (
   RUN_CASE_RUNNING_IMAGE="$stale_image" \
     run_case running-image-mismatch "" --confirm-dev-reset main \
-      pm-full-requested-catalog false
+      idle-base false
 )
 assert_no_mutation_command "$TEST_TMP/running-image-mismatch/commands.log"
 
@@ -763,7 +743,7 @@ prod_like_target="ssing-prod.cluster-example.ap-northeast-2.rds.amazonaws.com:33
 (
   RUN_CASE_DB_HOST="${prod_like_target%%:*}" \
     run_case prod-like-target "" --confirm-dev-reset main \
-      pm-full-requested-catalog false "$(target_sha256 "$prod_like_target")"
+      idle-base false "$(target_sha256 "$prod_like_target")"
 )
 assert_no_mutation_command "$TEST_TMP/prod-like-target/commands.log"
 
@@ -771,7 +751,7 @@ wrong_schema_target="${TEST_HOST}:3306/ssing_other"
 (
   RUN_CASE_DB_NAME=ssing_other \
     run_case wrong-schema-target "" --confirm-dev-reset main \
-      pm-full-requested-catalog false "$(target_sha256 "$wrong_schema_target")"
+      idle-base false "$(target_sha256 "$wrong_schema_target")"
 )
 assert_no_mutation_command "$TEST_TMP/wrong-schema-target/commands.log"
 
@@ -779,22 +759,22 @@ wrong_port_target="${TEST_HOST}:3307/ssing"
 (
   RUN_CASE_DB_PORT=3307 \
     run_case wrong-port-target "" --confirm-dev-reset main \
-      pm-full-requested-catalog false "$(target_sha256 "$wrong_port_target")"
+      idle-base false "$(target_sha256 "$wrong_port_target")"
 )
 assert_no_mutation_command "$TEST_TMP/wrong-port-target/commands.log"
 
-run_case invalid-charset charset --confirm-dev-reset main pm-full-requested-catalog false
+run_case invalid-charset charset --confirm-dev-reset main idle-base false
 assert_no_mutation_command "$TEST_TMP/invalid-charset/commands.log"
 
 run_case invalid-table-charset table-charset \
-  --confirm-dev-reset main pm-full-requested-catalog false
+  --confirm-dev-reset main idle-base false
 assert_no_mutation_command "$TEST_TMP/invalid-table-charset/commands.log"
 grep -Fq 'dev schema에 utf8mb4가 아닌 테이블이 있습니다' \
   "$TEST_TMP/invalid-table-charset/output.log" \
   || fail_test "테이블 문자셋 위반을 clean 전에 차단하지 않았습니다."
 
 run_case failure-mysql-connect mysql-connect \
-  --confirm-dev-reset main pm-full-requested-catalog false
+  --confirm-dev-reset main idle-base false
 assert_no_mutation_command "$TEST_TMP/failure-mysql-connect/commands.log"
 [[ "$(< "$TEST_TMP/failure-mysql-connect/exit-code")" == "50" ]] \
   || fail_test "MySQL 연결 실패 종료 코드가 보존되지 않았습니다."
@@ -807,7 +787,7 @@ grep -Fq '[REDACTED_DEV_DB_HOST]' "$TEST_TMP/failure-mysql-connect/output.log" \
   || fail_test "MySQL 연결 실패에서 reset 오류 안내가 중복 출력됐습니다."
 
 run_case failure-app-stop app-stop \
-  --confirm-dev-reset main pm-full-requested-catalog false
+  --confirm-dev-reset main idle-base false
 grep -Eq ' compose .* stop app ' "$TEST_TMP/failure-app-stop/commands.log" \
   || fail_test "app-stop 실패 주입이 앱 중지 단계에 도달하지 않았습니다."
 [[ ! -e "$TEST_TMP/failure-app-stop/deploy/.dev-db-reset-incomplete" ]] \
@@ -818,7 +798,7 @@ grep -Fq '실패/종료 단계: `안전 marker 생성과 앱 중지`' \
 
 while IFS='|' read -r failure_stage expected_report_stage; do
   run_case "failure-${failure_stage}" "$failure_stage" \
-    --confirm-dev-reset main pm-full-requested-catalog false
+    --confirm-dev-reset main idle-base false
   [[ -e "$TEST_TMP/failure-${failure_stage}/deploy/.dev-db-reset-incomplete" ]] \
     || fail_test "$failure_stage 실패는 incomplete marker를 유지해야 합니다."
   ! grep -Eq ' compose .* up --detach app ' "$TEST_TMP/failure-${failure_stage}/commands.log" \
@@ -831,8 +811,7 @@ flyway-clean|Flyway clean
 flyway-migrate|Flyway migrate
 base|Base Seed 적용
 base-verify|Base Seed 검증
-scenario|Scenario Seed 적용
-verify|Scenario 검증
+dev-reset-verify|Dev QA 시작 상태 검증
 utf8|UTF-8 검증
 flyway-validate|최종 Flyway validate와 연결 검증
 final-charset|최종 Flyway validate와 연결 검증
@@ -849,7 +828,7 @@ grep -Fq '[REDACTED_DEV_DB_URL]' \
 
 for failure_stage in app-start health persona; do
   run_case "failure-${failure_stage}" "$failure_stage" \
-    --confirm-dev-reset main pm-full-requested-catalog false
+    --confirm-dev-reset main idle-base false
   [[ ! -e "$TEST_TMP/failure-${failure_stage}/deploy/.dev-db-reset-incomplete" ]] \
     || fail_test "$failure_stage 실패는 DB 검증 뒤이므로 marker가 없어야 합니다."
   grep -Eq 'DB를 다시 (지우지|초기화하지) 말고' \
@@ -874,7 +853,7 @@ grep -Fq '현재 앱 상태: 정상 실행(health UP)' \
   || fail_test "persona 실패 report가 이미 확인한 health UP 상태를 잃었습니다."
 
 run_case failure-persona-encoding persona-encoding \
-  --confirm-dev-reset main pm-full-requested-catalog false
+  --confirm-dev-reset main idle-base false
 grep -Fq '정확한 한글 닉네임' \
   "$TEST_TMP/failure-persona-encoding/output.log" \
   "$TEST_TMP/failure-persona-encoding/report.md" \
@@ -883,21 +862,13 @@ grep -Fq '현재 앱 상태: 정상 실행(health UP)' \
   "$TEST_TMP/failure-persona-encoding/report.md" \
   || fail_test "문자셋 smoke 실패 report가 이미 확인한 health UP 상태를 잃었습니다."
 
-for success_seed_target in \
-  idle-base \
-  matching-price-vivaldi \
-  matching-no-candidate-alpensia \
-  matching-multi-request-oak \
-  pm-full-requested-catalog; do
-  run_case "success-${success_seed_target}" "" \
-    --confirm-dev-reset main "$success_seed_target" true
-done
+run_case success-idle-base "" --confirm-dev-reset main idle-base true
 
 (
   RUN_CASE_DEPLOYED_IMAGE="$EXPECTED_DIGEST_IMAGE" \
   RUN_CASE_RUNNING_IMAGE="$EXPECTED_DIGEST_IMAGE" \
     run_case success-digest-image "" \
-      --confirm-dev-reset main matching-price-vivaldi true
+      --confirm-dev-reset main idle-base true
 )
 
 assert_idle_success_order \
@@ -905,10 +876,8 @@ assert_idle_success_order \
 ! grep -Eq 'SQL_STAGE=(scenario|verify)' \
   "$TEST_TMP/success-idle-base/commands.log" \
   || fail_test "idle-base reset이 scenario SQL을 실행했습니다."
-assert_pm_success_order \
-  "$TEST_TMP/success-pm-full-requested-catalog/commands.log"
 [[ "$(grep -Fc 'character_set_client' \
-    "$TEST_TMP/success-pm-full-requested-catalog/commands.log")" == "2" ]] \
+    "$TEST_TMP/success-idle-base/commands.log")" == "2" ]] \
   || fail_test "reset 성공 전에 최종 schema UTF-8 계약을 다시 확인하지 않았습니다."
 
 run_migrate_case migration-blocked-by-marker "" true false
