@@ -70,6 +70,8 @@ public class DevInstructorActionTransactionService {
 
         executeMutation(request, lockedState, before);
         entityManager.flush();
+        // 커밋 뒤에도 같은 stateToken이 나오도록 DB에 저장된 시간 정밀도로 다시 읽는다.
+        entityManager.clear();
 
         DevInstructorMemberResponse after = queryService.getMember(memberId);
         return new DevInstructorActionExecutionResponse(request.actionKey(), before, after);
