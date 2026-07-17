@@ -121,6 +121,44 @@ public interface MatchingOfferRepository extends JpaRepository<MatchingOffer, Lo
 
     Optional<MatchingOffer> findFirstByMatchingRequestGroupIdOrderByIdDesc(Long matchingRequestGroupId);
 
+    // dev 매칭 조회에서 현재 그룹들의 제안 이력을 고정 쿼리 수로 읽는다.
+    @Query("""
+            select matchingOffer
+            from MatchingOffer matchingOffer
+            join fetch matchingOffer.matchingRequestGroup matchingRequestGroup
+            join fetch matchingOffer.instructorProfile instructorProfile
+            join fetch instructorProfile.member
+            where matchingRequestGroup.id in :matchingRequestGroupIds
+            order by matchingRequestGroup.id asc, matchingOffer.id desc
+            """)
+    List<MatchingOffer> findByMatchingRequestGroupIdInOrderByGroupIdAscOfferIdDesc(
+            @Param("matchingRequestGroupIds") Collection<Long> matchingRequestGroupIds
+    );
+
+    // dev 매칭 조회에서 강사가 서로 다른 그룹의 live 협상에 동시에 연결됐는지 한 번에 확인한다.
+    @Query("""
+            select matchingOffer
+            from MatchingOffer matchingOffer
+            join fetch matchingOffer.matchingRequestGroup matchingRequestGroup
+            join fetch matchingOffer.instructorProfile instructorProfile
+            join fetch instructorProfile.member
+            where instructorProfile.id in :instructorProfileIds
+              and (
+                  matchingOffer.status = :offeredStatus
+                  or (
+                      matchingOffer.status = :acceptedStatus
+                      and matchingRequestGroup.status in :acceptedGroupStatuses
+                  )
+              )
+            order by instructorProfile.id asc, matchingRequestGroup.id asc, matchingOffer.id asc
+            """)
+    List<MatchingOffer> findActiveByInstructorProfileIdIn(
+            @Param("instructorProfileIds") Collection<Long> instructorProfileIds,
+            @Param("offeredStatus") MatchingOfferStatus offeredStatus,
+            @Param("acceptedStatus") MatchingOfferStatus acceptedStatus,
+            @Param("acceptedGroupStatuses") Collection<MatchingRequestGroupStatus> acceptedGroupStatuses
+    );
+
     // 같은 소비자 매칭 요청이 살아있는 동안 이미 제안을 받은 강사를 다시 후보로 고르지 않기 위한 이력 확인
     @Query("""
             select case when count(matchingOffer) > 0 then true else false end

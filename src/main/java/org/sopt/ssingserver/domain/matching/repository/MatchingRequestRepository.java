@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Optional;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +18,27 @@ import org.springframework.data.repository.query.Param;
 
 // 매칭 요청 재탐색 대상 조회와 동시 처리 방어 Repository
 public interface MatchingRequestRepository extends JpaRepository<MatchingRequest, Long> {
+
+    @EntityGraph(attributePaths = {
+            "member",
+            "resort",
+            "matchingOffer",
+            "matchingOffer.matchingRequestGroup",
+            "matchingOffer.instructorProfile",
+            "matchingOffer.instructorProfile.member"
+    })
+    Page<MatchingRequest> findAllByOrderByIdDesc(Pageable pageable);
+
+    @EntityGraph(attributePaths = {
+            "member",
+            "resort",
+            "matchingOffer",
+            "matchingOffer.matchingRequestGroup",
+            "matchingOffer.instructorProfile",
+            "matchingOffer.instructorProfile.member"
+    })
+    @Query("select matchingRequest from MatchingRequest matchingRequest where matchingRequest.id = :id")
+    Optional<MatchingRequest> findDevExplorerContextById(@Param("id") Long id);
 
     boolean existsByMemberIdAndStatusIn(
             Long memberId,

@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f141b">
+    <title>SSING Dev Matching Explorer</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0f141b;
+            --surface: #151b23;
+            --surface-2: #1b2330;
+            --surface-3: #202a38;
+            --line: #2b3442;
+            --line-strong: #3d4d61;
+            --text: #eef2f7;
+            --muted: #9aa4b2;
+            --blue: #7aa2ff;
+            --blue-soft: rgba(122, 162, 255, .14);
+            --dev-shell-bg: rgba(15, 20, 27, 0.9);
+            --dev-shell-surface: rgba(21, 27, 35, 0.88);
+            --dev-shell-line: #2b3442;
+            --dev-shell-text: #eef2f7;
+            --dev-shell-muted: #9aa4b2;
+            --dev-shell-accent: #7aa2ff;
+            --dev-shell-accent-soft: rgba(122, 162, 255, 0.14);
+            --mint: #62d8b2;
+            --mint-soft: rgba(98, 216, 178, .13);
+            --yellow: #f2c86f;
+            --yellow-soft: rgba(242, 200, 111, .13);
+            --red: #ff8f8f;
+            --red-soft: rgba(255, 143, 143, .13);
+            --purple: #c9a2ff;
+            --shadow: 0 24px 64px rgba(0, 0, 0, .28);
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body { min-height: 100%; }
+
+        body {
+            margin: 0;
+            background:
+                radial-gradient(circle at 12% -10%, rgba(81, 130, 216, .18), transparent 31rem),
+                radial-gradient(circle at 90% 0%, rgba(71, 190, 160, .09), transparent 28rem),
+                var(--bg);
+            color: var(--text);
+            font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        button, input, select { font: inherit; }
+        button, a { -webkit-tap-highlight-color: transparent; }
+
+        .skip-link {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            z-index: 100;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: var(--dev-shell-accent);
+            color: #07111e;
+            font-weight: 700;
+            text-decoration: none;
+            transform: translateY(-160%);
+            transition: transform 0.16s ease;
+        }
+
+        .skip-link:focus-visible { transform: translateY(0); }
+
+        .dev-console-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 22px;
+            min-height: 68px;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--dev-shell-line);
+            background: var(--dev-shell-bg);
+            backdrop-filter: blur(18px);
+        }
+
+        .dev-console-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            color: var(--dev-shell-text);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .dev-console-logo {
+            display: block;
+            flex: 0 0 auto;
+            width: 34px;
+            height: 26px;
+            color: #2c8bef;
+        }
+
+        .dev-console-logo path { fill: currentColor; }
+        .dev-console-brand strong { display: block; font-size: 16px; letter-spacing: -0.02em; }
+        .dev-console-brand small { display: block; color: var(--dev-shell-muted); font-size: 11px; font-weight: 600; }
+
+        .dev-nav {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px;
+            border: 1px solid var(--dev-shell-line);
+            border-radius: 11px;
+            background: var(--dev-shell-surface);
+        }
+
+        .dev-nav a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            padding: 7px 11px;
+            border-radius: 8px;
+            color: var(--dev-shell-muted);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 700;
+            touch-action: manipulation;
+        }
+
+        .dev-nav a:hover { color: var(--dev-shell-text); background: rgba(255, 255, 255, 0.05); }
+        .dev-nav a.active { color: #dbe9ff; background: var(--dev-shell-accent-soft); }
+
+        .dev-console-brand:focus-visible,
+        .dev-nav a:focus-visible {
+            outline: 2px solid var(--dev-shell-accent);
+            outline-offset: 2px;
+        }
+
+        .dev-console-context {
+            margin-left: auto;
+            color: var(--dev-shell-muted);
+            font-size: 12px;
+            text-align: right;
+        }
+
+        .page {
+            max-width: 1680px;
+            margin: 0 auto;
+            padding: 22px 24px 36px;
+        }
+
+        .page-heading {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 16px;
+        }
+
+        h1 { margin: 0; font-size: 24px; line-height: 1.2; letter-spacing: -.03em; text-wrap: balance; }
+        .page-heading p { margin: 5px 0 0; color: var(--muted); text-wrap: pretty; }
+
+        .freshness {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .freshness-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--mint);
+            box-shadow: 0 0 0 4px var(--mint-soft);
+        }
+
+        .toolbar {
+            display: grid;
+            grid-template-columns: minmax(220px, 1fr) minmax(180px, 230px) auto auto;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: rgba(17, 25, 35, .9);
+            box-shadow: var(--shadow);
+        }
+
+        .control {
+            min-height: 40px;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            outline: none;
+            background: var(--bg);
+            color: var(--text);
+            padding: 8px 11px;
+        }
+
+        .control:focus-visible { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+
+        .toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 0 10px;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            color: var(--muted);
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .toggle input { accent-color: var(--blue); }
+
+        .button {
+            min-height: 40px;
+            border: 1px solid var(--line-strong);
+            border-radius: 9px;
+            background: var(--surface-2);
+            color: var(--text);
+            padding: 8px 13px;
+            font-weight: 750;
+            cursor: pointer;
+        }
+
+        .button:hover { border-color: var(--blue); background: var(--surface-3); }
+        .button.primary { border-color: #5f94ec; background: #5f94ec; color: #07111e; }
+        .button:disabled { opacity: .45; cursor: not-allowed; }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(390px, .82fr) minmax(620px, 1.55fr);
+            gap: 14px;
+            min-height: 690px;
+        }
+
+        .panel {
+            min-width: 0;
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: rgba(17, 25, 35, .92);
+            box-shadow: var(--shadow);
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            min-height: 54px;
+            padding: 11px 14px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(23, 33, 46, .8);
+        }
+
+        .panel-head h2 { margin: 0; font-size: 14px; }
+        .summary { color: var(--muted); font-size: 12px; }
+
+        .case-list { max-height: calc(100vh - 235px); overflow: auto; }
+
+        .case-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+            width: 100%;
+            padding: 13px 14px;
+            border: 0;
+            border-bottom: 1px solid rgba(41, 54, 71, .78);
+            background: transparent;
+            color: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .case-row:hover { background: rgba(118, 167, 255, .055); }
+        .case-row.selected { background: var(--blue-soft); box-shadow: inset 3px 0 var(--blue); }
+        .case-row.inconsistent { box-shadow: inset 3px 0 var(--red); }
+        .case-row.selected.inconsistent { box-shadow: inset 3px 0 var(--red); }
+
+        .case-title { display: flex; align-items: center; gap: 7px; min-width: 0; }
+        .case-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .case-meta { margin-top: 5px; color: var(--muted); font-size: 12px; }
+        .case-ids { display: flex; flex-wrap: wrap; gap: 5px 9px; margin-top: 8px; color: #aebdd0; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .case-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+
+        .badge, .mini-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 3px 7px;
+            font-size: 11px;
+            font-weight: 750;
+            white-space: nowrap;
+        }
+
+        .badge.blue { color: #bcd4ff; border-color: rgba(118, 167, 255, .45); background: var(--blue-soft); }
+        .badge.mint { color: #a6f0d8; border-color: rgba(98, 216, 178, .42); background: var(--mint-soft); }
+        .badge.yellow { color: #ffe2a1; border-color: rgba(242, 200, 111, .42); background: var(--yellow-soft); }
+        .badge.red { color: #ffc0c0; border-color: rgba(255, 143, 143, .42); background: var(--red-soft); }
+        .badge.purple { color: #dec6ff; border-color: rgba(201, 162, 255, .42); background: rgba(201, 162, 255, .12); }
+        .mini-chip { padding: 2px 6px; color: var(--muted); font-weight: 650; }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 12px;
+            border-top: 1px solid var(--line);
+        }
+
+        .pagination .button { min-height: 32px; padding: 5px 9px; }
+
+        .detail { max-height: calc(100vh - 181px); overflow: auto; }
+        .detail-body { padding: 16px; }
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(150px, .6fr));
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .metric {
+            min-width: 0;
+            padding: 13px;
+            border: 1px solid var(--line);
+            border-radius: 11px;
+            background: var(--surface-2);
+        }
+
+        .metric label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; font-weight: 750; text-transform: uppercase; }
+        .metric strong { display: block; font-size: 15px; overflow-wrap: anywhere; }
+        .metric code { color: #c7d7eb; font-size: 11px; overflow-wrap: anywhere; }
+
+        .section { margin-top: 18px; }
+        .section-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 9px; }
+        .section-title h3 { margin: 0; font-size: 13px; }
+        .section-title span { color: var(--muted); font-size: 11px; }
+
+        .people-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+        .person-card { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+        .person-card .name { margin-top: 9px; font-weight: 800; }
+        .person-card dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 3px 8px; margin: 8px 0 0; font-size: 12px; }
+        .person-card dt { color: var(--muted); }
+        .person-card dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+
+        .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { position: sticky; top: 0; z-index: 1; background: #182332; color: var(--muted); text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+        th, td { padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+        tr:last-child td { border-bottom: 0; }
+        td code { color: #c6d7ea; }
+
+        .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+        .action-button { min-height: 74px; padding: 11px; text-align: left; }
+        .action-button span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 500; }
+
+        .notice {
+            margin: 10px 0;
+            padding: 10px 12px;
+            border: 1px solid rgba(242, 200, 111, .4);
+            border-radius: 9px;
+            background: var(--yellow-soft);
+            color: #ffe4a9;
+            font-size: 12px;
+        }
+
+        .notice.error { border-color: rgba(255, 143, 143, .45); background: var(--red-soft); color: #ffc1c1; }
+        .notice.info { border-color: rgba(118, 167, 255, .4); background: var(--blue-soft); color: #c7d9ff; }
+        .notice ul { margin: 5px 0 0; padding-left: 18px; }
+
+        .empty {
+            display: grid;
+            place-items: center;
+            min-height: 420px;
+            padding: 36px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .empty strong { display: block; margin-bottom: 7px; color: var(--text); font-size: 16px; }
+        .empty code { color: #c5d8f1; }
+
+        .skeleton { opacity: .5; pointer-events: none; }
+
+        dialog {
+            width: min(900px, calc(100vw - 28px));
+            max-height: min(84vh, 860px);
+            padding: 0;
+            overflow: hidden;
+            border: 1px solid var(--line-strong);
+            border-radius: 15px;
+            background: var(--surface);
+            color: var(--text);
+            box-shadow: 0 34px 100px rgba(0, 0, 0, .58);
+        }
+
+        dialog::backdrop { background: rgba(2, 6, 12, .75); backdrop-filter: blur(6px); }
+        .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 17px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+        .dialog-head h2 { margin: 0; font-size: 17px; }
+        .dialog-body { max-height: calc(84vh - 70px); overflow: auto; padding: 16px; }
+        .outcome { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); }
+        .outcome h3 { margin: 0; font-size: 13px; }
+        .outcome p { margin: 4px 0 10px; color: var(--muted); font-size: 12px; }
+        .change { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(130px, .7fr) 24px minmax(130px, .7fr); gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 12px; }
+        .change:first-child { border-top: 0; }
+        .change .before { color: var(--yellow); }
+        .change .after { color: var(--mint); }
+
+        .toast {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            z-index: 50;
+            max-width: 420px;
+            padding: 10px 13px;
+            border: 1px solid var(--line-strong);
+            border-radius: 9px;
+            background: #1b2838;
+            color: var(--text);
+            box-shadow: var(--shadow);
+            opacity: 0;
+            transform: translateY(8px);
+            pointer-events: none;
+            transition: .18s ease;
+        }
+
+        .toast.show { opacity: 1; transform: none; }
+
+        @media (max-width: 1040px) {
+            .dev-console-context { display: none; }
+            .toolbar { grid-template-columns: 1fr 1fr; }
+            .workspace { grid-template-columns: 1fr; }
+            .case-list, .detail { max-height: none; }
+            .hero { grid-template-columns: 1fr 1fr; }
+            .hero .metric:first-child { grid-column: 1 / -1; }
+        }
+
+        @media (max-width: 640px) {
+            .dev-console-header { flex-wrap: wrap; padding-left: 14px; padding-right: 14px; }
+            .page { padding-left: 14px; padding-right: 14px; }
+            .dev-nav { width: 100%; margin-left: 0; order: 3; }
+            .dev-nav a { flex: 1; text-align: center; }
+            .toolbar { grid-template-columns: 1fr; }
+            .page-heading { align-items: flex-start; flex-direction: column; }
+            .hero { grid-template-columns: 1fr; }
+            .hero .metric:first-child { grid-column: auto; }
+            .change { grid-template-columns: 1fr; }
+            .change .arrow { display: none; }
+        }
+    </style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+<header class="dev-console-header" data-dev-console-shell="v1">
+    <a class="dev-console-brand" href="/dev/auth/console" aria-label="SSING 개발 데이터 탐색기">
+        <svg class="dev-console-logo ssing-brand" data-node-id="273:2055" viewBox="0 0 167.15 125.969" aria-hidden="true" focusable="false">
+            <path d="M69.5152 0.0796113C74.9546 -1.77272 118.099 29.2313 125.503 37.5591C132.906 45.8872 136.607 61.8414 126.89 69.023C116.248 76.8882 106.34 72.0164 89.8736 65.3208L99.6636 90.6861L119.03 104.952C124.207 108.765 125.313 116.053 121.5 121.23C117.686 126.407 110.397 127.513 105.22 123.7L4.73884 49.687C-0.438354 45.8736 -1.5443 38.5849 2.26911 33.4077C6.08252 28.2306 13.3712 27.1246 18.5484 30.938L35.1451 43.1626C32.8573 35.9301 32.4514 32.1907 37.1256 28.3042C46.9695 22.5445 68.7621 32.3985 94.5006 39.4097C76.681 19.7301 63.3769 2.17411 69.5152 0.0796113ZM150.955 22.7495C159.899 22.7497 167.15 30 167.15 38.9439C167.15 47.8879 159.899 55.139 150.955 55.1392C142.011 55.1391 134.76 47.8879 134.76 38.9439C134.76 29.9999 142.011 22.7496 150.955 22.7495Z"/>
+        </svg>
+        <span><strong>SSING Dev</strong><small>Data Explorer</small></span>
+    </a>
+    <nav class="dev-nav" aria-label="개발 도구">
+        <a href="/dev/auth/console">Persona</a>
+        <a class="active" href="/dev/matching/console" aria-current="page">Matching</a>
+        <a href="/adminer/" target="_blank" rel="noopener noreferrer" aria-label="Adminer 새 탭에서 열기">Adminer <span aria-hidden="true">↗</span></a>
+    </nav>
+    <div class="dev-console-context">읽기·미리보기 전용 · 실제 상태 변경은 #159</div>
+</header>
+
+<main id="main-content" class="page">
+    <div class="page-heading">
+        <div>
+            <h1>매칭 관계 조회</h1>
+            <p>강습생 요청부터 그룹·제안·결제·강습까지, 현재 연결과 가능한 다음 동작을 확인합니다.</p>
+        </div>
+        <div class="freshness"><span class="freshness-dot"></span><span id="observedAt">아직 조회하지 않음</span></div>
+    </div>
+
+    <section class="toolbar" aria-label="매칭 조회 도구">
+        <input class="control" id="search" type="search" aria-label="현재 페이지 검색" placeholder="현재 페이지에서 persona, 이름, request/group/offer ID 검색…" autocomplete="off">
+        <select class="control" id="statusFilter" aria-label="상태 필터">
+            <option value="">모든 MatchingStatus</option>
+        </select>
+        <label class="toggle"><input id="autoRefresh" type="checkbox"> 10초 자동 새로고침</label>
+        <button class="button primary" id="refresh" type="button">새로고침</button>
+    </section>
+
+    <section class="workspace">
+        <section class="panel" aria-label="매칭 목록">
+            <div class="panel-head">
+                <h2>매칭 요청</h2>
+                <span class="summary" id="listSummary">0건</span>
+            </div>
+            <div class="case-list" id="caseList"></div>
+            <div class="pagination">
+                <button class="button" id="previousPage" type="button">← 이전</button>
+                <span class="summary" id="pageSummary">1 / 1</span>
+                <button class="button" id="nextPage" type="button">다음 →</button>
+            </div>
+        </section>
+
+        <section class="panel detail" aria-label="매칭 상세">
+            <div class="panel-head">
+                <h2>관계 상세와 영향 미리보기</h2>
+                <span class="summary" id="detailMeta">매칭 건을 선택하세요</span>
+            </div>
+            <div id="detail"></div>
+        </section>
+    </section>
+</main>
+
+<dialog id="actionDialog">
+    <div class="dialog-head">
+        <h2 id="dialogTitle">영향 미리보기</h2>
+        <button class="button" id="closeDialog" type="button">닫기</button>
+    </div>
+    <div class="dialog-body" id="dialogBody"></div>
+</dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+    const STATUS_LABELS = {
+        SEARCHING: "강사 탐색 중",
+        WAITING_FOR_TEAM: "팀 구성 대기",
+        WAITING_FOR_INSTRUCTOR: "강사 응답 대기",
+        WAITING_FOR_CONFIRMATION: "강습생 확인 대기",
+        WAITING_FOR_OTHER_CONFIRMATIONS: "다른 강습생 확인 대기",
+        PAYMENT_PENDING: "결제 대기",
+        WAITING_FOR_OTHER_PAYMENTS: "다른 강습생 결제 대기",
+        PAYMENT_EXPIRED: "결제 만료",
+        REMATCHING: "재매칭 중",
+        CONFIRMED: "매칭 확정",
+        CANCELED: "취소",
+        FAILED: "실패",
+        NO_AVAILABLE_INSTRUCTOR: "가능한 강사 없음"
+    };
+
+    const state = {
+        page: 0,
+        size: 50,
+        totalPages: 0,
+        totalElements: 0,
+        requests: [],
+        selectedId: null,
+        detail: null,
+        detailSequence: 0,
+        loading: false,
+        autoTimer: null
+    };
+
+    const elements = {
+        search: document.querySelector("#search"),
+        statusFilter: document.querySelector("#statusFilter"),
+        autoRefresh: document.querySelector("#autoRefresh"),
+        refresh: document.querySelector("#refresh"),
+        observedAt: document.querySelector("#observedAt"),
+        caseList: document.querySelector("#caseList"),
+        listSummary: document.querySelector("#listSummary"),
+        previousPage: document.querySelector("#previousPage"),
+        nextPage: document.querySelector("#nextPage"),
+        pageSummary: document.querySelector("#pageSummary"),
+        detail: document.querySelector("#detail"),
+        detailMeta: document.querySelector("#detailMeta"),
+        dialog: document.querySelector("#actionDialog"),
+        dialogTitle: document.querySelector("#dialogTitle"),
+        dialogBody: document.querySelector("#dialogBody"),
+        toast: document.querySelector("#toast")
+    };
+
+    elements.refresh.addEventListener("click", () => loadList(true));
+    elements.search.addEventListener("input", renderList);
+    elements.statusFilter.addEventListener("change", renderList);
+    elements.previousPage.addEventListener("click", () => changePage(-1));
+    elements.nextPage.addEventListener("click", () => changePage(1));
+    elements.autoRefresh.addEventListener("change", configureAutoRefresh);
+    document.querySelector("#closeDialog").addEventListener("click", () => elements.dialog.close());
+    elements.dialog.addEventListener("click", event => {
+        if (event.target === elements.dialog) elements.dialog.close();
+    });
+
+    async function loadList(preserveSelection = true) {
+        if (state.loading) return;
+        state.loading = true;
+        elements.refresh.disabled = true;
+        renderPagination();
+        document.querySelector(".workspace").classList.add("skeleton");
+        try {
+            let payload = await api(`/dev/matching/requests?page=${state.page}&size=${state.size}`);
+            if (payload.totalPages > 0 && state.page >= payload.totalPages) {
+                state.page = payload.totalPages - 1;
+                payload = await api(`/dev/matching/requests?page=${state.page}&size=${state.size}`);
+            } else if (payload.totalPages === 0) {
+                state.page = 0;
+            }
+            state.requests = payload.requests;
+            state.totalPages = payload.totalPages;
+            state.totalElements = payload.totalElements;
+            updateStatusFilter();
+            updateFreshness(payload.observedAt);
+
+            const selectedStillExists = state.requests.some(item => item.matchingRequestId === state.selectedId);
+            if (!preserveSelection || !selectedStillExists) {
+                closePreview();
+                state.selectedId = state.requests[0]?.matchingRequestId ?? null;
+            }
+            renderList();
+            renderPagination();
+            if (state.selectedId !== null) {
+                await loadDetail(state.selectedId, true);
+            } else {
+                clearDetailState();
+            }
+        } catch (error) {
+            clearListState();
+            showError(error);
+        } finally {
+            state.loading = false;
+            elements.refresh.disabled = false;
+            renderPagination();
+            document.querySelector(".workspace").classList.remove("skeleton");
+        }
+    }
+
+    async function loadDetail(matchingRequestId, fromRefresh = false) {
+        const selectionChanged = state.selectedId !== matchingRequestId;
+        if (selectionChanged) {
+            closePreview();
+            state.detail = null;
+        }
+        state.selectedId = matchingRequestId;
+        const sequence = ++state.detailSequence;
+        renderList();
+        elements.detailMeta.textContent = `request #${matchingRequestId} 조회 중`;
+        try {
+            const detail = await api(`/dev/matching/requests/${matchingRequestId}`);
+            if (sequence !== state.detailSequence || state.selectedId !== matchingRequestId) return;
+            state.detail = detail;
+            renderDetail();
+            updateFreshness(state.detail.observedAt);
+            if (fromRefresh && elements.dialog.open) {
+                elements.dialog.close();
+                toast("데이터가 새로 조회되어 기존 미리보기를 닫았습니다.");
+            }
+        } catch (error) {
+            if (sequence !== state.detailSequence || state.selectedId !== matchingRequestId) return;
+            state.detail = null;
+            closePreview();
+            elements.detail.innerHTML = errorState(error.message);
+            elements.detailMeta.textContent = `request #${matchingRequestId} 조회 실패`;
+        }
+    }
+
+    async function api(path) {
+        const response = await fetch(path, {headers: {Accept: "application/json"}, cache: "no-store"});
+        let body;
+        try {
+            body = await response.json();
+        } catch (_) {
+            throw new Error(`HTTP ${response.status}: JSON 응답을 읽을 수 없습니다.`);
+        }
+        if (!response.ok || body.success !== true) {
+            throw new Error(body.message || `HTTP ${response.status}`);
+        }
+        return body.data;
+    }
+
+    function renderList() {
+        const query = elements.search.value.trim().toLowerCase();
+        const filter = elements.statusFilter.value;
+        const visible = state.requests.filter(item => {
+            const haystack = [
+                item.matchingRequestId,
+                item.groupId,
+                item.offerId,
+                item.consumerMemberId,
+                item.consumerPersonaKey,
+                item.consumerName,
+                item.matchingStatus,
+                item.requestStatus
+            ].filter(value => value !== null && value !== undefined).join(" ").toLowerCase();
+            return (!query || haystack.includes(query)) && (!filter || item.matchingStatus === filter);
+        });
+
+        elements.listSummary.textContent = `전체 ${state.totalElements}건 · 현재 페이지 ${visible.length}건 표시`;
+        if (state.requests.length === 0) {
+            elements.caseList.innerHTML = `
+                <div class="empty">
+                    <div><strong>조회할 매칭 요청이 없습니다.</strong>
+                    공유 Dev DB는 항상 <code>idle-base</code>로 reset됩니다. Persona 콘솔에서 토큰을 발급하고 매칭 요청 API를 실행하세요.<br>
+                    원본 seed 행은 <a href="/adminer/" target="_blank" rel="noopener noreferrer" aria-label="Adminer 새 탭에서 열기">Adminer</a>에서 확인할 수 있습니다.</div>
+                </div>`;
+            return;
+        }
+        if (visible.length === 0) {
+            elements.caseList.innerHTML = `<div class="empty"><div><strong>검색 결과가 없습니다.</strong>검색어나 상태 필터를 바꿔보세요.</div></div>`;
+            return;
+        }
+
+        elements.caseList.innerHTML = visible.map(item => {
+            const selected = item.matchingRequestId === state.selectedId ? " selected" : "";
+            const inconsistent = item.resolutionState === "INCONSISTENT" ? " inconsistent" : "";
+            const actions = (item.availableActionKeys || []).map(key => `<span class="mini-chip">${escapeHtml(actionLabel(key))}</span>`).join("");
+            return `
+                <button class="case-row${selected}${inconsistent}" type="button" data-request-id="${item.matchingRequestId}">
+                    <span>
+                        <span class="case-title">
+                            <strong>${escapeHtml(item.consumerName || "이름 없음")}</strong>
+                            ${statusBadge(item.matchingStatus, item.resolutionState)}
+                        </span>
+                        <span class="case-meta">${escapeHtml(item.consumerPersonaKey || "일반 member")} · raw ${escapeHtml(item.requestStatus)}</span>
+                        <span class="case-ids">
+                            <span>request #${value(item.matchingRequestId)}</span>
+                            <span>group #${value(item.groupId)}</span>
+                            <span>offer #${value(item.offerId)}</span>
+                        </span>
+                        <span class="case-actions">${actions || `<span class="mini-chip">가능 동작 없음</span>`}</span>
+                    </span>
+                    <span aria-hidden="true">›</span>
+                </button>`;
+        }).join("");
+        elements.caseList.querySelectorAll("[data-request-id]").forEach(row => {
+            row.addEventListener("click", () => loadDetail(Number(row.dataset.requestId)));
+        });
+    }
+
+    function renderDetail() {
+        const detail = state.detail;
+        if (!detail) return renderEmptyDetail();
+        elements.detailMeta.textContent = `request #${detail.matchingRequestId} · ${formatTime(detail.observedAt)} 조회`;
+        const diagnostics = detail.diagnostics?.length
+            ? `<div class="notice error"><strong>관계 진단 필요</strong><ul>${detail.diagnostics.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`
+            : "";
+        const limitations = detail.actionLimitations?.length
+            ? `<div class="notice info"><strong>미리보기 안내</strong><ul>${detail.actionLimitations.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`
+            : "";
+
+        elements.detail.innerHTML = `<div class="detail-body">
+            ${diagnostics}
+            <section class="hero">
+                <div class="metric"><label>계산된 MatchingStatus</label><strong>${statusText(detail.matchingStatus, detail.resolutionState)}</strong><code>${escapeHtml(detail.matchingStatus || detail.resolutionState)}</code></div>
+                <div class="metric"><label>원본 Request</label><strong>${escapeHtml(detail.requestStatus)}</strong><code>reason: ${escapeHtml(detail.requestStatusReason || "-")}</code></div>
+                <div class="metric"><label>State token</label><strong>v1 snapshot</strong><code title="${escapeHtml(detail.stateToken)}">${escapeHtml(shortToken(detail.stateToken))}</code></div>
+            </section>
+
+            <section class="section">
+                <div class="section-title"><h3>연결된 사람</h3><span>personaKey와 실제 member ID를 함께 표시</span></div>
+                <div class="people-grid">${detail.people.map(personCard).join("")}</div>
+            </section>
+
+            <section class="section">
+                <div class="section-title"><h3>요청별 연결표</h3><span>어느 강습생의 item·payment인지 한 행으로 확인</span></div>
+                ${requestRelationTable(detail.requestRelations, detail.people)}
+            </section>
+
+            <section class="section">
+                <div class="section-title"><h3>리소스 관계</h3><span>현재 action 판단에 사용한 row</span></div>
+                ${resourceTable(detail.resources)}
+            </section>
+
+            <section class="section">
+                <div class="section-title"><h3>가능한 동작</h3><span>클릭해도 DB는 바뀌지 않습니다.</span></div>
+                ${actionButtons(detail.availableActions)}
+            </section>
+
+            ${detail.participants?.length ? `
+                <section class="section">
+                    <div class="section-title"><h3>강습 참가자 원본</h3><span>account가 아닌 matching participant row</span></div>
+                    ${participantTable(detail.participants)}
+                </section>` : ""}
+            ${limitations}
+        </div>`;
+
+        elements.detail.querySelectorAll("[data-action-index]").forEach(button => {
+            button.addEventListener("click", () => openActionPreview(detail.availableActions[Number(button.dataset.actionIndex)]));
+        });
+    }
+
+    function renderEmptyDetail() {
+        elements.detailMeta.textContent = "매칭 건을 선택하세요";
+        elements.detail.innerHTML = `<div class="empty"><div><strong>왼쪽에서 매칭 요청을 선택하세요.</strong>사람·관계 ID·원본 상태와 가능한 동작의 영향을 한 번에 볼 수 있습니다.</div></div>`;
+    }
+
+    function personCard(person) {
+        return `<article class="person-card">
+            <header><span class="badge ${person.personRole === "INSTRUCTOR" ? "purple" : "blue"}">${person.personRole === "INSTRUCTOR" ? "강사" : "강습생"}</span></header>
+            <div class="name">${escapeHtml(person.displayName || "이름 없음")}</div>
+            <dl>
+                <dt>personaKey</dt><dd>${escapeHtml(person.personaKey || "-")}</dd>
+                <dt>memberId</dt><dd>#${value(person.memberId)}</dd>
+                ${person.instructorProfileId ? `<dt>instructorProfileId</dt><dd>#${person.instructorProfileId}</dd>` : ""}
+            </dl>
+        </article>`;
+    }
+
+    function resourceTable(resources) {
+        if (!resources?.length) return `<div class="notice">표시할 리소스가 없습니다.</div>`;
+        return `<div class="table-wrap"><table>
+            <thead><tr><th>Resource</th><th>ID</th><th>Status</th><th>Reason</th><th>Updated at</th></tr></thead>
+            <tbody>${resources.map(resource => `<tr>
+                <td>${escapeHtml(resource.resourceType)}</td>
+                <td><code>#${value(resource.resourceId)}</code></td>
+                <td>${escapeHtml(resource.status || "-")}</td>
+                <td>${escapeHtml(resource.statusReason || "-")}</td>
+                <td>${escapeHtml(formatTime(resource.updatedAt))}</td>
+            </tr>`).join("")}</tbody>
+        </table></div>`;
+    }
+
+    function requestRelationTable(relations, people) {
+        if (!relations?.length) return `<div class="notice">표시할 요청 관계가 없습니다.</div>`;
+        return `<div class="table-wrap"><table>
+            <thead><tr><th>강습생</th><th>Request</th><th>Group item</th><th>Payment</th><th>Group / Offer</th><th>계산 상태</th></tr></thead>
+            <tbody>${relations.map(relation => {
+                const consumer = people.find(person => person.personRole === "CONSUMER"
+                    && person.memberId === relation.consumerMemberId);
+                return `<tr>
+                    <td>${escapeHtml(consumer?.displayName || `member #${relation.consumerMemberId}`)}<br><code>${escapeHtml(consumer?.personaKey || "-")}</code></td>
+                    <td><code>#${value(relation.matchingRequestId)}</code></td>
+                    <td><code>#${value(relation.groupItemId)}</code></td>
+                    <td><code>#${value(relation.paymentId)}</code></td>
+                    <td><code>group #${value(relation.groupId)}<br>offer #${value(relation.offerId)}</code></td>
+                    <td>${statusBadge(relation.matchingStatus, relation.matchingStatus ? "RESOLVED" : "INCONSISTENT")}</td>
+                </tr>`;
+            }).join("")}</tbody>
+        </table></div>`;
+    }
+
+    function participantTable(participants) {
+        return `<div class="table-wrap"><table>
+            <thead><tr><th>Participant ID</th><th>Request ID</th><th>Name</th><th>Age</th><th>Gender</th></tr></thead>
+            <tbody>${participants.map(person => `<tr><td><code>#${person.participantId}</code></td><td><code>#${person.matchingRequestId}</code></td><td>${escapeHtml(person.name || "-")}</td><td>${person.age}</td><td>${escapeHtml(person.gender)}</td></tr>`).join("")}</tbody>
+        </table></div>`;
+    }
+
+    function actionButtons(actions) {
+        if (!actions?.length) return `<div class="notice">현재 원본 상태에서 실행 가능한 동작이 없거나, 관계 진단이 필요합니다.</div>`;
+        return `<div class="action-grid">${actions.map((action, index) => `
+            <button class="button action-button" type="button" data-action-index="${index}">
+                ${escapeHtml(action.label)}
+                <span>${action.outcomes.length > 1 ? `${action.outcomes.length}개 조건부 결과` : "예상 변경 확인"} · preview only</span>
+            </button>`).join("")}</div>`;
+    }
+
+    function openActionPreview(action) {
+        elements.dialogTitle.textContent = `${action.label} 영향 미리보기`;
+        elements.dialogBody.innerHTML = `
+            <div class="notice info"><strong>실행되지 않습니다.</strong> 이 화면은 #159에서 실제 실행 기능을 붙이기 전, 현재 snapshot 기준 예상 영향만 보여줍니다.</div>
+            <section class="people-grid">
+                <article class="person-card"><span class="badge blue">Actor</span><div class="name">${escapeHtml(action.actor?.displayName || "-")}</div><dl><dt>personaKey</dt><dd>${escapeHtml(action.actor?.personaKey || "-")}</dd><dt>memberId</dt><dd>#${value(action.actor?.memberId)}</dd></dl></article>
+                <article class="person-card"><span class="badge mint">Affected people</span><div class="name">${action.affectedPeople.length}명</div><div class="case-meta">${action.affectedPeople.map(person => escapeHtml(person.displayName || `member #${person.memberId}`)).join(" · ")}</div></article>
+                <article class="person-card"><span class="badge yellow">Affected resources</span><div class="name">${action.affectedResources.length}개</div><div class="case-meta">${action.affectedResources.map(resource => `${escapeHtml(resource.resourceType)} #${value(resource.resourceId)}`).join(" · ")}</div></article>
+            </section>
+            ${action.outcomes.map(outcomeCard).join("")}`;
+        elements.dialog.showModal();
+    }
+
+    function outcomeCard(outcome) {
+        const personChanges = outcome.personStatusChanges.map(change => `
+            <div class="change"><strong>${escapeHtml(change.person.displayName || `member #${change.person.memberId}`)}</strong><span class="before">${escapeHtml(change.before || "-")}</span><span class="arrow">→</span><span class="after">${escapeHtml(change.after || "-")}</span></div>`).join("");
+        const resourceChanges = outcome.resourceStateChanges.map(change => `
+            <div class="change"><strong>${escapeHtml(change.resource.resourceType)} #${value(change.resource.resourceId)} · ${escapeHtml(change.field)}</strong><span class="before">${escapeHtml(change.before || "-")}</span><span class="arrow">→</span><span class="after">${escapeHtml(change.after || "-")}</span></div>`).join("");
+        return `<article class="outcome">
+            <h3>${escapeHtml(outcome.outcomeKey)} ${outcome.conditional ? `<span class="badge yellow">조건부</span>` : `<span class="badge mint">예상 결과</span>`}</h3>
+            <p>${escapeHtml(outcome.condition)} · ${escapeHtml(outcome.note || "")}</p>
+            ${personChanges}${resourceChanges}
+        </article>`;
+    }
+
+    function updateStatusFilter() {
+        const current = elements.statusFilter.value;
+        const statuses = [...new Set(state.requests.map(item => item.matchingStatus).filter(Boolean))].sort();
+        elements.statusFilter.innerHTML = `<option value="">모든 MatchingStatus</option>${statuses.map(status => `<option value="${escapeHtml(status)}">${escapeHtml(STATUS_LABELS[status] || status)} (${escapeHtml(status)})</option>`).join("")}`;
+        if (statuses.includes(current)) elements.statusFilter.value = current;
+    }
+
+    function renderPagination() {
+        const displayPages = Math.max(state.totalPages, 1);
+        elements.pageSummary.textContent = `${state.page + 1} / ${displayPages}`;
+        elements.previousPage.disabled = state.loading || state.page <= 0;
+        elements.nextPage.disabled = state.loading || state.page + 1 >= state.totalPages;
+    }
+
+    function changePage(delta) {
+        const next = state.page + delta;
+        if (next < 0 || next >= state.totalPages) return;
+        state.page = next;
+        clearDetailState();
+        loadList(false);
+    }
+
+    function configureAutoRefresh() {
+        if (state.autoTimer) clearInterval(state.autoTimer);
+        state.autoTimer = null;
+        if (elements.autoRefresh.checked) {
+            state.autoTimer = setInterval(() => loadList(true), 10_000);
+            toast("10초 자동 새로고침을 켰습니다.");
+        } else {
+            toast("자동 새로고침을 껐습니다.");
+        }
+    }
+
+    function statusBadge(status, resolution) {
+        if (resolution === "INCONSISTENT") return `<span class="badge red">관계 오류</span>`;
+        const color = status === "CONFIRMED" ? "mint"
+            : ["FAILED", "CANCELED", "PAYMENT_EXPIRED", "NO_AVAILABLE_INSTRUCTOR"].includes(status) ? "red"
+            : ["PAYMENT_PENDING", "WAITING_FOR_CONFIRMATION", "WAITING_FOR_OTHER_CONFIRMATIONS", "WAITING_FOR_OTHER_PAYMENTS"].includes(status) ? "yellow"
+            : "blue";
+        return `<span class="badge ${color}">${escapeHtml(STATUS_LABELS[status] || status || "상태 없음")}</span>`;
+    }
+
+    function statusText(status, resolution) {
+        if (resolution === "INCONSISTENT") return "관계 진단 필요";
+        return STATUS_LABELS[status] || status || "상태 없음";
+    }
+
+    function actionLabel(key) {
+        return {
+            INSTRUCTOR_ACCEPT: "강사 수락",
+            INSTRUCTOR_REJECT: "강사 거절",
+            CONSUMER_ACCEPT: "강습생 수락",
+            CONSUMER_REJECT: "강습생 거절",
+            PAYMENT_COMPLETE: "결제 완료"
+        }[key] || key;
+    }
+
+    function updateFreshness(instant) {
+        elements.observedAt.textContent = instant ? `마지막 조회 ${formatTime(instant)}` : "조회 시각 없음";
+    }
+
+    function shortToken(token) {
+        if (!token) return "-";
+        return token.length > 28 ? `${token.slice(0, 16)}…${token.slice(-8)}` : token;
+    }
+
+    function formatTime(instant) {
+        if (!instant) return "-";
+        const date = new Date(instant);
+        if (Number.isNaN(date.getTime())) return String(instant);
+        return new Intl.DateTimeFormat("ko-KR", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false}).format(date);
+    }
+
+    function value(input) { return input === null || input === undefined || input === "" ? "-" : input; }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    function errorState(message) {
+        return `<div class="empty"><div><strong>조회에 실패했습니다.</strong>${escapeHtml(message)}<br>dev API와 현재 profile, 관계 진단 로그를 확인하세요.</div></div>`;
+    }
+
+    function showError(error) {
+        elements.caseList.innerHTML = errorState(error.message);
+        elements.detail.innerHTML = errorState(error.message);
+        elements.listSummary.textContent = "조회 실패";
+        elements.detailMeta.textContent = "조회 실패";
+        toast(`조회 실패: ${error.message}`);
+    }
+
+    function closePreview() {
+        if (elements.dialog.open) elements.dialog.close();
+    }
+
+    function clearDetailState() {
+        state.detailSequence += 1;
+        state.selectedId = null;
+        state.detail = null;
+        closePreview();
+        renderEmptyDetail();
+    }
+
+    function clearListState() {
+        state.requests = [];
+        state.totalPages = 0;
+        state.totalElements = 0;
+        state.page = 0;
+        clearDetailState();
+        updateStatusFilter();
+    }
+
+    let toastTimer;
+    function toast(message) {
+        clearTimeout(toastTimer);
+        elements.toast.textContent = message;
+        elements.toast.classList.add("show");
+        toastTimer = setTimeout(() => elements.toast.classList.remove("show"), 2400);
+    }
+
+    const initialLoadPromise = loadList(false);
+    if (typeof globalThis.__SSING_DEV_MATCHING_TEST_HOOK__ === "function") {
+        globalThis.__SSING_DEV_MATCHING_TEST_HOOK__({
+            state,
+            elements,
+            loadList,
+            loadDetail,
+            initialLoadPromise
+        });
+    }
+</script>
+</body>
+</html>

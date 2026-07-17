@@ -352,6 +352,46 @@ jobs:
           echo "::notice title=Firebase 서비스 계정 키 복원 완료::키를 EC2 런타임 파일로만 복원했습니다."
           echo "::endgroup::"
 
+      # 기존 dev runtime DB 비밀번호를 Adminer 컨테이너 전용 secret 파일로 복원
+      - name: Adminer DB 비밀번호 파일 복원
+        env:
+          SSING_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::Adminer DB 비밀번호 파일 복원"
+          umask 077
+          password_file="$(mktemp)"
+          trap 'rm -f "$password_file"' EXIT
+          printf '%s' "$SSING_DATASOURCE_PASSWORD" > "$password_file"
+
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "install -d -m 700 '$DEPLOY_DIR/secrets'"; then
+            echo "::error title=EC2 Adminer secret 디렉터리 생성 실패::배포 계정의 $DEPLOY_DIR 권한을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          if ! scp -i ~/.ssh/ssing-dev-key "$password_file" \
+            "$SSH_TARGET:$DEPLOY_DIR/secrets/adminer-db-password.next"; then
+            echo "::error title=EC2 Adminer secret 업로드 실패::SSH 연결과 EC2 디렉터리 권한을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "chmod 444 '$DEPLOY_DIR/secrets/adminer-db-password.next' && mv -f '$DEPLOY_DIR/secrets/adminer-db-password.next' '$DEPLOY_DIR/secrets/adminer-db-password'"; then
+            echo "::error title=EC2 Adminer secret 교체 실패::EC2 파일 권한과 디스크 여유 공간을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=Adminer DB 비밀번호 파일 복원 완료::비밀번호를 브라우저나 컨테이너 환경변수에 넣지 않고 secret 파일로 준비했습니다."
+          echo "::endgroup::"
+
       # marker가 있으면 앱은 계속 막되 최신 main의 전체 초기화로 복구를 시도
       - name: 미완료 dev DB 작업 확인
         env:
@@ -389,17 +429,19 @@ jobs:
             exit 1
           fi
 
-          echo "Docker Compose, Caddyfile, SHA 고정 DB 실행기 업로드"
+          echo "Docker Compose, Caddyfile, Adminer 플러그인, SHA 고정 DB 실행기 업로드"
           tar -czf .deploy-db-tooling.tgz \
             scripts/db \
             db/seed \
             src/main/resources/db/migration
+          tar -czf .deploy-adminer.tgz -C deploy adminer
           if ! scp -i ~/.ssh/ssing-dev-key \
             deploy/docker-compose.dev.yml \
             deploy/Caddyfile \
             .deploy-db-tooling.tgz \
+            .deploy-adminer.tgz \
             "$SSH_TARGET:$DEPLOY_DIR/"; then
-            rm -f .deploy-db-tooling.tgz
+            rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
             echo "::error title=EC2 배포 파일 업로드 실패::SSH 접속 상태, $DEPLOY_DIR 디렉터리 권한, 네트워크 연결 상태를 확인하세요."
             echo "::endgroup::"
             exit 1
@@ -408,22 +450,22 @@ jobs:
           if ! scp -i ~/.ssh/ssing-dev-key \
             scripts/db/install-dev-release.sh \
             "$SSH_TARGET:$DEPLOY_DIR/.install-dev-release.sh"; then
-            rm -f .deploy-db-tooling.tgz
+            rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
             echo "::error title=release 설치기 업로드 실패::SSH 접속 상태와 $DEPLOY_DIR 디렉터리 권한을 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
 
           if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-            "chmod 700 '$DEPLOY_DIR/.install-dev-release.sh' && bash '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/releases' '$DEPLOY_SHA' && rm -f '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.deploy-db-tooling.tgz'"; then
-            rm -f .deploy-db-tooling.tgz
-            echo "::error title=DB release 준비 실패::EC2의 tar, 디스크 권한, archive 내용과 release 설치 로그를 확인하세요."
+            "chmod 700 '$DEPLOY_DIR/.install-dev-release.sh' && bash '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/releases' '$DEPLOY_SHA' && tar -xzf '$DEPLOY_DIR/.deploy-adminer.tgz' --directory '$DEPLOY_DIR' && rm -f '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.deploy-adminer.tgz'"; then
+            rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
+            echo "::error title=DB release와 Adminer 준비 실패::EC2의 tar, 디스크 권한, archive 내용과 release 설치 로그를 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
-          rm -f .deploy-db-tooling.tgz
+          rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
 
-          echo "::notice title=EC2 배포 파일 업로드 완료::Compose와 ${DEPLOY_SHA} 전용 migration snapshot을 EC2에 준비했습니다."
+          echo "::notice title=EC2 배포 파일 업로드 완료::Compose, Adminer 플러그인, ${DEPLOY_SHA} 전용 migration snapshot을 EC2에 준비했습니다."
           echo "::endgroup::"
 
       # EC2 런타임 환경변수 파일 생성
@@ -435,6 +477,7 @@ jobs:
           SSING_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
           SSING_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
           SSING_JPA_DDL_AUTO: validate
+          SSING_ADMINER_DEFAULT_SERVER: ${{ vars.SSING_DEV_DB_HOST }}
           SSING_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
           SSING_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
@@ -457,6 +500,7 @@ jobs:
             SSING_DATASOURCE_URL
             SSING_DATASOURCE_USERNAME
             SSING_DATASOURCE_PASSWORD
+            SSING_ADMINER_DEFAULT_SERVER
             SSING_JWT_SECRET
             SSING_KAKAO_APP_ID
             SSING_DEV_DOMAIN
@@ -509,6 +553,7 @@ jobs:
             printf 'SSING_DATASOURCE_USERNAME=%s\n' "$SSING_DATASOURCE_USERNAME"
             printf 'SSING_DATASOURCE_PASSWORD=%s\n' "$SSING_DATASOURCE_PASSWORD"
             printf 'SSING_JPA_DDL_AUTO=%s\n' "$SSING_JPA_DDL_AUTO"
+            printf 'SSING_ADMINER_DEFAULT_SERVER=%s\n' "$SSING_ADMINER_DEFAULT_SERVER"
             printf 'SSING_JWT_SECRET=%s\n' "$SSING_JWT_SECRET"
             printf 'SSING_KAKAO_APP_ID=%s\n' "$SSING_KAKAO_APP_ID"
             printf 'SSING_DEV_DOMAIN=%s\n' "$SSING_DEV_DOMAIN"
@@ -712,15 +757,15 @@ jobs:
           echo "::notice title=EC2 Docker Compose 재시작 완료::사전 검증한 image로 컨테이너 재시작을 완료했습니다."
           echo "::endgroup::"
 
-      # 애플리케이션 헬스체크
-      - name: 애플리케이션 헬스체크
+      # 앱이 후보 설정으로 정상 기동한 것을 확인한 뒤 현재 런타임 설정을 먼저 확정
+      - name: 애플리케이션 내부 헬스체크 및 런타임 설정 승격
         env:
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
         run: |
           set -euo pipefail
 
-          echo "::group::애플리케이션 헬스체크"
+          echo "::group::애플리케이션 내부 헬스체크 및 런타임 설정 승격"
           SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
 
           if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
@@ -729,9 +774,9 @@ jobs:
           cd "$DEPLOY_DIR"
 
           for attempt in {1..30}; do
-            echo "헬스체크 시도: ${attempt}/30"
+            echo "애플리케이션 내부 헬스체크 시도: ${attempt}/30"
             if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
-              echo "헬스체크 성공: /actuator/health status UP"
+              echo "애플리케이션 내부 헬스체크 성공: app status UP"
               echo "검증을 마친 런타임 설정으로 원자적 전환"
               if ! mv -f .env.next .env; then
                 echo "런타임 설정 전환 실패: .env.next를 .env로 교체하지 못했습니다. 파일 권한과 디스크 여유 공간을 확인하세요."
@@ -743,18 +788,18 @@ jobs:
             sleep 5
           done
 
-          echo "헬스체크 실패: app 컨테이너 최근 로그"
+          echo "애플리케이션 내부 헬스체크 실패: app 컨테이너 최근 로그"
           sudo env SSING_RUNTIME_ENV_FILE=.env.next \
             docker compose --env-file .env.next -f "$COMPOSE_FILE" logs --tail=100 app
           exit 1
           EOF
           then
-            echo "::error title=애플리케이션 검증 또는 설정 전환 실패::health 로그와 런타임 설정 전환 실패 메시지를 확인하세요. 기존 .env 보존 여부, 후보 .env.next 권한, 디스크 여유 공간을 함께 확인하세요."
+            echo "::error title=애플리케이션 내부 검증 실패::app health 로그와 런타임 설정 전환 실패 메시지를 확인하세요. 기존 .env 보존 여부, 후보 .env.next 권한, 디스크 여유 공간을 함께 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
 
-          echo "::notice title=애플리케이션 헬스체크 완료::/actuator/health 응답이 UP입니다."
+          echo "::notice title=애플리케이션 내부 검증 완료::app status UP을 확인하고 .env.next를 현재 .env로 승격했습니다."
           echo "::endgroup::"
 
       # 외부 도메인 HTTPS 헬스체크
@@ -789,6 +834,77 @@ jobs:
           echo "::error title=외부 도메인 HTTPS 헬스체크 실패::${HEALTH_URL} 응답이 UP이 아닙니다. DNS A 레코드, EC2 80/443 인바운드, Caddy 인증서 발급, reverse proxy 상태를 확인하세요."
           echo "::endgroup::"
           exit 1
+
+      # 앱 런타임 승격과 외부 health가 끝난 뒤 Adminer 자동 로그인만 별도로 검증
+      - name: Adminer 자동 로그인 스모크 체크
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
+          SSING_ADMINER_DEFAULT_SERVER: ${{ vars.SSING_DEV_DB_HOST }}
+          SSING_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::Adminer 자동 로그인 스모크 체크"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' SSING_DEV_DOMAIN='$SSING_DEV_DOMAIN' SSING_ADMINER_DEFAULT_SERVER='$SSING_ADMINER_DEFAULT_SERVER' SSING_DATASOURCE_USERNAME='$SSING_DATASOURCE_USERNAME' bash -s" <<'EOF'
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+
+          if [ ! -f .env ]; then
+            echo "현재 런타임 .env가 없어 Adminer 검증을 시작할 수 없습니다."
+            exit 1
+          fi
+
+          adminer_cookie_jar="$(mktemp)"
+          trap 'rm -f "$adminer_cookie_jar"' EXIT
+
+          if [ "$SSING_DEV_DOMAIN" = ":80" ]; then
+            adminer_url="http://127.0.0.1/adminer/"
+            adminer_resolve=()
+          else
+            adminer_url="https://${SSING_DEV_DOMAIN}/adminer/"
+            adminer_resolve=(--resolve "${SSING_DEV_DOMAIN}:443:127.0.0.1")
+          fi
+
+          for attempt in {1..30}; do
+            echo "Adminer 자동 로그인 확인 시도: ${attempt}/30"
+            : > "$adminer_cookie_jar"
+
+            if adminer_response="$(curl -fsS -L --max-time 10 \
+                "${adminer_resolve[@]}" \
+                -c "$adminer_cookie_jar" \
+                -b "$adminer_cookie_jar" \
+                --data-urlencode 'auth[driver]=server' \
+                --data-urlencode "auth[server]=${SSING_ADMINER_DEFAULT_SERVER}" \
+                --data-urlencode "auth[username]=${SSING_DATASOURCE_USERNAME}" \
+                --data-urlencode 'auth[password]=ssing-managed-login' \
+                --data-urlencode 'auth[db]=ssing' \
+                "$adminer_url")" \
+                && grep -q 'name="logout"' <<< "$adminer_response"; then
+              echo "Adminer 자동 로그인 확인 성공"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Adminer 자동 로그인 확인 실패: Adminer와 Caddy 컨테이너 최근 로그"
+          sudo env SSING_RUNTIME_ENV_FILE=.env \
+            docker compose --env-file .env -f "$COMPOSE_FILE" logs --tail=100 adminer caddy
+          exit 1
+          EOF
+          then
+            echo "::error title=Adminer 자동 로그인 검증 실패::앱 런타임 설정은 이미 승격되었습니다. /adminer/ 경로, Caddy, DB 접속, 자동 로그인 플러그인 로그를 확인한 뒤 workflow를 다시 실행하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=Adminer 자동 로그인 검증 완료::/adminer/에서 로그인 화면 없이 DB 목록까지 진입했습니다."
+          echo "::endgroup::"
 
       # dev 배포 성공 Slack 알림
       - name: Slack 배포 성공 알림
@@ -865,10 +981,10 @@ jobs:
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
         run: |
-          rm -f .migration.env .deploy-db-tooling.tgz
+          rm -f .migration.env .deploy-db-tooling.tgz .deploy-adminer.tgz
           if [ -f ~/.ssh/ssing-dev-key ]; then
             SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
             ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-              "rm -f '$DEPLOY_DIR/.migration.env' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.dev-deploy-preflight' '$DEPLOY_DIR/.env.next' '$DEPLOY_DIR/secrets/firebase-admin.json.next'" || true
+              "rm -f '$DEPLOY_DIR/.migration.env' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.deploy-adminer.tgz' '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.dev-deploy-preflight' '$DEPLOY_DIR/.env.next' '$DEPLOY_DIR/secrets/firebase-admin.json.next' '$DEPLOY_DIR/secrets/adminer-db-password.next'" || true
           fi
           rm -f ~/.ssh/ssing-dev-key

@@ -31,6 +31,31 @@ services:
     networks:
       - ssing-dev
 
+  # dev DB를 원본 표 형태로 확인하는 개발자 도구
+  # 기존 runtime admin 계정으로 자동 로그인하므로 dev 환경에서만 실행한다.
+  adminer:
+    image: adminer:5.4.2-standalone
+    container_name: ssing-dev-adminer
+    restart: unless-stopped
+
+    # 실제 비밀번호는 환경변수 대신 /run/secrets 파일에서만 읽는다.
+    environment:
+      ADMINER_DEFAULT_SERVER: ${SSING_ADMINER_DEFAULT_SERVER}
+      SSING_ADMINER_DB_SERVER: ${SSING_ADMINER_DEFAULT_SERVER}
+      SSING_ADMINER_DB_USERNAME: ${SSING_DATASOURCE_USERNAME}
+      SSING_ADMINER_DB_NAME: ssing
+      SSING_ADMINER_DB_PASSWORD_FILE: /run/secrets/adminer_db_password
+
+    volumes:
+      - ./adminer/001-ssing-autologin.php:/var/www/html/plugins-enabled/001-ssing-autologin.php:ro
+
+    secrets:
+      - adminer_db_password
+
+    # host port를 열지 않고 Caddy를 통해서만 접근한다.
+    networks:
+      - ssing-dev
+
   # HTTPS 종료와 reverse proxy 컨테이너
   caddy:
     image: caddy:2.10-alpine
@@ -40,6 +65,7 @@ services:
     # 애플리케이션 컨테이너 우선 생성 순서
     depends_on:
       - app
+      - adminer
 
     # Caddyfile 도메인 치환 값
     environment:
@@ -59,6 +85,11 @@ services:
     # 애플리케이션 컨테이너 접근 네트워크
     networks:
       - ssing-dev
+
+# Adminer에만 전달하는 기존 dev runtime DB 비밀번호
+secrets:
+  adminer_db_password:
+    file: ./secrets/adminer-db-password
 
 # dev 배포 전용 Docker 네트워크
 networks:

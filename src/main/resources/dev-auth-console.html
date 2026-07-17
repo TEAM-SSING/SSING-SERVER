@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f141b">
     <title>SSING Dev Auth Console</title>
     <style>
         :root {
@@ -16,6 +17,13 @@
             --primary: #7aa2ff;
             --primary-dark: #5d87f0;
             --primary-soft: rgba(122, 162, 255, 0.14);
+            --dev-shell-bg: rgba(15, 20, 27, 0.9);
+            --dev-shell-surface: rgba(21, 27, 35, 0.88);
+            --dev-shell-line: #2b3442;
+            --dev-shell-text: #eef2f7;
+            --dev-shell-muted: #9aa4b2;
+            --dev-shell-accent: #7aa2ff;
+            --dev-shell-accent-soft: rgba(122, 162, 255, 0.14);
             --brand-blue: #2C8BEF;
             --mint: #8ee8d8;
             --coral: #ffb199;
@@ -138,43 +146,97 @@
             font: inherit;
         }
 
-        header {
-            display: flex;
-            position: relative;
-            z-index: 1;
-            align-items: center;
-            justify-content: flex-start;
-            gap: 16px;
-            padding: 24px;
-            border-bottom: 1px solid var(--line);
-            background: rgba(21, 27, 35, 0.84);
-            backdrop-filter: blur(16px);
+        .skip-link {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            z-index: 100;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: var(--dev-shell-accent);
+            color: #07111e;
+            font-weight: 700;
+            text-decoration: none;
+            transform: translateY(-160%);
+            transition: transform 0.16s ease;
         }
 
-        .brand-lockup {
+        .skip-link:focus-visible { transform: translateY(0); }
+
+        .dev-console-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 22px;
+            min-height: 68px;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--dev-shell-line);
+            background: var(--dev-shell-bg);
+            backdrop-filter: blur(18px);
+        }
+
+        .dev-console-brand {
             display: flex;
             align-items: center;
             gap: 10px;
             min-width: 0;
+            color: var(--dev-shell-text);
+            text-decoration: none;
+            white-space: nowrap;
         }
 
-        .ssing-brand {
+        .dev-console-logo {
             display: block;
             flex: 0 0 auto;
-            width: 38px;
-            height: 29px;
-            color: var(--brand-blue);
+            width: 34px;
+            height: 26px;
+            color: #2c8bef;
         }
 
-        .ssing-brand path {
-            fill: currentColor;
+        .dev-console-logo path { fill: currentColor; }
+        .dev-console-brand strong { display: block; font-size: 16px; letter-spacing: -0.02em; }
+        .dev-console-brand small { display: block; color: var(--dev-shell-muted); font-size: 11px; font-weight: 600; }
+
+        .dev-nav {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px;
+            border: 1px solid var(--dev-shell-line);
+            border-radius: 11px;
+            background: var(--dev-shell-surface);
         }
 
-        h1 {
-            margin: 0;
-            font-size: var(--type-page-title-size);
-            line-height: var(--type-page-title-line);
-            font-weight: var(--font-weight-bold);
+        .dev-nav a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            padding: 7px 11px;
+            border-radius: 8px;
+            color: var(--dev-shell-muted);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 700;
+            touch-action: manipulation;
+        }
+
+        .dev-nav a:hover { color: var(--dev-shell-text); background: rgba(255, 255, 255, 0.05); }
+        .dev-nav a.active { color: #dbe9ff; background: var(--dev-shell-accent-soft); }
+
+        .dev-console-brand:focus-visible,
+        .dev-nav a:focus-visible {
+            outline: 2px solid var(--dev-shell-accent);
+            outline-offset: 2px;
+        }
+
+        .dev-console-context {
+            margin-left: auto;
+            color: var(--dev-shell-muted);
+            font-size: 12px;
+            text-align: right;
         }
 
         main {
@@ -184,6 +246,24 @@
             margin: 0 auto;
             padding: 24px;
         }
+
+        .page-heading {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 16px;
+        }
+
+        .page-heading h1 {
+            margin: 0;
+            font-size: 24px;
+            line-height: 1.2;
+            letter-spacing: -0.03em;
+            text-wrap: balance;
+        }
+
+        .page-heading p { margin: 5px 0 0; color: var(--muted); text-wrap: pretty; }
 
         .console-panel {
             padding: 16px;
@@ -1042,20 +1122,12 @@
             margin-top: 10px;
         }
 
+        @media (max-width: 1040px) {
+            .dev-console-context { display: none; }
+        }
+
         @media (max-width: 860px) {
-            header,
-            main {
-                padding: 16px;
-            }
-
-            header {
-                align-items: flex-start;
-                flex-wrap: wrap;
-            }
-
-            header .button {
-                width: 100%;
-            }
+            main { padding: 16px; }
 
             .toolbar {
                 grid-template-columns: 1fr;
@@ -1150,6 +1222,13 @@
             .role-card .choice-title {
                 font-size: 16px;
             }
+        }
+
+        @media (max-width: 640px) {
+            .dev-console-header { flex-wrap: wrap; padding-left: 14px; padding-right: 14px; }
+            .dev-nav { width: 100%; margin-left: 0; order: 3; }
+            .dev-nav a { flex: 1; text-align: center; }
+            .page-heading { align-items: flex-start; flex-direction: column; }
         }
 
         @container persona-list (max-width: 960px) {
@@ -1300,6 +1379,7 @@
     </style>
 </head>
 <body>
+<a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
 <!-- Arctic Ski Lodge Console inline SVG system. -->
 <svg class="illustration-symbols" aria-hidden="true" focusable="false">
     <symbol id="illustration-instructor" viewBox="0 0 160 120">
@@ -1501,15 +1581,27 @@
         <use class="backdrop-playmate backdrop-faint" href="#illustration-bg-bear-guide" x="1126" y="672" width="184" height="123"/>
     </svg>
 </div>
-<header>
-    <div class="brand-lockup">
-        <svg class="ssing-brand" data-node-id="273:2055" viewBox="0 0 167.15 125.969" role="img" aria-label="SSING" focusable="false">
+<header class="dev-console-header" data-dev-console-shell="v1">
+    <a class="dev-console-brand" href="/dev/auth/console" aria-label="SSING 개발 데이터 탐색기">
+        <svg class="dev-console-logo ssing-brand" data-node-id="273:2055" viewBox="0 0 167.15 125.969" aria-hidden="true" focusable="false">
             <path d="M69.5152 0.0796113C74.9546 -1.77272 118.099 29.2313 125.503 37.5591C132.906 45.8872 136.607 61.8414 126.89 69.023C116.248 76.8882 106.34 72.0164 89.8736 65.3208L99.6636 90.6861L119.03 104.952C124.207 108.765 125.313 116.053 121.5 121.23C117.686 126.407 110.397 127.513 105.22 123.7L4.73884 49.687C-0.438354 45.8736 -1.5443 38.5849 2.26911 33.4077C6.08252 28.2306 13.3712 27.1246 18.5484 30.938L35.1451 43.1626C32.8573 35.9301 32.4514 32.1907 37.1256 28.3042C46.9695 22.5445 68.7621 32.3985 94.5006 39.4097C76.681 19.7301 63.3769 2.17411 69.5152 0.0796113ZM150.955 22.7495C159.899 22.7497 167.15 30 167.15 38.9439C167.15 47.8879 159.899 55.139 150.955 55.1392C142.011 55.1391 134.76 47.8879 134.76 38.9439C134.76 29.9999 142.011 22.7496 150.955 22.7495Z"/>
         </svg>
-        <h1>SSING Dev Auth Console</h1>
-    </div>
+        <span><strong>SSING Dev</strong><small>Data Explorer</small></span>
+    </a>
+    <nav class="dev-nav" aria-label="개발 도구">
+        <a class="active" href="/dev/auth/console" aria-current="page">Persona</a>
+        <a href="/dev/matching/console">Matching</a>
+        <a href="/adminer/" target="_blank" rel="noopener noreferrer" aria-label="Adminer 새 탭에서 열기">Adminer <span aria-hidden="true">↗</span></a>
+    </nav>
+    <div class="dev-console-context">페르소나·토큰 관리</div>
 </header>
-<main>
+<main id="main-content">
+    <div class="page-heading">
+        <div>
+            <h1>테스트 페르소나</h1>
+            <p>테스트 사용자를 조회하고, 필요한 계정과 인증 토큰을 준비합니다.</p>
+        </div>
+    </div>
     <section class="console-panel">
         <div class="toolbar">
             <div class="toolbar-actions">
