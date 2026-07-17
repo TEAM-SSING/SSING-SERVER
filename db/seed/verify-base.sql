@@ -57,7 +57,10 @@ SELECT (
            OR (member.role = 'INSTRUCTOR' AND persona.template = 'INSTRUCTOR_APPROVED')
        )) = 14
     AND
-    (SELECT COUNT(*) FROM instructor_profiles WHERE approval_status = 'APPROVED') = 4
+    (SELECT COUNT(*)
+     FROM instructor_profiles
+     WHERE approval_status = 'APPROVED'
+       AND approved_at IS NOT NULL) = 4
     AND
     (SELECT COUNT(*)
      FROM instructor_profiles profile

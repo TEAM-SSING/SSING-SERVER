@@ -61,27 +61,13 @@ class DevWorkflowContractTest(unittest.TestCase):
         cls.ci_deploy_job = indented_block(cls.ci, "deploy-dev:", 2)
         cls.deploy_job = indented_block(cls.deploy, "build-and-deploy:", 2)
 
-    def test_reset_has_only_seed_target_and_boolean_confirmation_inputs(self):
+    def test_reset_has_only_boolean_confirmation_input(self):
         workflow_dispatch = indented_block(self.reset, "workflow_dispatch:", 2)
         inputs_block = indented_block(workflow_dispatch, "inputs:", 4)
         input_names = re.findall(r"^      ([A-Za-z][A-Za-z0-9]*):$", inputs_block, re.MULTILINE)
-        seed_target_block = indented_block(inputs_block, "seedTarget:", 6)
-        seed_target_options = indented_block(seed_target_block, "options:", 8)
-        options = re.findall(r"^          - ([a-z0-9-]+)$", seed_target_options, re.MULTILINE)
 
-        self.assertEqual(["seedTarget", "confirmReset"], input_names)
-        self.assertEqual(
-            [
-                "idle-base",
-                "matching-price-vivaldi",
-                "matching-no-candidate-alpensia",
-                "matching-multi-request-oak",
-                "pm-full-requested-catalog",
-            ],
-            options,
-        )
-        self.assertRegex(seed_target_block, r"(?m)^        type: choice$")
-        self.assertRegex(seed_target_block, r"(?m)^        default: idle-base$")
+        self.assertEqual(["confirmReset"], input_names)
+        self.assertNotIn("seedTarget:", inputs_block)
         confirmation_block = indented_block(inputs_block, "confirmReset:", 6)
         self.assertRegex(confirmation_block, r"(?m)^        type: boolean$")
         self.assertRegex(confirmation_block, r"(?m)^        default: false$")
@@ -97,18 +83,32 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertIn('GIT_REF: ${{ github.ref }}', preflight_step)
         self.assertIn('if [ "$CONFIRM_RESET" != "true" ]', preflight_step)
         self.assertIn('if [ "$GIT_REF" != "refs/heads/main" ]', preflight_step)
-        for seed_target in (
-            "idle-base",
+        self.assertNotIn("SEED_TARGET", preflight_step)
+        for scenario_key in (
             "matching-price-vivaldi",
             "matching-no-candidate-alpensia",
             "matching-multi-request-oak",
             "pm-full-requested-catalog",
         ):
-            self.assertIn(seed_target, preflight_step)
+            self.assertNotIn(scenario_key, preflight_step)
 
         self.assertRegex(self.reset_job, r"(?m)^    environment: dev-reset$")
         self.assertNotRegex(self.reset, r"(?m)^  preflight:$")
-        self.assertIn("./scripts/db/reset-dev.sh --confirm-dev-reset", self.reset_job)
+        self.assertIn(
+            "./scripts/db/reset-dev.sh --confirm-dev-reset main idle-base",
+            self.reset_job,
+        )
+        self.assertNotIn("inputs.seedTarget", self.reset)
+
+    def test_dev_reset_runner_accepts_only_idle_base(self):
+        reset_runner = (ROOT / "scripts/db/reset-dev.sh").read_text(encoding="utf-8")
+        runner_allowlist = re.search(
+            r'case "\$seed_target" in\s+(?P<targets>[a-z0-9|\-\s]+?)\)',
+            reset_runner,
+        )
+        self.assertIsNotNone(runner_allowlist)
+        runner_targets = set(runner_allowlist.group("targets").strip().split("|"))
+        self.assertEqual({"idle-base"}, runner_targets)
 
     def test_reset_and_deploy_share_one_max_queue(self):
         for workflow in (self.reset, self.deploy):

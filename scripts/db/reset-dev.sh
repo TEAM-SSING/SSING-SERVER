@@ -28,26 +28,16 @@ if [[ -e "$(dev_reset_marker_path)" ]]; then
 fi
 
 assert_dev_reset_artifacts() {
-  local seed_target="$1"
-  local scenario_directory="$PROJECT_ROOT/db/seed/scenarios/$seed_target"
   local -a base_files=("$PROJECT_ROOT/db/seed/base"/*.sql)
   local -a migration_files=("$PROJECT_ROOT/src/main/resources/db/migration"/*.sql)
   local -a required_files=(
     "$PROJECT_ROOT/db/seed/verify-base.sql"
+    "$PROJECT_ROOT/db/seed/verify-dev-reset.sql"
     "$PROJECT_ROOT/db/seed/verify-utf8.sql"
   )
 
   [[ -s "${migration_files[0]:-}" && -s "${base_files[0]:-}" ]] \
     || dev_fail "필요한 migration 또는 Base Seed SQL 파일이 없습니다."
-
-  if ! is_idle_seed_target "$seed_target"; then
-    [[ "$seed_target" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && -d "$scenario_directory" ]] \
-      || dev_fail "선택한 Seed 시나리오 디렉터리가 없습니다."
-    required_files+=(
-      "$scenario_directory/seed.sql"
-      "$scenario_directory/verify.sql"
-    )
-  fi
 
   local sql_file
   for sql_file in "${migration_files[@]}" "${base_files[@]}" "${required_files[@]}"; do
@@ -161,7 +151,7 @@ seed_target="${3:-}"
   || dev_fail "main ref에서만 dev DB reset을 실행할 수 있습니다." 2
 
 case "$seed_target" in
-  idle-base|matching-price-vivaldi|matching-no-candidate-alpensia|matching-multi-request-oak|pm-full-requested-catalog)
+  idle-base)
     SAFE_SEED_TARGET="$seed_target"
     ;;
   *)
@@ -174,7 +164,7 @@ CURRENT_STAGE="대상·권한·UTF-8 사전 검사"
 dev_require_command sudo
 dev_require_command docker
 dev_require_command curl
-assert_dev_reset_artifacts "$SAFE_SEED_TARGET"
+assert_dev_reset_artifacts
 assert_dev_target
 assert_dev_account_separation
 select_dev_migration_account
@@ -245,15 +235,9 @@ CURRENT_STAGE="Base Seed 검증"
 run_dev_mysql_file "$PROJECT_ROOT/db/seed/verify-base.sql"
 LAST_SUCCESS_STAGE="Base Seed 검증"
 
-if ! is_idle_seed_target "$SAFE_SEED_TARGET"; then
-  CURRENT_STAGE="Scenario Seed 적용"
-  run_dev_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$SAFE_SEED_TARGET/seed.sql"
-  LAST_SUCCESS_STAGE="Scenario Seed 적용"
-
-  CURRENT_STAGE="Scenario 검증"
-  run_dev_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$SAFE_SEED_TARGET/verify.sql"
-  LAST_SUCCESS_STAGE="Scenario 검증"
-fi
+CURRENT_STAGE="Dev QA 시작 상태 검증"
+run_dev_mysql_file "$PROJECT_ROOT/db/seed/verify-dev-reset.sql"
+LAST_SUCCESS_STAGE="Dev QA 시작 상태 검증"
 
 CURRENT_STAGE="UTF-8 검증"
 run_dev_mysql_file "$PROJECT_ROOT/db/seed/verify-utf8.sql"

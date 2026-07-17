@@ -6,15 +6,11 @@ scheduler_type: TRANSITION
 execution_scope:
   - local
   - ci
-  - dev
 required_runtime:
   snapshot_validation:
     app_state: stopped
     scheduled_jobs_enabled: false
     matching_search_scheduler_enabled: false
-  dev_after_reset:
-    scheduler_override: none
-    scheduler_mode: default_on
 base_dependencies:
   - db/seed/base/001_reference_data.sql
   - db/seed/base/010_dev_personas.sql
@@ -82,7 +78,7 @@ notes:
   - scheduler를 켜면 조건이 맞는 REQUESTED 요청이 GROUPED로 전이될 수 있다.
   - 통합 테스트는 @Scheduled 자동 등록을 끄고 실제 MatchingSearchScheduler.runScheduledSearch()를 수동 호출해 전이를 검증한다.
   - 냅다레전드-유빈-일반강습생은 idle base 소유이며 PM 원본 snapshot 비교 대상에 포함하지 않는다.
-  - dev 앱은 scheduler를 정상 설정으로 재기동하므로 일부 REQUESTED 요청은 자연스럽게 GROUPED로 전이될 수 있다.
+  - 공유 dev Reset에서는 선택할 수 없고 local/CI snapshot 검증에서만 사용한다.
   - WebSocket event와 계산 상태는 seed하지 않는다.
 deferred_checks:
   - key: instructor-realtime-reconnect-recovery
