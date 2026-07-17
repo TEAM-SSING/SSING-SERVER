@@ -209,6 +209,8 @@ class DevWorkflowContractTest(unittest.TestCase):
             "MatchingRequestV4MigrationTest.java",
             "src/integrationTest/java/org/sopt/ssingserver/database/"
             "NotificationV5MigrationTest.java",
+            "src/integrationTest/java/org/sopt/ssingserver/database/"
+            "MatchingRequestParticipantV6MigrationTest.java",
         }
         legacy_tag_owners = {
             source.relative_to(ROOT).as_posix()

@@ -9,6 +9,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface MatchingRequestParticipantRepository extends JpaRepository<MatchingRequestParticipant, Long> {
 
+    List<MatchingRequestParticipant> findByMatchingRequestIdOrderByIdAsc(Long matchingRequestId);
+
     @Query("""
             select participant
             from MatchingRequestParticipant participant

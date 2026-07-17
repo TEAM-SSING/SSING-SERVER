@@ -30,6 +30,7 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
+import org.sopt.ssingserver.domain.matching.entity.MatchingRequestParticipant;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
@@ -37,6 +38,7 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
+import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipantRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.domain.member.entity.Member;
@@ -69,6 +71,9 @@ class MatchingStatusQueryServiceTest {
 
     @Mock
     private MatchingRequestRepository matchingRequestRepository;
+
+    @Mock
+    private MatchingRequestParticipantRepository matchingRequestParticipantRepository;
 
     @Mock
     private MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
@@ -112,12 +117,28 @@ class MatchingStatusQueryServiceTest {
     void getActiveStatus는_본인의_활성_요청을_기존_상태_응답으로_복구한다() {
         MatchingStatusQueryService service = createService();
         MatchingRequest matchingRequest = matchingRequest(10L, member(1L, "요청자", MemberRole.CONSUMER));
+        MatchingRequestParticipant firstParticipant = participant(
+                100L,
+                matchingRequest,
+                "홍길동",
+                24,
+                Gender.FEMALE
+        );
+        MatchingRequestParticipant legacyParticipant = participant(
+                101L,
+                matchingRequest,
+                null,
+                30,
+                Gender.MALE
+        );
         when(matchingRequestRepository.findByMemberIdAndStatusIn(
                 1L,
                 MatchingRequestStatus.activeNegotiationStatuses()
         )).thenReturn(Optional.of(matchingRequest));
         when(matchingRequestGroupItemRepository.findFirstByMatchingRequestIdOrderByIdDesc(10L))
                 .thenReturn(Optional.empty());
+        when(matchingRequestParticipantRepository.findByMatchingRequestIdOrderByIdAsc(10L))
+                .thenReturn(List.of(firstParticipant, legacyParticipant));
         when(matchingStatusResolver.resolve(
                 matchingRequest,
                 Optional.empty(),
@@ -136,6 +157,14 @@ class MatchingStatusQueryServiceTest {
         assertThat(result.requestSummary().sport()).isSameAs(Sport.SNOWBOARD);
         assertThat(result.requestSummary().lessonLevel()).isSameAs(LessonLevel.FIRST_TIME);
         assertThat(result.requestSummary().headcount()).isEqualTo(2);
+        assertThat(result.requestSummary().requesterName()).isEqualTo("요청자");
+        assertThat(result.requestSummary().participants())
+                .extracting("name", "age", "gender")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("홍길동", 24, Gender.FEMALE),
+                        org.assertj.core.groups.Tuple.tuple(null, 30, Gender.MALE)
+                );
+        verify(matchingRequestParticipantRepository).findByMatchingRequestIdOrderByIdAsc(10L);
         assertThat(result.lessonSummary()).isNull();
         assertThat(result.instructorProfile()).isNull();
         verifyNoInteractions(reviewRepository);
@@ -391,6 +420,7 @@ class MatchingStatusQueryServiceTest {
 
         verifyNoInteractions(reviewRepository);
         verifyNoInteractions(matchingOfferPriceSnapshotRepository);
+        verifyNoInteractions(matchingRequestParticipantRepository);
         verifyNoInteractions(lessonRepository);
     }
 
@@ -864,6 +894,7 @@ class MatchingStatusQueryServiceTest {
     private MatchingStatusQueryService createService() {
         return new MatchingStatusQueryService(
                 matchingRequestRepository,
+                matchingRequestParticipantRepository,
                 matchingRequestGroupItemRepository,
                 matchingOfferRepository,
                 matchingOfferPriceSnapshotRepository,
@@ -874,6 +905,23 @@ class MatchingStatusQueryServiceTest {
                 new MatchingTimeoutPolicy(),
                 FIXED_CLOCK
         );
+    }
+
+    private MatchingRequestParticipant participant(
+            Long id,
+            MatchingRequest matchingRequest,
+            String name,
+            int age,
+            Gender gender
+    ) {
+        MatchingRequestParticipant participant = MatchingRequestParticipant.create(
+                matchingRequest,
+                name,
+                age,
+                gender
+        );
+        ReflectionTestUtils.setField(participant, "id", id);
+        return participant;
     }
 
     private MatchingRequest matchingRequest(Long id, Member member) {

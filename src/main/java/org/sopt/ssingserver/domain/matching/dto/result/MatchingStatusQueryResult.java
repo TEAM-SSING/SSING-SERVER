@@ -8,6 +8,7 @@ import org.sopt.ssingserver.domain.instructor.enums.InstructorCertificateType;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
+import org.sopt.ssingserver.domain.matching.entity.MatchingRequestParticipant;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupStatus;
@@ -78,10 +79,15 @@ public record MatchingStatusQueryResult(
             ResortResult resort,
             Sport sport,
             LessonLevel lessonLevel,
-            int headcount
+            int headcount,
+            String requesterName,
+            List<ParticipantResult> participants
     ) {
 
-        public static RequestSummaryResult from(MatchingRequest matchingRequest) {
+        public static RequestSummaryResult from(
+                MatchingRequest matchingRequest,
+                List<MatchingRequestParticipant> participants
+        ) {
             return new RequestSummaryResult(
                     new ResortResult(
                             matchingRequest.getResort().getCode(),
@@ -89,7 +95,26 @@ public record MatchingStatusQueryResult(
                     ),
                     matchingRequest.getSport(),
                     matchingRequest.getLessonLevel(),
-                    matchingRequest.getHeadcount()
+                    matchingRequest.getHeadcount(),
+                    matchingRequest.getMember().getNickname(),
+                    participants.stream()
+                            .map(ParticipantResult::from)
+                            .toList()
+            );
+        }
+    }
+
+    public record ParticipantResult(
+            String name,
+            int age,
+            Gender gender
+    ) {
+
+        private static ParticipantResult from(MatchingRequestParticipant participant) {
+            return new ParticipantResult(
+                    participant.getName(),
+                    participant.getAge(),
+                    participant.getGender()
             );
         }
     }

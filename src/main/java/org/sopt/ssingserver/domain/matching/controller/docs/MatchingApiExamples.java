@@ -268,7 +268,12 @@ final class MatchingApiExamples {
                 new MatchingStatusQueryResult.ResortResult("HIGH1", "하이원"),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
-                2
+                2,
+                "요청자",
+                List.of(
+                        new MatchingStatusQueryResult.ParticipantResult("홍길동", 24, Gender.FEMALE),
+                        new MatchingStatusQueryResult.ParticipantResult("김민지", 30, Gender.MALE)
+                )
         );
     }
 

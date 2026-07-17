@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
@@ -37,6 +39,7 @@ public record CreateConsumerMatchingRequest(
 
         @Schema(description = "참여자 정보 목록")
         @NotEmpty(message = "참여자는 1명 이상이어야 합니다.")
+        @Size(max = 5, message = "참여자는 5명 이하여야 합니다.")
         List<@Valid @NotNull(message = "참여자 정보는 null일 수 없습니다.") ParticipantRequest> participants,
 
         @Schema(description = "장비 착용 완료 여부", example = "true")
@@ -59,6 +62,15 @@ public record CreateConsumerMatchingRequest(
     }
 
     public record ParticipantRequest(
+            @Schema(
+                    description = "참여자 이름. 구버전 앱이 생성한 요청은 생략할 수 있습니다.",
+                    example = "홍길동",
+                    maxLength = 50
+            )
+            @Size(max = 50, message = "참여자 이름은 50자 이하여야 합니다.")
+            @Pattern(regexp = ".*\\S.*", message = "참여자 이름은 공백일 수 없습니다.")
+            String name,
+
             @Schema(description = "참여자 나이", example = "24")
             @NotNull(message = "참여자 나이는 필수입니다.")
             @Min(value = 1, message = "참여자 나이는 1세 이상이어야 합니다.")
@@ -69,8 +81,12 @@ public record CreateConsumerMatchingRequest(
             Gender gender
     ) {
 
+        public ParticipantRequest(Integer age, Gender gender) {
+            this(null, age, gender);
+        }
+
         private MatchingParticipantCommand toCommand() {
-            return MatchingParticipantCommand.of(age, gender);
+            return MatchingParticipantCommand.of(name, age, gender);
         }
     }
 }

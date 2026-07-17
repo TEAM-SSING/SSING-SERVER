@@ -71,6 +71,15 @@ class ConsumerMatchingStatusResponseTest {
         assertThat(json).contains("\"matchingStatus\":\"WAITING_FOR_CONFIRMATION\"");
         assertThat(json).contains("\"requestSummary\":{\"resort\":{\"code\":\"HIGH1\",\"displayName\":\"하이원\"}");
         assertThat(json).contains("\"headcount\":2");
+        var requestSummary = objectMapper.readTree(json).path("requestSummary");
+        assertThat(requestSummary.path("requesterName").asString()).isEqualTo("요청자");
+        assertThat(requestSummary.path("participants").size()).isEqualTo(2);
+        assertThat(requestSummary.path("participants").path(0).path("name").asString()).isEqualTo("홍길동");
+        assertThat(requestSummary.path("participants").path(0).path("age").asInt()).isEqualTo(24);
+        assertThat(requestSummary.path("participants").path(0).path("gender").asString()).isEqualTo("FEMALE");
+        assertThat(requestSummary.path("participants").path(1).has("name")).isFalse();
+        assertThat(requestSummary.path("participants").path(1).path("age").asInt()).isEqualTo(30);
+        assertThat(requestSummary.path("participants").path(1).path("gender").asString()).isEqualTo("MALE");
         assertThat(json).contains("\"lessonSummary\":{\"durationMinutes\":120,\"totalHeadcount\":4,\"startType\":\"IMMEDIATE\"}");
         assertThat(json).contains("\"careerYears\":6");
         assertThat(json).contains("\"completedLessonCount\":24");
@@ -293,7 +302,12 @@ class ConsumerMatchingStatusResponseTest {
                 new MatchingStatusQueryResult.ResortResult("HIGH1", "하이원"),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
-                2
+                2,
+                "요청자",
+                List.of(
+                        new MatchingStatusQueryResult.ParticipantResult("홍길동", 24, Gender.FEMALE),
+                        new MatchingStatusQueryResult.ParticipantResult(null, 30, Gender.MALE)
+                )
         );
     }
 

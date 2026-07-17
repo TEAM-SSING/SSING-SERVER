@@ -546,10 +546,42 @@ class SsingServerApplicationTests {
 				.containsExactly("ACTIVE");
 		assertThat(textValues(consumerActiveProperties.path("requestStatus").path("enum")))
 				.containsExactlyInAnyOrder("REQUESTED", "GROUPED", "MATCHED");
-		assertThat(schemas.path("ConsumerActiveMatchingRequestSummary").path("properties")
-				.has("resort")).isTrue();
-		assertThat(schemas.path("ConsumerActiveMatchingRequestSummary").path("properties")
-				.has("headcount")).isTrue();
+			JsonNode requestSummarySchema = schemas.path("ConsumerActiveMatchingRequestSummary");
+			JsonNode requestSummaryProperties = requestSummarySchema.path("properties");
+			assertThat(requestSummaryProperties.has("resort")).isTrue();
+			assertThat(requestSummaryProperties.has("headcount")).isTrue();
+			assertThat(requestSummaryProperties.has("requesterName")).isTrue();
+			assertThat(requestSummaryProperties.has("participants")).isTrue();
+			assertThat(textValues(requestSummarySchema.path("required")))
+					.contains("resort", "sport", "lessonLevel", "headcount", "requesterName", "participants");
+			JsonNode participantSchema = schemas.path("ConsumerActiveMatchingParticipant");
+			assertThat(participantSchema.path("properties").has("name")).isTrue();
+			assertThat(participantSchema.path("properties").has("age")).isTrue();
+			assertThat(participantSchema.path("properties").has("gender")).isTrue();
+			assertThat(textValues(participantSchema.path("required"))).contains("age", "gender");
+			assertThat(textValues(participantSchema.path("required"))).doesNotContain("name");
+
+			JsonNode createMatchingRequestSchema = resolveLocalReference(
+					openApi,
+					findOperation(openApi, "POST /api/v1/consumer/matching-requests")
+							.path("requestBody")
+							.path("content")
+							.path("application/json")
+							.path("schema")
+							.path("$ref")
+							.asString()
+			);
+			JsonNode createParticipantsProperty = createMatchingRequestSchema.path("properties").path("participants");
+			assertThat(createParticipantsProperty.path("maxItems").asInt()).isEqualTo(5);
+			JsonNode createParticipantSchema = resolveLocalReference(
+					openApi,
+					createParticipantsProperty.path("items").path("$ref").asString()
+			);
+			assertThat(createParticipantSchema.path("properties").has("name")).isTrue();
+			assertThat(createParticipantSchema.path("properties").path("name").path("maxLength").asInt())
+					.isEqualTo(50);
+			assertThat(textValues(createParticipantSchema.path("required"))).contains("age", "gender");
+			assertThat(textValues(createParticipantSchema.path("required"))).doesNotContain("name");
 		assertThat(schemas.path("ConsumerActiveMatchingResort").path("properties")
 				.has("displayName")).isTrue();
 		assertThat(schemas.path("ConsumerActiveMatchingLessonSummary").path("properties")
@@ -609,7 +641,10 @@ class SsingServerApplicationTests {
 		);
 		JsonNode searchingExample = consumerExamples.path("SEARCHING").path("value").path("data");
 		assertThat(searchingExample.path("recoveryState").asString()).isEqualTo("ACTIVE");
-		assertThat(searchingExample.path("requestSummary").path("headcount").asInt()).isEqualTo(2);
+			assertThat(searchingExample.path("requestSummary").path("headcount").asInt()).isEqualTo(2);
+			assertThat(searchingExample.path("requestSummary").path("requesterName").asString())
+					.isEqualTo("요청자");
+			assertThat(searchingExample.path("requestSummary").path("participants").size()).isEqualTo(2);
 		assertThat(searchingExample.has("groupId")).isFalse();
 		assertThat(searchingExample.has("lessonSummary")).isFalse();
 		assertThat(searchingExample.has("instructorProfile")).isFalse();
@@ -1104,6 +1139,10 @@ class SsingServerApplicationTests {
 	}
 
 	private void assertLocalReferenceResolves(JsonNode openApi, String reference) {
+		resolveLocalReference(openApi, reference);
+	}
+
+	private JsonNode resolveLocalReference(JsonNode openApi, String reference) {
 		assertThat(reference).startsWith("#/");
 		JsonNode target = openApi;
 		for (String rawSegment : reference.substring(2).split("/")) {
@@ -1111,6 +1150,7 @@ class SsingServerApplicationTests {
 			target = target.path(segment);
 		}
 		assertThat(target.isMissingNode()).as("unresolved OpenAPI reference " + reference).isFalse();
+		return target;
 	}
 
 }

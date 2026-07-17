@@ -23,13 +23,27 @@ class MatchingRequestParticipantTest {
 
         MatchingRequestParticipant participant = MatchingRequestParticipant.create(
                 matchingRequest,
+                "  홍길동  ",
                 24,
                 Gender.FEMALE
         );
 
         assertThat(participant.getMatchingRequest()).isSameAs(matchingRequest);
+        assertThat(participant.getName()).isEqualTo("홍길동");
         assertThat(participant.getAge()).isEqualTo(24);
         assertThat(participant.getGender()).isSameAs(Gender.FEMALE);
+    }
+
+    @Test
+    void create는_기존_요청의_null_이름을_허용한다() {
+        MatchingRequestParticipant participant = MatchingRequestParticipant.create(
+                matchingRequest(),
+                null,
+                24,
+                Gender.FEMALE
+        );
+
+        assertThat(participant.getName()).isNull();
     }
 
     private MatchingRequest matchingRequest() {
