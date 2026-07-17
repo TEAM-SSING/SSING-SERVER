@@ -59,6 +59,23 @@ SELECT (
     AND
     (SELECT COUNT(*) FROM instructor_profiles WHERE approval_status = 'APPROVED') = 4
     AND
+    (SELECT COUNT(*)
+     FROM instructor_profiles profile
+     JOIN dev_personas persona ON persona.member_id = profile.member_id
+     WHERE (persona.persona_key = '폼미친-성빈-승인강사' AND profile.gender = 'MALE')
+        OR (persona.persona_key IN (
+                '기세로다해먹는-도연-승인강사',
+                '뉴런공유중인-유정-승인강사',
+                '보법다른-유정-승인강사'
+            ) AND profile.gender = 'FEMALE')) = 4
+    AND
+    (SELECT COUNT(*)
+     FROM instructor_profiles
+     WHERE CHAR_LENGTH(intro) >= 20
+       AND intro NOT LIKE '%fixture%'
+       AND intro NOT LIKE '%검증%'
+       AND intro NOT LIKE '%로컬 전용%') = 4
+    AND
     (SELECT COUNT(*) FROM instructor_profile_certificates) = 4
     AND
     (SELECT COUNT(*) FROM instructor_matching_settings) = 4

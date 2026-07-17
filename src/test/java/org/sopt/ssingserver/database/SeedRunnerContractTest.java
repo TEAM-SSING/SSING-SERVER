@@ -26,13 +26,12 @@ class SeedRunnerContractTest {
     }
 
     @Test
-    void verify_all은_현재_seed_target에_맞는_검증만_실행한다() throws IOException {
+    void verify_all은_base를_먼저_검증하고_선택한_scenario를_추가로_검증한다() throws IOException {
         String verifyAll = Files.readString(VERIFY_ALL);
 
         assertThat(verifyAll).containsSubsequence(
-                "if is_idle_seed_target \"$seed_target\"; then",
                 "run_mysql_file \"$PROJECT_ROOT/db/seed/verify-base.sql\"",
-                "else",
+                "if ! is_idle_seed_target \"$seed_target\"; then",
                 "run_mysql_file \"$PROJECT_ROOT/db/seed/scenarios/$seed_target/verify.sql\""
         );
     }

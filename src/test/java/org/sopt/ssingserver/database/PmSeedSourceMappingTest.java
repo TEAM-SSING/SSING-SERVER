@@ -108,7 +108,7 @@ class PmSeedSourceMappingTest {
     }
 
     @Test
-    void snapshot_개인정보는_승인된_익명_fixture_형식만_사용한다() throws IOException {
+    void snapshot_프로필은_익명화된_시연용_형식을_사용한다() throws IOException {
         List<ExpectedAggregate> aggregates = readExpectedAggregates();
         List<ExpectedAggregate> consumers = aggregates.stream()
                 .filter(aggregate -> aggregate.type().equals("CONSUMER"))
@@ -132,6 +132,8 @@ class PmSeedSourceMappingTest {
             assertThat(json.path("nickname").asText())
                     .isEqualTo(EXPECTED_INSTRUCTOR_NICKNAMES.get(aggregate.aggregateKey()));
             assertThat(profile.path("realName").asText()).isEqualTo(json.path("nickname").asText());
+            assertThat(profile.path("gender").asText())
+                    .isEqualTo(aggregate.aggregateKey().equals("폼미친-성빈-승인강사") ? "MALE" : "FEMALE");
 
             if (!aggregate.aggregateKey().equals("보법다른-유정-승인강사")) {
                 assertThat(profile.path("phone").asText()).matches("010-0000-\\d{4}");
@@ -140,15 +142,13 @@ class PmSeedSourceMappingTest {
                         "2000-01-02",
                         "2000-01-03"
                 );
-                assertThat(profile.path("intro").asText())
-                        .startsWith("PM 구조화 값을 익명화한 ")
-                        .endsWith(" fixture입니다.");
             } else {
                 assertThat(profile.path("phone").asText()).isEqualTo("010-0000-0000");
                 assertThat(profile.path("birthDate").asText()).isEqualTo("2000-01-04");
-                assertThat(profile.path("intro").asText())
-                        .isEqualTo("비발디파크 가격 흐름을 검증하는 로컬 전용 강사입니다.");
             }
+            assertThat(profile.path("intro").asText())
+                    .hasSizeGreaterThanOrEqualTo(20)
+                    .doesNotContain("PM", "fixture", "검증", "로컬 전용", "010-");
             assertThat(json.path("profileImageUrl").isNull()).isTrue();
         });
 
