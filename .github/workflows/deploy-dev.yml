@@ -429,7 +429,8 @@ jobs:
             exit 1
           fi
 
-          echo "Docker Compose, Caddyfile, Adminer 플러그인, SHA 고정 DB 실행기 업로드"
+          echo "Docker Compose, Caddy 후보 설정, Adminer 플러그인, SHA 고정 DB 실행기 업로드"
+          caddy_candidate="Caddyfile.candidate-${DEPLOY_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           tar -czf .deploy-db-tooling.tgz \
             scripts/db \
             db/seed \
@@ -437,12 +438,29 @@ jobs:
           tar -czf .deploy-adminer.tgz -C deploy adminer
           if ! scp -i ~/.ssh/ssing-dev-key \
             deploy/docker-compose.dev.yml \
-            deploy/Caddyfile \
             .deploy-db-tooling.tgz \
             .deploy-adminer.tgz \
             "$SSH_TARGET:$DEPLOY_DIR/"; then
             rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
             echo "::error title=EC2 배포 파일 업로드 실패::SSH 접속 상태, $DEPLOY_DIR 디렉터리 권한, 네트워크 연결 상태를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          # 실행 중인 정상 설정을 먼저 덮지 않도록 현재 run 전용 후보 파일로 올린다.
+          if ! scp -i ~/.ssh/ssing-dev-key \
+            deploy/Caddyfile "$SSH_TARGET:$DEPLOY_DIR/$caddy_candidate"; then
+            rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
+            echo "::error title=EC2 Caddy 후보 설정 업로드 실패::SSH 연결과 EC2 배포 디렉터리 권한을 확인하세요. 기존 Caddyfile은 변경하지 않았습니다."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          if ! scp -i ~/.ssh/ssing-dev-key \
+            scripts/deploy/manage-dev-caddy.sh \
+            "$SSH_TARGET:$DEPLOY_DIR/.manage-dev-caddy.sh"; then
+            rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
+            echo "::error title=EC2 Caddy 설정 관리기 업로드 실패::SSH 연결과 EC2 배포 디렉터리 권한을 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
@@ -457,7 +475,7 @@ jobs:
           fi
 
           if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-            "chmod 700 '$DEPLOY_DIR/.install-dev-release.sh' && bash '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/releases' '$DEPLOY_SHA' && tar -xzf '$DEPLOY_DIR/.deploy-adminer.tgz' --directory '$DEPLOY_DIR' && rm -f '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.deploy-adminer.tgz'"; then
+            "chmod 644 '$DEPLOY_DIR/$caddy_candidate' && chmod 700 '$DEPLOY_DIR/.manage-dev-caddy.sh' '$DEPLOY_DIR/.install-dev-release.sh' && bash '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/releases' '$DEPLOY_SHA' && tar -xzf '$DEPLOY_DIR/.deploy-adminer.tgz' --directory '$DEPLOY_DIR' && rm -f '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.deploy-adminer.tgz'"; then
             rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
             echo "::error title=DB release와 Adminer 준비 실패::EC2의 tar, 디스크 권한, archive 내용과 release 설치 로그를 확인하세요."
             echo "::endgroup::"
@@ -465,7 +483,7 @@ jobs:
           fi
           rm -f .deploy-db-tooling.tgz .deploy-adminer.tgz
 
-          echo "::notice title=EC2 배포 파일 업로드 완료::Compose, Adminer 플러그인, ${DEPLOY_SHA} 전용 migration snapshot을 EC2에 준비했습니다."
+          echo "::notice title=EC2 배포 파일 업로드 완료::Compose, run 전용 Caddy 후보 설정, Adminer 플러그인, ${DEPLOY_SHA} 전용 migration snapshot을 EC2에 준비했습니다."
           echo "::endgroup::"
 
       # EC2 런타임 환경변수 파일 생성
@@ -585,6 +603,31 @@ jobs:
           fi
 
           echo "::notice title=EC2 런타임 환경변수 후보 준비 완료::migration·컨테이너 재기동·health가 통과하면 .env.next를 현재 .env로 원자적으로 전환합니다."
+          echo "::endgroup::"
+
+      # DB를 초기화하기 전에 Caddy 후보 문법과 이전 미완료 transaction 복구 가능 여부를 먼저 확인
+      - name: Caddy 후보 설정 사전 검증
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::Caddy 후보 설정 사전 검증"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_RUN_ID='$GITHUB_RUN_ID' DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT' SSING_DEV_DOMAIN='$SSING_DEV_DOMAIN' bash -s" <<'EOF'
+          set -euo pipefail
+          "$DEPLOY_DIR/.manage-dev-caddy.sh" preflight
+          EOF
+          then
+            echo "::error title=Caddy 후보 설정 사전 검증 실패::dev DB는 아직 초기화하지 않았습니다. 후보 설정 또는 보존된 rollback transaction을 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=Caddy 후보 설정 사전 검증 완료::dev DB 초기화 전에 후보 문법과 기존 Caddy 복구 상태를 확인했습니다."
           echo "::endgroup::"
 
       # 앱과 DB를 건드리기 전에 후보 설정, image, DB 연결, Flyway 실행 가능 여부를 확인
@@ -751,7 +794,7 @@ jobs:
           chmod 600 .dev-deploy-compose-started.tmp
           mv -f .dev-deploy-compose-started.tmp .dev-deploy-compose-started
           sudo env SSING_RUNTIME_ENV_FILE="$candidate_env" \
-            docker compose --env-file "$candidate_env" -f "$COMPOSE_FILE" up --pull never -d --remove-orphans
+            docker compose --env-file "$candidate_env" -f "$COMPOSE_FILE" up --pull never -d --remove-orphans app adminer
 
           echo "Docker Compose 컨테이너 상태"
           sudo env SSING_RUNTIME_ENV_FILE="$candidate_env" \
@@ -828,9 +871,37 @@ jobs:
           echo "::notice title=애플리케이션 내부 검증 완료::app status UP을 확인하고 현재 run의 후보 설정을 .env로 승격했습니다."
           echo "::endgroup::"
 
+      # 실행 중인 Caddy에 후보를 반영하되 두 smoke가 끝날 때까지 기존 정상 설정을 보관
+      - name: Caddy 설정 검증 및 무중단 반영
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::Caddy 설정 검증 및 무중단 반영"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_RUN_ID='$GITHUB_RUN_ID' DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT' SSING_DEV_DOMAIN='$SSING_DEV_DOMAIN' bash -s" <<'EOF'
+          set -euo pipefail
+          "$DEPLOY_DIR/.manage-dev-caddy.sh" activate
+          EOF
+          then
+            echo "::error title=Caddy 설정 반영 실패::새 후보 설정은 적용하지 않았거나 기존 live 설정으로 복구했습니다. Caddy validate/reload 로그와 컨테이너 상태를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=Caddy 후보 설정 반영 완료::두 smoke가 모두 통과할 때까지 이전 정상 설정을 복구 가능하게 보관합니다."
+          echo "::endgroup::"
+
       # 외부 도메인 HTTPS 헬스체크
       - name: 외부 도메인 HTTPS 헬스체크
+        id: caddy_app_health
         env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
         run: |
           set -euo pipefail
@@ -838,12 +909,10 @@ jobs:
           echo "::group::외부 도메인 HTTPS 헬스체크"
 
           if [ "$SSING_DEV_DOMAIN" = ":80" ]; then
-            echo "::notice title=외부 도메인 헬스체크 생략::SSING_DEV_DOMAIN=:80 IP-only 임시 배포 모드입니다."
-            echo "::endgroup::"
-            exit 0
+            HEALTH_URL="http://${EC2_HOST}/actuator/health"
+          else
+            HEALTH_URL="https://${SSING_DEV_DOMAIN}/actuator/health"
           fi
-
-          HEALTH_URL="https://${SSING_DEV_DOMAIN}/actuator/health"
 
           for attempt in {1..30}; do
             echo "외부 헬스체크 시도: ${attempt}/30 (${HEALTH_URL})"
@@ -863,6 +932,7 @@ jobs:
 
       # 앱 런타임 승격과 외부 health가 끝난 뒤 Adminer 자동 로그인만 별도로 검증
       - name: Adminer 자동 로그인 스모크 체크
+        id: adminer_smoke
         env:
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
@@ -931,6 +1001,58 @@ jobs:
           fi
 
           echo "::notice title=Adminer 자동 로그인 검증 완료::/adminer/에서 로그인 화면 없이 DB 목록까지 진입했습니다."
+          echo "::endgroup::"
+
+      # 두 route smoke 결과를 한곳에서 판정해 후보를 확정하거나 이전 Caddy 설정으로 복구
+      - name: Caddy 설정 확정 또는 복구
+        if: always()
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
+          CADDY_APP_HEALTH_OUTCOME: ${{ steps.caddy_app_health.outcome }}
+          ADMINER_SMOKE_OUTCOME: ${{ steps.adminer_smoke.outcome }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f ~/.ssh/ssing-dev-key ]; then
+            echo "::notice title=Caddy 설정 정리 생략::SSH 준비 전에 배포가 끝나 원격 Caddy transaction이 없습니다."
+            exit 0
+          fi
+
+          if [ "$CADDY_APP_HEALTH_OUTCOME" = "success" ] \
+              && [ "$ADMINER_SMOKE_OUTCOME" = "success" ]; then
+            caddy_smoke_succeeded="true"
+            action_message="두 smoke가 통과해 새 Caddy 설정을 확정합니다."
+          else
+            caddy_smoke_succeeded="false"
+            action_message="Caddy 관련 smoke가 모두 통과하지 않아 이전 설정을 복구합니다."
+          fi
+
+          echo "::group::Caddy 설정 확정 또는 복구"
+          echo "$action_message"
+          SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
+
+          if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_RUN_ID='$GITHUB_RUN_ID' DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT' SSING_DEV_DOMAIN='$SSING_DEV_DOMAIN' CADDY_SMOKE_SUCCEEDED='$caddy_smoke_succeeded' bash -s" <<'EOF'
+          set -euo pipefail
+          if [ ! -x "$DEPLOY_DIR/.manage-dev-caddy.sh" ]; then
+            if [ -e "$DEPLOY_DIR/.dev-deploy-caddy-activated" ]; then
+              echo "미완료 Caddy transaction이 있지만 설정 관리기를 실행할 수 없습니다."
+              exit 1
+            fi
+            echo "실행할 Caddy transaction이 없습니다."
+            exit 0
+          fi
+          "$DEPLOY_DIR/.manage-dev-caddy.sh" settle
+          EOF
+          then
+            echo "::error title=Caddy 설정 확정·복구 실패::원격 Caddy transaction marker와 rollback 파일을 보존했습니다. 다음 배포 전에 로그를 확인하세요."
+            echo "::endgroup::"
+            exit 1
+          fi
+
+          echo "::notice title=Caddy 설정 확정·복구 완료::${action_message}"
           echo "::endgroup::"
 
       # dev 배포 성공 Slack 알림
@@ -1007,12 +1129,13 @@ jobs:
         env:
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USERNAME: ${{ vars.EC2_USERNAME }}
+          SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
         run: |
           rm -f .migration.env .deploy-db-tooling.tgz .deploy-adminer.tgz
           if [ -f ~/.ssh/ssing-dev-key ]; then
             SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
             ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-              "DEPLOY_DIR='$DEPLOY_DIR' bash -s" <<'EOF' || true
+              "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_RUN_ID='$GITHUB_RUN_ID' DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT' SSING_DEV_DOMAIN='$SSING_DEV_DOMAIN' bash -s" <<'EOF' || true
           set -euo pipefail
           rm -f \
             "$DEPLOY_DIR/.migration.env" \
@@ -1023,6 +1146,17 @@ jobs:
             "$DEPLOY_DIR/.dev-deploy-compose-started.tmp" \
             "$DEPLOY_DIR/secrets/firebase-admin.json.next" \
             "$DEPLOY_DIR/secrets/adminer-db-password.next"
+
+          if [ -x "$DEPLOY_DIR/.manage-dev-caddy.sh" ]; then
+            "$DEPLOY_DIR/.manage-dev-caddy.sh" cleanup
+          elif [ -e "$DEPLOY_DIR/.dev-deploy-caddy-activated" ]; then
+            echo "미완료 Caddy transaction이 있어 후보와 rollback 파일을 보존합니다."
+          else
+            rm -f \
+              "$DEPLOY_DIR/Caddyfile.candidate-${DEPLOY_SHA}-${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}" \
+              "$DEPLOY_DIR/Caddyfile.rollback-${DEPLOY_SHA}-${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}" \
+              "$DEPLOY_DIR/Caddyfile.rollback-domain-${DEPLOY_SHA}-${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}"
+          fi
 
           rm -f "$DEPLOY_DIR/.env.next"
           if [ -e "$DEPLOY_DIR/.dev-deploy-compose-started" ]; then
