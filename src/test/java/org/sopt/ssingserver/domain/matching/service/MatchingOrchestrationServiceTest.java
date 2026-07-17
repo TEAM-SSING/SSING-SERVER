@@ -22,6 +22,7 @@ import org.sopt.ssingserver.domain.matching.dto.command.MatchingCreationCommand;
 import org.sopt.ssingserver.domain.matching.dto.command.MatchingParticipantCommand;
 import org.sopt.ssingserver.domain.matching.dto.result.MatchingCreationResult;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
+import org.sopt.ssingserver.domain.matching.entity.MatchingRequestParticipant;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
@@ -71,9 +72,9 @@ class MatchingOrchestrationServiceTest {
         });
 
         MatchingCreationResult result = service.createImmediateMatchingRequest(command(List.of(
-                MatchingParticipantCommand.of(24, Gender.FEMALE),
-                MatchingParticipantCommand.of(25, Gender.MALE),
-                MatchingParticipantCommand.of(26, Gender.FEMALE)
+                MatchingParticipantCommand.of("홍길동", 24, Gender.FEMALE),
+                MatchingParticipantCommand.of("김민지", 25, Gender.MALE),
+                MatchingParticipantCommand.of(null, 26, Gender.FEMALE)
         )));
 
         assertThat(result.matchingRequestId()).isEqualTo(10L);
@@ -93,7 +94,16 @@ class MatchingOrchestrationServiceTest {
                 .containsExactly(120, 180);
         assertThat(matchingRequestCaptor.getValue().getStatus()).isSameAs(MatchingRequestStatus.REQUESTED);
         assertThat(matchingRequestCaptor.getValue().getExpiresAt()).isNull();
-        verify(matchingRequestParticipantRepository).saveAll(any());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<MatchingRequestParticipant>> participantCaptor = ArgumentCaptor.forClass(List.class);
+        verify(matchingRequestParticipantRepository).saveAll(participantCaptor.capture());
+        assertThat(participantCaptor.getValue())
+                .extracting("name", "age", "gender")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("홍길동", 24, Gender.FEMALE),
+                        org.assertj.core.groups.Tuple.tuple("김민지", 25, Gender.MALE),
+                        org.assertj.core.groups.Tuple.tuple(null, 26, Gender.FEMALE)
+                );
         verify(matchingSearchTriggerService).triggerSearch(10L);
     }
 

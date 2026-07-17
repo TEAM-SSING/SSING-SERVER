@@ -131,6 +131,12 @@ class MatchingControllerTest {
                 .andExpect(jsonPath("$.data.requestSummary.sport").value("SNOWBOARD"))
                 .andExpect(jsonPath("$.data.requestSummary.lessonLevel").value("FIRST_TIME"))
                 .andExpect(jsonPath("$.data.requestSummary.headcount").value(2))
+                .andExpect(jsonPath("$.data.requestSummary.requesterName").value("요청자"))
+                .andExpect(jsonPath("$.data.requestSummary.participants[0].name").value("홍길동"))
+                .andExpect(jsonPath("$.data.requestSummary.participants[0].age").value(24))
+                .andExpect(jsonPath("$.data.requestSummary.participants[0].gender").value("FEMALE"))
+                .andExpect(jsonPath("$.data.requestSummary.participants[1].name").doesNotExist())
+                .andExpect(jsonPath("$.data.requestSummary.participants[1].age").value(30))
                 .andExpect(jsonPath("$.data.groupId").doesNotExist())
                 .andExpect(jsonPath("$.data.offerStatus").doesNotExist())
                 .andExpect(jsonPath("$.data.paymentStatus").doesNotExist())
@@ -274,7 +280,12 @@ class MatchingControllerTest {
                 new MatchingStatusQueryResult.ResortResult("HIGH1", "하이원"),
                 Sport.SNOWBOARD,
                 LessonLevel.FIRST_TIME,
-                2
+                2,
+                "요청자",
+                List.of(
+                        new MatchingStatusQueryResult.ParticipantResult("홍길동", 24, Gender.FEMALE),
+                        new MatchingStatusQueryResult.ParticipantResult(null, 30, Gender.MALE)
+                )
         );
     }
 }

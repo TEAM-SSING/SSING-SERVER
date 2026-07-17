@@ -111,6 +111,7 @@ public class MatchingOrchestrationService {
     ) {
         return MatchingRequestParticipant.create(
                 matchingRequest,
+                participant.name(),
                 participant.age(),
                 participant.gender()
         );

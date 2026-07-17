@@ -17,12 +17,14 @@ import org.sopt.ssingserver.domain.matching.entity.MatchingOffer;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroup;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequestGroupItem;
+import org.sopt.ssingserver.domain.matching.entity.MatchingRequestParticipant;
 import org.sopt.ssingserver.domain.matching.enums.MatchingOfferStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestGroupItemStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.enums.MatchingStatus;
 import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.repository.MatchingOfferRepository;
+import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipantRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestGroupItemRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
@@ -44,6 +46,7 @@ public class MatchingStatusQueryService {
     private static final String IMMEDIATE_START_TYPE = "IMMEDIATE";
 
     private final MatchingRequestRepository matchingRequestRepository;
+    private final MatchingRequestParticipantRepository matchingRequestParticipantRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingOfferPriceSnapshotRepository matchingOfferPriceSnapshotRepository;
@@ -151,6 +154,9 @@ public class MatchingStatusQueryService {
     private MatchingStatusQueryResult toActiveQueryResult(MatchingStatusContext context) {
         MatchingRequest matchingRequest = context.matchingRequest();
         MatchingStatus matchingStatus = context.matchingStatus();
+        // 같은 그룹의 다른 요청자 개인정보가 섞이지 않도록 현재 요청 ID의 참가자만 조회한다.
+        List<MatchingRequestParticipant> participants =
+                matchingRequestParticipantRepository.findByMatchingRequestIdOrderByIdAsc(matchingRequest.getId());
         boolean shouldHideRelations = matchingStatus == MatchingStatus.REMATCHING;
         Optional<MatchingRequestGroup> responseMatchingRequestGroup = shouldHideRelations
                 ? Optional.empty()
@@ -185,7 +191,7 @@ public class MatchingStatusQueryService {
                 resolveActiveInstructorProfile(matchingStatus, responseOffer),
                 null,
                 resolvePriceSummary(matchingStatus, responseOffer, responsePayment),
-                MatchingStatusQueryResult.RequestSummaryResult.from(matchingRequest),
+                MatchingStatusQueryResult.RequestSummaryResult.from(matchingRequest, participants),
                 resolveLessonSummary(matchingStatus, responseMatchingRequestGroup, groupItems)
         );
     }

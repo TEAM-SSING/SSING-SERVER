@@ -148,7 +148,20 @@ public sealed interface ConsumerActiveMatchingResponse permits
             LessonLevel lessonLevel,
 
             @Schema(description = "현재 소비자 요청의 수강 인원", example = "2", requiredMode = Schema.RequiredMode.REQUIRED)
-            int headcount
+            int headcount,
+
+            @Schema(
+                    description = "매칭 요청 소유자의 표시명(회원 닉네임)",
+                    example = "요청자",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            String requesterName,
+
+            @Schema(
+                    description = "현재 소비자 요청에 속한 실제 강습 참가자. ID 오름차순으로 반환",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            List<ParticipantResponse> participants
     ) {
 
         static RequestSummaryResponse from(MatchingStatusQueryResult.RequestSummaryResult result) {
@@ -160,8 +173,34 @@ public sealed interface ConsumerActiveMatchingResponse permits
                     ResortResponse.from(result.resort()),
                     result.sport(),
                     result.lessonLevel(),
-                    result.headcount()
+                    result.headcount(),
+                    result.requesterName(),
+                    result.participants().stream()
+                            .map(ParticipantResponse::from)
+                            .toList()
             );
+        }
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "ConsumerActiveMatchingParticipant", description = "현재 요청의 강습 참가자 정보")
+    record ParticipantResponse(
+            @Schema(
+                    description = "참가자 이름. 구버전 앱으로 생성되어 저장값이 없으면 생략",
+                    example = "홍길동",
+                    maxLength = 50
+            )
+            String name,
+
+            @Schema(description = "참가자 나이", example = "24", requiredMode = Schema.RequiredMode.REQUIRED)
+            int age,
+
+            @Schema(description = "참가자 성별", example = "FEMALE", requiredMode = Schema.RequiredMode.REQUIRED)
+            Gender gender
+    ) {
+
+        static ParticipantResponse from(MatchingStatusQueryResult.ParticipantResult result) {
+            return new ParticipantResponse(result.name(), result.age(), result.gender());
         }
     }
 

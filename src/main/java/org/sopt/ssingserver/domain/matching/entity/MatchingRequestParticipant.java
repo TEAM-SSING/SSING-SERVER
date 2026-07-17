@@ -31,6 +31,9 @@ public class MatchingRequestParticipant extends BaseTimeEntity {
     @JoinColumn(nullable = false)
     private MatchingRequest matchingRequest;
 
+    @Column(length = 50)
+    private String name;
+
     @Column(nullable = false)
     private int age;
 
@@ -40,13 +43,23 @@ public class MatchingRequestParticipant extends BaseTimeEntity {
 
     public static MatchingRequestParticipant create(
             MatchingRequest matchingRequest,
+            String name,
             int age,
             Gender gender
     ) {
         MatchingRequestParticipant participant = new MatchingRequestParticipant();
         participant.matchingRequest = matchingRequest;
+        participant.name = name == null ? null : name.strip();
         participant.age = age;
         participant.gender = gender;
         return participant;
+    }
+
+    public static MatchingRequestParticipant create(
+            MatchingRequest matchingRequest,
+            int age,
+            Gender gender
+    ) {
+        return create(matchingRequest, null, age, gender);
     }
 }

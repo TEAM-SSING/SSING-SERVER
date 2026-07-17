@@ -102,6 +102,92 @@ class CreateConsumerMatchingRequestTest {
     }
 
     @Test
+    void 참여자_이름은_앞뒤_공백을_제거해_command로_변환한다() {
+        CreateConsumerMatchingRequest request = new CreateConsumerMatchingRequest(
+                "HIGH1",
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                List.of(120),
+                List.of(new CreateConsumerMatchingRequest.ParticipantRequest("  홍길동  ", 24, Gender.FEMALE)),
+                true
+        );
+
+        MatchingCreationCommand command = request.toCommand(1L);
+
+        assertThat(command.participants().getFirst().name()).isEqualTo("홍길동");
+    }
+
+    @Test
+    void 참여자_이름이_공백뿐이면_검증에_실패한다() {
+        CreateConsumerMatchingRequest request = new CreateConsumerMatchingRequest(
+                "HIGH1",
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                List.of(120),
+                List.of(new CreateConsumerMatchingRequest.ParticipantRequest("   ", 24, Gender.FEMALE)),
+                true
+        );
+
+        Set<ConstraintViolation<CreateConsumerMatchingRequest>> violations = validator.validate(request);
+
+        assertThat(violations)
+                .extracting(ConstraintViolation::getMessage)
+                .contains("참여자 이름은 공백일 수 없습니다.");
+    }
+
+    @Test
+    void 참여자_이름이_50자를_초과하면_검증에_실패한다() {
+        CreateConsumerMatchingRequest request = new CreateConsumerMatchingRequest(
+                "HIGH1",
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                List.of(120),
+                List.of(new CreateConsumerMatchingRequest.ParticipantRequest("가".repeat(51), 24, Gender.FEMALE)),
+                true
+        );
+
+        Set<ConstraintViolation<CreateConsumerMatchingRequest>> violations = validator.validate(request);
+
+        assertThat(violations)
+                .extracting(ConstraintViolation::getMessage)
+                .contains("참여자 이름은 50자 이하여야 합니다.");
+    }
+
+    @Test
+    void 기존_앱처럼_참여자_이름이_없어도_검증을_통과한다() {
+        CreateConsumerMatchingRequest request = new CreateConsumerMatchingRequest(
+                "HIGH1",
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                List.of(120),
+                List.of(new CreateConsumerMatchingRequest.ParticipantRequest(null, 24, Gender.FEMALE)),
+                true
+        );
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void 참여자가_5명을_초과하면_검증에_실패한다() {
+        CreateConsumerMatchingRequest.ParticipantRequest participant =
+                new CreateConsumerMatchingRequest.ParticipantRequest("홍길동", 24, Gender.FEMALE);
+        CreateConsumerMatchingRequest request = new CreateConsumerMatchingRequest(
+                "HIGH1",
+                Sport.SNOWBOARD,
+                LessonLevel.FIRST_TIME,
+                List.of(120),
+                List.of(participant, participant, participant, participant, participant, participant),
+                true
+        );
+
+        Set<ConstraintViolation<CreateConsumerMatchingRequest>> violations = validator.validate(request);
+
+        assertThat(violations)
+                .extracting(ConstraintViolation::getMessage)
+                .contains("참여자는 5명 이하여야 합니다.");
+    }
+
+    @Test
     void toCommand는_요청값과_참여자_목록을_매칭_생성_command로_변환한다() {
         CreateConsumerMatchingRequest request = request(List.of(120, 180));
 
@@ -116,10 +202,10 @@ class CreateConsumerMatchingRequestTest {
         assertThat(command.participants()).hasSize(2);
         assertThat(command.headcount()).isEqualTo(2);
         assertThat(command.participants())
-                .extracting("age", "gender")
+                .extracting("name", "age", "gender")
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(24, Gender.FEMALE),
-                        org.assertj.core.groups.Tuple.tuple(30, Gender.MALE)
+                        org.assertj.core.groups.Tuple.tuple("홍길동", 24, Gender.FEMALE),
+                        org.assertj.core.groups.Tuple.tuple("김민지", 30, Gender.MALE)
                 );
     }
 
@@ -130,8 +216,8 @@ class CreateConsumerMatchingRequestTest {
                 LessonLevel.FIRST_TIME,
                 requestedDurationMinutes,
                 List.of(
-                        new CreateConsumerMatchingRequest.ParticipantRequest(24, Gender.FEMALE),
-                        new CreateConsumerMatchingRequest.ParticipantRequest(30, Gender.MALE)
+                        new CreateConsumerMatchingRequest.ParticipantRequest("홍길동", 24, Gender.FEMALE),
+                        new CreateConsumerMatchingRequest.ParticipantRequest("김민지", 30, Gender.MALE)
                 ),
                 true
         );
