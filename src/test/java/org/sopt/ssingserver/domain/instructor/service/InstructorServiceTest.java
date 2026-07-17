@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -19,6 +20,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sopt.ssingserver.domain.instructor.dto.request.InstructorMatchingExposureRequest;
@@ -81,7 +83,7 @@ class InstructorServiceTest {
         InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
         InstructorMatchingExposureRequest request = request();
 
-        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L)).thenReturn(Optional.of(profile));
         when(lessonRepository.existsByInstructorProfileIdAndStatus(
                 10L,
                 LessonStatus.IN_PROGRESS
@@ -116,11 +118,11 @@ class InstructorServiceTest {
     void startExposure는_활성_가격정책이_없으면_대기상태를_저장하지_않는다() {
         InstructorService service = createService();
         InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
-        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L)).thenReturn(Optional.of(profile));
         when(lessonRepository.existsByInstructorProfileIdAndStatus(10L, LessonStatus.IN_PROGRESS))
                 .thenReturn(false);
-        when(instructorPricePolicyRepository.findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(10L))
-                .thenReturn(Optional.empty());
+        when(instructorPricePolicyRepository.findActiveByInstructorProfileIdForUpdate(10L))
+                .thenReturn(List.of());
 
         assertThatThrownBy(() -> service.startExposure(1L, request()))
                 .isInstanceOf(BusinessException.class)
@@ -146,7 +148,7 @@ class InstructorServiceTest {
         existingSetting.stopExposure();
         InstructorMatchingExposureRequest request = request();
 
-        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L)).thenReturn(Optional.of(profile));
         when(lessonRepository.existsByInstructorProfileIdAndStatus(
                 10L,
                 LessonStatus.IN_PROGRESS
@@ -166,6 +168,44 @@ class InstructorServiceTest {
         assertThat(existingSetting.getMaxHeadcount()).isEqualTo(3);
         assertThat(existingSetting.isExposed()).isTrue();
         verify(matchingSearchTriggerService).triggerAllRequested();
+    }
+
+    @Test
+    void startExposure는_profile_setting_price_순서로_잠그고_잠근_가격으로_응답한다() {
+        InstructorService service = createService();
+        InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
+        InstructorMatchingSetting existingSetting = InstructorMatchingSetting.create(
+                profile,
+                Sport.SKI,
+                List.of(LessonLevel.CERTIFIED),
+                List.of(120),
+                1,
+                true
+        );
+        InstructorPricePolicy lockedLatestPrice = instructorPricePolicy(100_000, 30_000);
+
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L)).thenReturn(Optional.of(profile));
+        when(lessonRepository.existsByInstructorProfileIdAndStatus(10L, LessonStatus.IN_PROGRESS))
+                .thenReturn(false);
+        when(instructorMatchingSettingRepository.existsByInstructorProfileId(10L)).thenReturn(true);
+        when(instructorMatchingSettingRepository.findByInstructorProfileIdForUpdate(10L))
+                .thenReturn(Optional.of(existingSetting));
+        when(instructorPricePolicyRepository.findActiveByInstructorProfileIdForUpdate(10L))
+                .thenReturn(List.of(lockedLatestPrice));
+
+        InstructorMatchingExposureResponse response = service.startExposure(1L, request());
+
+        InOrder lockOrder = inOrder(
+                instructorProfileRepository,
+                instructorMatchingSettingRepository,
+                instructorPricePolicyRepository
+        );
+        lockOrder.verify(instructorProfileRepository).findByMemberIdForUpdate(1L);
+        lockOrder.verify(instructorMatchingSettingRepository).findByInstructorProfileIdForUpdate(10L);
+        lockOrder.verify(instructorPricePolicyRepository).findActiveByInstructorProfileIdForUpdate(10L);
+        assertThat(response.pricePolicy().basePriceAmount()).isEqualTo(100_000);
+        assertThat(response.pricePolicy().additionalPersonPriceAmount()).isEqualTo(30_000);
+        assertThat(response.estimatedLessonPriceAmount()).isEqualTo(172_500);
     }
 
     @Test
@@ -250,7 +290,7 @@ class InstructorServiceTest {
         InstructorService service = createService();
         InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
 
-        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L)).thenReturn(Optional.of(profile));
         when(lessonRepository.existsByInstructorProfileIdAndStatus(
                 10L,
                 LessonStatus.IN_PROGRESS
@@ -271,7 +311,7 @@ class InstructorServiceTest {
         InstructorProfile profile = instructorProfile(10L, InstructorApprovalStatus.APPROVED);
         ReflectionTestUtils.setField(profile, "resort", null);
 
-        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L)).thenReturn(Optional.of(profile));
         when(lessonRepository.existsByInstructorProfileIdAndStatus(
                 10L,
                 LessonStatus.IN_PROGRESS
@@ -296,7 +336,7 @@ class InstructorServiceTest {
                 InstructorCertificateType.KSIA_SKI_LEVEL_1
         );
 
-        when(instructorProfileRepository.findByMemberId(1L)).thenReturn(Optional.of(profile));
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L)).thenReturn(Optional.of(profile));
         when(lessonRepository.existsByInstructorProfileIdAndStatus(
                 10L,
                 LessonStatus.IN_PROGRESS
@@ -390,7 +430,7 @@ class InstructorServiceTest {
         );
         concurrentlyCreatedSetting.stopExposure();
 
-        when(instructorProfileRepository.findByMemberId(1L))
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L))
                 .thenReturn(Optional.of(profile), Optional.of(profile));
         when(lessonRepository.existsByInstructorProfileIdAndStatus(
                 10L,
@@ -428,7 +468,7 @@ class InstructorServiceTest {
                 InstructorCertificateType.KSIA_SKI_LEVEL_1
         );
 
-        when(instructorProfileRepository.findByMemberId(1L))
+        when(instructorProfileRepository.findByMemberIdForUpdate(1L))
                 .thenReturn(Optional.of(firstProfile), Optional.of(changedProfile));
         when(lessonRepository.existsByInstructorProfileIdAndStatus(
                 10L,
@@ -448,9 +488,8 @@ class InstructorServiceTest {
     }
 
     private InstructorService createService() {
-        lenient().when(instructorPricePolicyRepository
-                        .findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(10L))
-                .thenReturn(Optional.of(instructorPricePolicy()));
+        lenient().when(instructorPricePolicyRepository.findActiveByInstructorProfileIdForUpdate(10L))
+                .thenReturn(List.of(instructorPricePolicy()));
         return new InstructorService(
                 instructorProfileRepository,
                 instructorMatchingSettingRepository,
@@ -464,12 +503,23 @@ class InstructorServiceTest {
     }
 
     private InstructorPricePolicy instructorPricePolicy() {
+        return instructorPricePolicy(60_000, 20_000);
+    }
+
+    private InstructorPricePolicy instructorPricePolicy(
+            int basePriceAmount,
+            int additionalPersonPriceAmount
+    ) {
         try {
             Constructor<InstructorPricePolicy> constructor = InstructorPricePolicy.class.getDeclaredConstructor();
             constructor.setAccessible(true);
             InstructorPricePolicy pricePolicy = constructor.newInstance();
-            ReflectionTestUtils.setField(pricePolicy, "basePriceAmount", 60_000);
-            ReflectionTestUtils.setField(pricePolicy, "additionalPersonPriceAmount", 20_000);
+            ReflectionTestUtils.setField(pricePolicy, "basePriceAmount", basePriceAmount);
+            ReflectionTestUtils.setField(
+                    pricePolicy,
+                    "additionalPersonPriceAmount",
+                    additionalPersonPriceAmount
+            );
             ReflectionTestUtils.setField(pricePolicy, "isActive", true);
             return pricePolicy;
         } catch (ReflectiveOperationException exception) {

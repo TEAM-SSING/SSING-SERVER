@@ -1376,6 +1376,300 @@
                 padding-inline: 6px;
             }
         }
+
+        .console-panel + .console-panel {
+            margin-top: 18px;
+        }
+
+        .section-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin: 0 0 14px;
+        }
+
+        .section-heading h2 {
+            margin: 0;
+            font-size: var(--type-title-md-size);
+            line-height: var(--type-title-md-line);
+        }
+
+        .section-heading p {
+            max-width: 720px;
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: var(--type-caption-size);
+            line-height: 1.5;
+        }
+
+        .section-kicker {
+            display: inline-flex;
+            align-items: center;
+            min-height: 24px;
+            border: 1px solid rgba(142, 232, 216, 0.25);
+            border-radius: 999px;
+            padding: 3px 8px;
+            color: var(--primary);
+            background: rgba(142, 232, 216, 0.07);
+            font-size: var(--type-micro-size);
+            font-weight: var(--font-weight-semibold);
+            white-space: nowrap;
+        }
+
+        .kakao-member-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .kakao-grid-header,
+        .kakao-member-row {
+            display: grid;
+            grid-template-columns: minmax(190px, 1.1fr) minmax(150px, 0.8fr) minmax(260px, 1.45fr) minmax(190px, 0.9fr);
+            gap: 12px;
+            align-items: center;
+        }
+
+        .kakao-grid-header {
+            padding: 0 12px;
+            color: var(--muted);
+            font-size: var(--type-micro-size);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .kakao-member-row {
+            border: 1px solid rgba(151, 175, 203, 0.2);
+            border-radius: 10px;
+            padding: 12px;
+            background: rgba(17, 24, 33, 0.8);
+        }
+
+        .kakao-member-row:hover {
+            border-color: rgba(142, 232, 216, 0.28);
+            background: rgba(22, 31, 42, 0.88);
+        }
+
+        .kakao-cell {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .kakao-name {
+            overflow: hidden;
+            color: var(--text);
+            font-weight: var(--font-weight-bold);
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .raw-id-list,
+        .compact-badges,
+        .action-buttons,
+        .selector-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .raw-id {
+            border: 1px solid rgba(151, 175, 203, 0.2);
+            border-radius: 5px;
+            padding: 3px 6px;
+            color: #b9c7d8;
+            background: rgba(8, 13, 20, 0.55);
+            font: 600 var(--type-micro-size)/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        .state-pill {
+            display: inline-flex;
+            align-items: center;
+            min-height: 24px;
+            width: fit-content;
+            border: 1px solid rgba(151, 175, 203, 0.2);
+            border-radius: 999px;
+            padding: 3px 8px;
+            color: var(--muted);
+            background: rgba(151, 175, 203, 0.06);
+            font-size: var(--type-micro-size);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .state-pill.positive {
+            border-color: rgba(99, 210, 151, 0.32);
+            color: var(--success);
+            background: rgba(99, 210, 151, 0.08);
+        }
+
+        .state-pill.pending {
+            border-color: rgba(255, 209, 102, 0.34);
+            color: var(--warning);
+            background: rgba(255, 209, 102, 0.08);
+        }
+
+        .state-pill.exposed {
+            border-color: rgba(122, 162, 255, 0.4);
+            color: #9dbbff;
+            background: rgba(122, 162, 255, 0.1);
+        }
+
+        .config-line,
+        .diagnostic-line {
+            margin: 0;
+            color: #c3cfdd;
+            font-size: var(--type-caption-size);
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+
+        .diagnostic-line {
+            color: var(--muted);
+            font-size: var(--type-micro-size);
+        }
+
+        .action-buttons {
+            justify-content: flex-end;
+        }
+
+        .action-buttons .button {
+            min-height: 34px;
+            padding: 6px 10px;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pagination-label {
+            min-width: 68px;
+            color: var(--muted);
+            font-size: var(--type-caption-size);
+            text-align: center;
+        }
+
+        .feature-disabled {
+            border: 1px dashed rgba(255, 209, 102, 0.34);
+            border-radius: 10px;
+            padding: 18px;
+            color: var(--warning);
+            background: rgba(255, 209, 102, 0.05);
+            text-align: center;
+        }
+
+        .instructor-action-modal {
+            display: grid;
+            max-height: min(820px, calc(100vh - 32px));
+            overflow: auto;
+            overscroll-behavior: contain;
+            gap: 12px;
+        }
+
+        .action-target,
+        .action-impact,
+        .configuration-fieldset {
+            border: 1px solid rgba(151, 175, 203, 0.2);
+            border-radius: 10px;
+            padding: 12px;
+            background: rgba(8, 13, 20, 0.38);
+        }
+
+        .action-target {
+            display: grid;
+            gap: 6px;
+        }
+
+        .configuration-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .configuration-fieldset {
+            display: grid;
+            gap: 8px;
+            margin: 0;
+        }
+
+        .configuration-fieldset legend {
+            padding: 0 5px;
+            color: var(--muted);
+            font-size: var(--type-caption-size);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .selector-chip {
+            min-height: 34px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 6px 10px;
+            color: var(--muted);
+            background: rgba(17, 24, 33, 0.9);
+            font-size: var(--type-caption-size);
+            font-weight: var(--font-weight-semibold);
+            cursor: pointer;
+        }
+
+        .selector-chip[aria-pressed="true"],
+        .selector-chip[aria-checked="true"] {
+            border-color: var(--primary);
+            color: #09111f;
+            background: var(--primary);
+        }
+
+        .selector-chip:focus-visible,
+        input[type="range"]:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .price-control {
+            display: grid;
+            grid-template-columns: auto minmax(120px, 1fr) auto minmax(82px, auto);
+            gap: 8px;
+            align-items: center;
+        }
+
+        .price-control input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+        }
+
+        .price-value {
+            color: var(--text);
+            font: 700 var(--type-caption-size)/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+            text-align: right;
+        }
+
+        .action-impact {
+            display: grid;
+            gap: 5px;
+            color: #c3cfdd;
+            font-size: var(--type-caption-size);
+            line-height: 1.5;
+        }
+
+        .action-impact strong {
+            color: var(--text);
+        }
+
+        @media (max-width: 920px) {
+            .kakao-grid-header { display: none; }
+            .kakao-member-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                align-items: start;
+            }
+            .action-buttons { justify-content: flex-start; }
+        }
+
+        @media (max-width: 640px) {
+            .section-heading { flex-direction: column; }
+            .kakao-member-row { grid-template-columns: 1fr; }
+            .price-control { grid-template-columns: auto minmax(0, 1fr) auto; }
+            .price-value { grid-column: 1 / -1; text-align: left; }
+            .instructor-action-modal .button,
+            .selector-chip { min-height: 44px; }
+        }
     </style>
 </head>
 <body>
@@ -1593,16 +1887,23 @@
         <a href="/dev/matching/console">Matching</a>
         <a href="/adminer/" target="_blank" rel="noopener noreferrer" aria-label="Adminer 새 탭에서 열기">Adminer <span aria-hidden="true">↗</span></a>
     </nav>
-    <div class="dev-console-context">페르소나·토큰 관리</div>
+    <div class="dev-console-context">페르소나·실제 Kakao 강사 관리</div>
 </header>
 <main id="main-content">
     <div class="page-heading">
         <div>
-            <h1>테스트 페르소나</h1>
-            <p>테스트 사용자를 조회하고, 필요한 계정과 인증 토큰을 준비합니다.</p>
+            <h1>개발 계정 관리</h1>
+            <p>합성 페르소나와 실제 Kakao 테스트 회원을 한곳에서 확인하고 필요한 상태를 준비합니다.</p>
         </div>
     </div>
     <section class="console-panel">
+        <div class="section-heading">
+            <div>
+                <h2>합성 페르소나</h2>
+                <p>앱 인증·권한 흐름을 빠르게 확인하기 위한 독립 테스트 계정입니다.</p>
+            </div>
+            <span class="section-kicker">DevPersona</span>
+        </div>
         <div class="toolbar">
             <div class="toolbar-actions">
                 <button class="button icon-button refresh-button" id="refreshPersonas" type="button" aria-label="새로고침">
@@ -1626,6 +1927,38 @@
             </div>
         </div>
         <section class="persona-list" id="personaList"></section>
+    </section>
+
+    <section class="console-panel" id="kakaoInstructorPanel">
+        <div class="section-heading">
+            <div>
+                <h2>실제 Kakao 로그인 회원</h2>
+                <p>카카오로 로그인해 DB에 만들어진 회원만 조회합니다. 신청·승인·설정 저장과 매칭 시작은 서로 분리됩니다.</p>
+            </div>
+            <span class="section-kicker">OAuthAccount · KAKAO</span>
+        </div>
+        <div class="toolbar">
+            <div class="toolbar-actions">
+                <button class="button icon-button refresh-button" id="refreshKakaoMembers" type="button" aria-label="실제 Kakao 회원 새로고침">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M19 8a7 7 0 1 0 1 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M19 4v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="toolbar-controls">
+                <div class="pagination-controls" aria-label="실제 Kakao 회원 페이지 이동">
+                    <button class="button" id="previousKakaoPage" type="button">이전</button>
+                    <span class="pagination-label" id="kakaoPageLabel">1 / 1</span>
+                    <button class="button" id="nextKakaoPage" type="button">다음</button>
+                </div>
+            </div>
+            <div class="toolbar-meta">
+                <div class="summary" id="kakaoSummary"></div>
+                <div class="status" id="kakaoStatus" aria-live="polite"></div>
+            </div>
+        </div>
+        <section class="kakao-member-list" id="kakaoMemberList" aria-label="실제 Kakao 회원 목록"></section>
     </section>
 </main>
 
@@ -1669,6 +2002,69 @@
         </div>
         <div class="modal-actions">
             <button class="button primary" id="createPersonaButton" type="submit" disabled>유저 생성</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="instructorActionDialog" aria-labelledby="instructorActionTitle">
+    <form class="modal instructor-action-modal" method="dialog" id="instructorActionForm">
+        <div class="modal-header">
+            <h2 class="modal-title" id="instructorActionTitle">강사 상태 변경</h2>
+            <button class="button icon-button modal-close" type="button" id="closeInstructorActionModal" aria-label="닫기">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+        <section class="action-target" id="instructorActionTarget"></section>
+
+        <div class="configuration-grid" id="instructorConfigurationFields" hidden>
+            <fieldset class="configuration-fieldset">
+                <legend>스키장</legend>
+                <div class="selector-row" id="resortChoices" role="radiogroup" aria-label="활동 스키장"></div>
+            </fieldset>
+            <fieldset class="configuration-fieldset">
+                <legend>종목</legend>
+                <div class="selector-row" id="sportChoices" role="radiogroup" aria-label="강습 종목"></div>
+            </fieldset>
+            <fieldset class="configuration-fieldset">
+                <legend>강습 레벨 · 여러 개 선택 가능</legend>
+                <div class="selector-row" id="lessonLevelChoices"></div>
+            </fieldset>
+            <fieldset class="configuration-fieldset">
+                <legend>최대 인원</legend>
+                <div class="selector-row" id="headcountChoices" role="radiogroup" aria-label="최대 강습 인원"></div>
+            </fieldset>
+            <fieldset class="configuration-fieldset">
+                <legend>가능 시간 · 여러 개 선택 가능</legend>
+                <div class="selector-row" id="durationChoices"></div>
+            </fieldset>
+            <fieldset class="configuration-fieldset">
+                <legend>기본 2시간 가격</legend>
+                <div class="price-control">
+                    <button class="button" type="button" data-price-adjust="base" data-delta="-5000" aria-label="기본 가격 5000원 내리기">−</button>
+                    <input id="basePriceRange" type="range" min="50000" max="200000" step="5000" value="100000" aria-label="기본 2시간 가격" aria-describedby="basePriceValue">
+                    <button class="button" type="button" data-price-adjust="base" data-delta="5000" aria-label="기본 가격 5000원 올리기">+</button>
+                    <output class="price-value" id="basePriceValue" for="basePriceRange">100,000원</output>
+                </div>
+            </fieldset>
+            <fieldset class="configuration-fieldset">
+                <legend>추가 1인 가격</legend>
+                <div class="price-control">
+                    <button class="button" type="button" data-price-adjust="additional" data-delta="-5000" aria-label="추가 인원 가격 5000원 내리기">−</button>
+                    <input id="additionalPriceRange" type="range" min="0" max="50000" step="5000" value="20000" aria-label="추가 1인 가격" aria-describedby="additionalPriceValue">
+                    <button class="button" type="button" data-price-adjust="additional" data-delta="5000" aria-label="추가 인원 가격 5000원 올리기">+</button>
+                    <output class="price-value" id="additionalPriceValue" for="additionalPriceRange">20,000원</output>
+                </div>
+            </fieldset>
+        </div>
+
+        <section class="action-impact" id="instructorActionImpact"></section>
+        <div class="status" id="instructorActionStatus" aria-live="polite"></div>
+        <div class="modal-actions">
+            <button class="button" id="cancelInstructorAction" type="button">취소</button>
+            <button class="button primary" id="confirmInstructorAction" type="submit">실행</button>
         </div>
     </form>
 </dialog>
@@ -1738,6 +2134,28 @@
         REJECTED: "반려",
         SUSPENDED: "정지"
     };
+    const instructorActionLabels = {
+        CREATE_APPLICATION: "테스트 신청 만들기",
+        APPROVE_WITH_CONFIGURATION: "승인 + 설정 저장",
+        SAVE_CONFIGURATION: "설정 다시 저장",
+        START_MATCHING: "매칭 시작",
+        STOP_MATCHING: "매칭 중단"
+    };
+    const lessonLevelOptions = [
+        ["FIRST_TIME", "첫 방문"],
+        ["BEGINNER", "초급"],
+        ["INTERMEDIATE", "중급"],
+        ["CERTIFIED", "자격 준비"]
+    ];
+    const durationOptions = [
+        [120, "2시간"],
+        [180, "3시간"],
+        [240, "4시간"]
+    ];
+    const sportOptions = [
+        ["SKI", "스키"],
+        ["SNOWBOARD", "스노보드"]
+    ];
     const createdAtFormatter = new Intl.DateTimeFormat("ko-KR", {
         month: "2-digit",
         day: "2-digit",
@@ -1769,7 +2187,20 @@
         isCreating: false,
         createCompleted: false,
         selectedRole: null,
-        selectedTemplate: null
+        selectedTemplate: null,
+        kakaoMembers: [],
+        resorts: [],
+        applicationDefaults: null,
+        kakaoPage: 0,
+        kakaoTotalPages: 0,
+        kakaoTotalElements: 0,
+        kakaoHasPrevious: false,
+        kakaoHasNext: false,
+        kakaoFeatureAvailable: true,
+        selectedKakaoMember: null,
+        selectedInstructorAction: null,
+        instructorConfiguration: null,
+        kakaoActionInFlight: false
     };
 
     const status = document.querySelector("#status");
@@ -1783,6 +2214,23 @@
     const templateField = document.querySelector("#templateField");
     const templateChoices = document.querySelector("#templateChoices");
     const modalTokenPanel = document.querySelector("#modalTokenPanel");
+    const kakaoStatus = document.querySelector("#kakaoStatus");
+    const kakaoSummary = document.querySelector("#kakaoSummary");
+    const kakaoMemberList = document.querySelector("#kakaoMemberList");
+    const kakaoPageLabel = document.querySelector("#kakaoPageLabel");
+    const previousKakaoPage = document.querySelector("#previousKakaoPage");
+    const nextKakaoPage = document.querySelector("#nextKakaoPage");
+    const instructorActionDialog = document.querySelector("#instructorActionDialog");
+    const instructorActionForm = document.querySelector("#instructorActionForm");
+    const instructorActionTitle = document.querySelector("#instructorActionTitle");
+    const instructorActionTarget = document.querySelector("#instructorActionTarget");
+    const instructorConfigurationFields = document.querySelector("#instructorConfigurationFields");
+    const instructorActionImpact = document.querySelector("#instructorActionImpact");
+    const instructorActionStatus = document.querySelector("#instructorActionStatus");
+    const confirmInstructorAction = document.querySelector("#confirmInstructorAction");
+    const cancelInstructorAction = document.querySelector("#cancelInstructorAction");
+    const basePriceRange = document.querySelector("#basePriceRange");
+    const additionalPriceRange = document.querySelector("#additionalPriceRange");
 
     renderRoleChoices();
 
@@ -1792,6 +2240,28 @@
     });
     document.querySelector("#closeCreateModal").addEventListener("click", () => dialog.close());
     document.querySelector("#refreshPersonas").addEventListener("click", loadPersonas);
+    document.querySelector("#refreshKakaoMembers").addEventListener("click", () => loadKakaoMembers());
+    previousKakaoPage.addEventListener("click", () => loadKakaoMembers(state.kakaoPage - 1));
+    nextKakaoPage.addEventListener("click", () => loadKakaoMembers(state.kakaoPage + 1));
+    document.querySelector("#closeInstructorActionModal").addEventListener("click", closeInstructorActionModal);
+    cancelInstructorAction.addEventListener("click", closeInstructorActionModal);
+    instructorActionDialog.addEventListener("cancel", event => {
+        if (state.kakaoActionInFlight) {
+            event.preventDefault();
+        }
+    });
+    instructorActionForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        await executeSelectedInstructorAction();
+    });
+    basePriceRange.addEventListener("input", syncPricesFromInputs);
+    additionalPriceRange.addEventListener("input", syncPricesFromInputs);
+    document.querySelectorAll("[data-price-adjust]").forEach(button => {
+        button.addEventListener("click", () => adjustPrice(
+            button.dataset.priceAdjust,
+            Number(button.dataset.delta)
+        ));
+    });
 
     roleChoices.addEventListener("click", event => {
         const button = event.target.closest("[data-role-choice]");
@@ -1827,6 +2297,533 @@
             updateSummary([]);
             setStatus(status, error.message, "error");
         }
+    }
+
+    async function loadKakaoMembers(page = state.kakaoPage) {
+        const nextPage = Math.max(0, Number.isFinite(page) ? page : 0);
+        setStatus(kakaoStatus, "실제 Kakao 회원을 불러오는 중", "");
+        try {
+            const response = await requestJson(`/dev/auth/kakao-members?page=${nextPage}&size=100`);
+            const data = response.data;
+            state.kakaoFeatureAvailable = true;
+            state.kakaoMembers = data.members || [];
+            state.resorts = data.resorts || [];
+            state.applicationDefaults = data.applicationDefaults || null;
+            state.kakaoPage = data.page;
+            state.kakaoTotalPages = data.totalPages;
+            state.kakaoTotalElements = data.totalElements;
+            state.kakaoHasPrevious = data.hasPrevious;
+            state.kakaoHasNext = data.hasNext;
+            renderKakaoMembers();
+            setStatus(kakaoStatus, "", "");
+        } catch (error) {
+            if (error.status === 404) {
+                state.kakaoFeatureAvailable = false;
+                state.kakaoMembers = [];
+                state.kakaoTotalPages = 0;
+                state.kakaoTotalElements = 0;
+                state.kakaoHasPrevious = false;
+                state.kakaoHasNext = false;
+                renderKakaoMembers();
+                setStatus(kakaoStatus, "기능 플래그가 꺼져 있습니다.", "warning");
+                return;
+            }
+            renderKakaoMembers();
+            setStatus(kakaoStatus, error.message, "error");
+        }
+    }
+
+    function renderKakaoMembers() {
+        kakaoMemberList.replaceChildren();
+        const currentPageLabel = state.kakaoTotalPages === 0 ? 0 : state.kakaoPage + 1;
+        kakaoPageLabel.textContent = `${currentPageLabel} / ${state.kakaoTotalPages}`;
+        previousKakaoPage.disabled = !state.kakaoHasPrevious || state.kakaoActionInFlight;
+        nextKakaoPage.disabled = !state.kakaoHasNext || state.kakaoActionInFlight;
+        kakaoSummary.textContent = state.kakaoFeatureAvailable
+            ? `실제 Kakao 회원 ${state.kakaoTotalElements}명 · 현재 ${state.kakaoMembers.length}명 표시`
+            : "실제 Kakao 회원 변경 기능 비활성화";
+
+        if (!state.kakaoFeatureAvailable) {
+            const disabled = document.createElement("div");
+            disabled.className = "feature-disabled";
+            disabled.textContent = "SSING_DEV_INSTRUCTOR_ACTIONS_ENABLED=true로 실행한 local/dev 서버에서만 사용할 수 있습니다.";
+            kakaoMemberList.append(disabled);
+            return;
+        }
+        if (state.kakaoMembers.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "feature-disabled";
+            empty.textContent = "카카오로 로그인해 생성된 실제 테스트 회원이 없습니다.";
+            kakaoMemberList.append(empty);
+            return;
+        }
+
+        const header = document.createElement("div");
+        header.className = "kakao-grid-header";
+        header.setAttribute("role", "row");
+        header.innerHTML = "<span>회원 · raw ID</span><span>권한 상태</span><span>강사 설정</span><span>가능 동작</span>";
+        kakaoMemberList.append(header);
+
+        state.kakaoMembers.forEach(member => {
+            const row = document.createElement("article");
+            row.className = "kakao-member-row";
+            row.dataset.kakaoMemberId = member.memberId;
+            const config = member.configuration;
+            const diagnostics = (member.diagnostics || []).slice(0, 2);
+            const priceIds = config.activePricePolicyIds || [];
+            row.innerHTML = `
+                <div class="kakao-cell">
+                    <span class="kakao-name">${escapeHtml(member.nickname)}</span>
+                    <div class="raw-id-list">
+                        ${rawIdMarkup("OAuth", member.oauthAccountId)}
+                        ${rawIdMarkup("Member", member.memberId)}
+                        ${rawIdMarkup("Profile", member.instructorProfileId)}
+                        ${rawIdMarkup("Setting", config.matchingSettingId)}
+                        ${priceIds.map(id => rawIdMarkup("Price", id)).join("")}
+                    </div>
+                </div>
+                <div class="kakao-cell">
+                    <div class="compact-badges">
+                        <span class="state-pill ${member.memberStatus === "ACTIVE" ? "positive" : ""}">${escapeHtml(formatMemberStatus(member.memberStatus))}</span>
+                        <span class="state-pill ${approvalStateClass(member.instructorApprovalStatus)}">${escapeHtml(formatKakaoInstructorStatus(member.instructorApprovalStatus))}</span>
+                        <span class="state-pill ${config.exposed ? "exposed" : ""}">${config.exposed ? "매칭 ON" : "매칭 OFF"}</span>
+                    </div>
+                    <p class="diagnostic-line">역할 ${escapeHtml(member.memberRole)} · 생성 ${escapeHtml(formatCreatedAt(member.memberCreatedAt))}</p>
+                </div>
+                <div class="kakao-cell">
+                    <p class="config-line">${escapeHtml(configurationSummary(config))}</p>
+                    <p class="config-line">${escapeHtml(priceSummary(config))}</p>
+                    ${diagnostics.map(message => `<p class="diagnostic-line">${escapeHtml(message)}</p>`).join("")}
+                </div>
+                <div class="kakao-cell">
+                    <div class="action-buttons">
+                        ${actionButtonsMarkup(member)}
+                    </div>
+                </div>
+            `;
+            row.querySelectorAll("[data-instructor-action]").forEach(button => {
+                button.addEventListener("click", () => openInstructorAction(
+                    member,
+                    button.dataset.instructorAction
+                ));
+            });
+            kakaoMemberList.append(row);
+        });
+    }
+
+    function rawIdMarkup(label, value) {
+        if (value === null || value === undefined) {
+            return "";
+        }
+        return `<span class="raw-id">${escapeHtml(label)}#${escapeHtml(value)}</span>`;
+    }
+
+    function approvalStateClass(approvalStatus) {
+        if (approvalStatus === "APPROVED") {
+            return "positive";
+        }
+        if (approvalStatus === "PENDING") {
+            return "pending";
+        }
+        return "";
+    }
+
+    function formatKakaoInstructorStatus(approvalStatus) {
+        return approvalStatus ? formatInstructorStatus(approvalStatus) : "신청 전";
+    }
+
+    function configurationSummary(configuration) {
+        if (!configuration.matchingSettingId) {
+            return `설정 없음${configuration.resortDisplayName ? ` · ${configuration.resortDisplayName}` : ""}`;
+        }
+        const levels = (configuration.lessonLevels || []).join(", ") || "레벨 없음";
+        const durations = (configuration.availableDurationMinutes || [])
+            .map(value => `${value / 60}시간`)
+            .join(", ");
+        return `${configuration.resortDisplayName || "리조트 없음"} · ${configuration.sport || "종목 없음"} · ${levels} · ${durations} · 최대 ${configuration.maxHeadcount || "-"}명`;
+    }
+
+    function priceSummary(configuration) {
+        if (configuration.basePriceAmount === null || configuration.basePriceAmount === undefined) {
+            return "활성 가격 없음";
+        }
+        return `기본 ${formatWon(configuration.basePriceAmount)} · 추가 1인 ${formatWon(configuration.additionalPersonPriceAmount)} · ${configuration.complete ? "시작 가능" : "설정 보완 필요"}`;
+    }
+
+    function actionButtonsMarkup(member) {
+        const actions = member.availableActions || [];
+        if (actions.length === 0) {
+            return "<span class=\"diagnostic-line\">현재 가능한 동작 없음</span>";
+        }
+        return actions.map(actionKey => {
+            const primary = ["CREATE_APPLICATION", "APPROVE_WITH_CONFIGURATION", "START_MATCHING"]
+                .includes(actionKey);
+            return `<button class="button ${primary ? "primary" : ""}" type="button" data-instructor-action="${escapeHtml(actionKey)}" ${state.kakaoActionInFlight ? "disabled" : ""}>${escapeHtml(instructorActionLabels[actionKey] || actionKey)}</button>`;
+        }).join("");
+    }
+
+    function openInstructorAction(member, actionKey) {
+        if (state.kakaoActionInFlight) {
+            return;
+        }
+        state.selectedKakaoMember = member;
+        state.selectedInstructorAction = actionKey;
+        state.instructorConfiguration = null;
+        instructorActionTitle.textContent = instructorActionLabels[actionKey] || actionKey;
+        instructorActionTarget.innerHTML = `
+            <strong>${escapeHtml(member.nickname)}</strong>
+            <div class="raw-id-list">
+                ${rawIdMarkup("OAuth", member.oauthAccountId)}
+                ${rawIdMarkup("Member", member.memberId)}
+                ${rawIdMarkup("Profile", member.instructorProfileId)}
+                ${rawIdMarkup("Setting", member.configuration.matchingSettingId)}
+            </div>
+            <span class="diagnostic-line">${escapeHtml(member.memberRole)} · ${escapeHtml(formatKakaoInstructorStatus(member.instructorApprovalStatus))} · ${member.configuration.exposed ? "매칭 ON" : "매칭 OFF"}</span>
+        `;
+
+        const configurationRequired = actionRequiresConfiguration(actionKey);
+        instructorConfigurationFields.hidden = !configurationRequired;
+        if (configurationRequired) {
+            state.instructorConfiguration = configurationFromMember(member);
+            renderConfigurationSelectors();
+            syncPriceInputs();
+        }
+        renderInstructorActionImpact();
+        setStatus(instructorActionStatus, "", "");
+        syncInstructorActionButtons();
+        instructorActionDialog.showModal();
+        requestAnimationFrame(() => {
+            const firstControl = configurationRequired
+                ? instructorConfigurationFields.querySelector("button, input")
+                : confirmInstructorAction;
+            firstControl?.focus();
+        });
+    }
+
+    function actionRequiresConfiguration(actionKey) {
+        return actionKey === "APPROVE_WITH_CONFIGURATION" || actionKey === "SAVE_CONFIGURATION";
+    }
+
+    function configurationFromMember(member) {
+        const current = member.configuration || {};
+        return {
+            resortCode: current.resortCode || state.resorts[0]?.code || null,
+            sport: current.sport || "SKI",
+            lessonLevels: new Set(
+                current.lessonLevels?.length
+                    ? current.lessonLevels
+                    : ["FIRST_TIME", "BEGINNER"]
+            ),
+            availableDurationMinutes: new Set(
+                current.availableDurationMinutes?.length
+                    ? current.availableDurationMinutes
+                    : [120]
+            ),
+            maxHeadcount: current.maxHeadcount || 3,
+            basePriceAmount: clampPriceValue(
+                current.basePriceAmount ?? 100000,
+                50000,
+                200000
+            ),
+            additionalPersonPriceAmount: clampPriceValue(
+                current.additionalPersonPriceAmount ?? 20000,
+                0,
+                50000
+            )
+        };
+    }
+
+    function renderConfigurationSelectors() {
+        const resortChoices = document.querySelector("#resortChoices");
+        const sportChoices = document.querySelector("#sportChoices");
+        const lessonLevelChoices = document.querySelector("#lessonLevelChoices");
+        const headcountChoices = document.querySelector("#headcountChoices");
+        const durationChoices = document.querySelector("#durationChoices");
+        resortChoices.replaceChildren();
+        sportChoices.replaceChildren();
+        lessonLevelChoices.replaceChildren();
+        headcountChoices.replaceChildren();
+        durationChoices.replaceChildren();
+
+        state.resorts.forEach(resort => appendConfigurationChip(
+            resortChoices,
+            "resortCode",
+            resort.code,
+            resort.displayName,
+            "radio"
+        ));
+        sportOptions.forEach(([value, label]) => appendConfigurationChip(
+            sportChoices,
+            "sport",
+            value,
+            label,
+            "radio"
+        ));
+        lessonLevelOptions.forEach(([value, label]) => appendConfigurationChip(
+            lessonLevelChoices,
+            "lessonLevels",
+            value,
+            label,
+            "toggle"
+        ));
+        [1, 2, 3, 4, 5].forEach(value => appendConfigurationChip(
+            headcountChoices,
+            "maxHeadcount",
+            value,
+            `${value}명`,
+            "radio"
+        ));
+        durationOptions.forEach(([value, label]) => appendConfigurationChip(
+            durationChoices,
+            "availableDurationMinutes",
+            value,
+            label,
+            "toggle"
+        ));
+        syncConfigurationChipStates();
+    }
+
+    function appendConfigurationChip(container, field, value, label, type) {
+        const button = document.createElement("button");
+        button.className = "selector-chip";
+        button.type = "button";
+        button.dataset.configurationField = field;
+        button.dataset.configurationValue = String(value);
+        button.dataset.configurationType = type;
+        button.textContent = label;
+        if (type === "radio") {
+            button.setAttribute("role", "radio");
+            button.setAttribute("aria-checked", "false");
+        } else {
+            button.setAttribute("aria-pressed", "false");
+        }
+        button.addEventListener("click", () => {
+            selectConfigurationValue(field, value, type);
+            syncConfigurationChipStates();
+            renderInstructorActionImpact();
+            syncInstructorActionButtons();
+        });
+        container.append(button);
+    }
+
+    function selectConfigurationValue(field, value, type) {
+        if (!state.instructorConfiguration) {
+            return;
+        }
+        if (type === "radio") {
+            state.instructorConfiguration[field] = value;
+            return;
+        }
+        const values = state.instructorConfiguration[field];
+        if (values.has(value)) {
+            values.delete(value);
+        } else {
+            values.add(value);
+        }
+    }
+
+    function syncConfigurationChipStates() {
+        document.querySelectorAll("[data-configuration-field]").forEach(button => {
+            const field = button.dataset.configurationField;
+            const rawValue = button.dataset.configurationValue;
+            const value = ["maxHeadcount", "availableDurationMinutes"].includes(field)
+                ? Number(rawValue)
+                : rawValue;
+            const selected = button.dataset.configurationType === "radio"
+                ? state.instructorConfiguration?.[field] === value
+                : state.instructorConfiguration?.[field]?.has(value);
+            if (button.dataset.configurationType === "radio") {
+                button.setAttribute("aria-checked", String(Boolean(selected)));
+            } else {
+                button.setAttribute("aria-pressed", String(Boolean(selected)));
+            }
+        });
+    }
+
+    function syncPriceInputs() {
+        if (!state.instructorConfiguration) {
+            return;
+        }
+        basePriceRange.value = state.instructorConfiguration.basePriceAmount;
+        additionalPriceRange.value = state.instructorConfiguration.additionalPersonPriceAmount;
+        syncPriceOutputs();
+    }
+
+    function syncPricesFromInputs() {
+        if (!state.instructorConfiguration) {
+            return;
+        }
+        state.instructorConfiguration.basePriceAmount = Number(basePriceRange.value);
+        state.instructorConfiguration.additionalPersonPriceAmount = Number(additionalPriceRange.value);
+        syncPriceOutputs();
+        renderInstructorActionImpact();
+    }
+
+    function adjustPrice(priceType, delta) {
+        const input = priceType === "base" ? basePriceRange : additionalPriceRange;
+        const nextValue = Math.min(
+            Number(input.max),
+            Math.max(Number(input.min), Number(input.value) + delta)
+        );
+        input.value = nextValue;
+        syncPricesFromInputs();
+    }
+
+    function syncPriceOutputs() {
+        document.querySelector("#basePriceValue").textContent = formatWon(Number(basePriceRange.value));
+        document.querySelector("#additionalPriceValue").textContent = formatWon(
+            Number(additionalPriceRange.value)
+        );
+        basePriceRange.setAttribute("aria-valuetext", formatWon(Number(basePriceRange.value)));
+        additionalPriceRange.setAttribute(
+            "aria-valuetext",
+            formatWon(Number(additionalPriceRange.value))
+        );
+    }
+
+    function clampPriceValue(value, min, max) {
+        const bounded = Math.min(max, Math.max(min, Number(value)));
+        return Math.round(bounded / 5000) * 5000;
+    }
+
+    function renderInstructorActionImpact() {
+        const member = state.selectedKakaoMember;
+        const actionKey = state.selectedInstructorAction;
+        if (!member || !actionKey) {
+            instructorActionImpact.replaceChildren();
+            return;
+        }
+
+        const lines = [];
+        if (actionKey === "CREATE_APPLICATION") {
+            const defaults = state.applicationDefaults || {};
+            lines.push("<strong>바뀌는 대상</strong>");
+            lines.push(`<span>Member#${escapeHtml(member.memberId)}에 PENDING 강사 프로필 1개를 만듭니다.</span>`);
+            lines.push(`<span>실명은 닉네임, 전화번호 ${escapeHtml(defaults.phone || "010-0000-0000")}, 생년월일 ${escapeHtml(defaults.birthDate || "2000-01-01")}, 경력 시작일 ${escapeHtml(defaults.careerStartDate || "2020-01-01")}로 자동 입력됩니다.</span>`);
+            lines.push("<span>회원 역할은 아직 CONSUMER이며 매칭에는 노출되지 않습니다.</span>");
+        } else if (actionKey === "APPROVE_WITH_CONFIGURATION") {
+            lines.push("<strong>한 번에 바뀌는 대상</strong>");
+            lines.push(`<span>Member#${escapeHtml(member.memberId)} → INSTRUCTOR, Profile#${escapeHtml(member.instructorProfileId)} → APPROVED</span>`);
+            lines.push("<span>리조트·선택 종목 L1 테스트 자격증·새 활성 가격·매칭 설정을 함께 저장합니다. 기존 자격증은 지우지 않습니다.</span>");
+            lines.push("<span>설정은 OFF로 저장되므로 승인 직후에는 매칭되지 않습니다.</span>");
+        } else if (actionKey === "SAVE_CONFIGURATION") {
+            lines.push("<strong>다시 저장되는 대상</strong>");
+            lines.push(`<span>Profile#${escapeHtml(member.instructorProfileId)}, Setting#${escapeHtml(member.configuration.matchingSettingId || "new")}, 활성 Price 정책</span>`);
+            lines.push("<span>기존 활성 가격은 비활성화하고 새 정책 1개를 만듭니다. 이미 생성된 제안·결제 금액은 바뀌지 않습니다.</span>");
+            lines.push("<span>노출 OFF 상태를 유지합니다.</span>");
+        } else if (actionKey === "START_MATCHING") {
+            lines.push("<strong>매칭 시작 영향</strong>");
+            lines.push(`<span>Setting#${escapeHtml(member.configuration.matchingSettingId)}를 ON으로 바꿉니다.</span>`);
+            lines.push("<span>커밋 뒤 대기 중인 매칭 요청을 다시 탐색하므로 제안과 dev 알림이 만들어질 수 있습니다.</span>");
+        } else if (actionKey === "STOP_MATCHING") {
+            lines.push("<strong>매칭 중단 영향</strong>");
+            lines.push(`<span>Setting#${escapeHtml(member.configuration.matchingSettingId)}를 OFF로 바꿔 새 후보에서 제외합니다.</span>`);
+            lines.push("<span>이미 만들어진 제안·협상·강습은 자동 취소하지 않습니다.</span>");
+        }
+
+        if (actionRequiresConfiguration(actionKey) && state.instructorConfiguration) {
+            const configuration = buildInstructorConfigurationPayload();
+            const resort = state.resorts.find(option => option.code === configuration.resortCode);
+            lines.push("<strong>선택한 설정</strong>");
+            lines.push(`<span>${escapeHtml(resort?.displayName || configuration.resortCode || "리조트 미선택")} · ${escapeHtml(configuration.sport)} · 최대 ${escapeHtml(configuration.maxHeadcount)}명 · ${configuration.availableDurationMinutes.map(value => `${value / 60}시간`).join(", ") || "시간 미선택"}</span>`);
+            lines.push(`<span>기본 ${formatWon(configuration.basePriceAmount)} · 추가 1인 ${formatWon(configuration.additionalPersonPriceAmount)}</span>`);
+        }
+        instructorActionImpact.innerHTML = lines.join("");
+    }
+
+    function buildInstructorConfigurationPayload() {
+        const configuration = state.instructorConfiguration;
+        return {
+            resortCode: configuration?.resortCode || null,
+            sport: configuration?.sport || null,
+            lessonLevels: lessonLevelOptions
+                .map(([value]) => value)
+                .filter(value => configuration?.lessonLevels?.has(value)),
+            availableDurationMinutes: durationOptions
+                .map(([value]) => value)
+                .filter(value => configuration?.availableDurationMinutes?.has(value)),
+            maxHeadcount: configuration?.maxHeadcount || null,
+            basePriceAmount: configuration?.basePriceAmount ?? null,
+            additionalPersonPriceAmount: configuration?.additionalPersonPriceAmount ?? null
+        };
+    }
+
+    function isInstructorConfigurationComplete() {
+        if (!state.instructorConfiguration) {
+            return true;
+        }
+        return Boolean(
+            state.instructorConfiguration.resortCode
+            && state.instructorConfiguration.sport
+            && state.instructorConfiguration.lessonLevels.size
+            && state.instructorConfiguration.availableDurationMinutes.size
+            && state.instructorConfiguration.maxHeadcount
+        );
+    }
+
+    function syncInstructorActionButtons() {
+        const missingConfiguration = actionRequiresConfiguration(state.selectedInstructorAction)
+            && !isInstructorConfigurationComplete();
+        confirmInstructorAction.disabled = state.kakaoActionInFlight || missingConfiguration;
+        confirmInstructorAction.textContent = state.kakaoActionInFlight
+            ? "처리 중"
+            : (instructorActionLabels[state.selectedInstructorAction] || "실행");
+        cancelInstructorAction.disabled = state.kakaoActionInFlight;
+    }
+
+    async function executeSelectedInstructorAction() {
+        if (state.kakaoActionInFlight
+                || !state.selectedKakaoMember
+                || !state.selectedInstructorAction
+                || !isInstructorConfigurationComplete()) {
+            return;
+        }
+
+        const member = state.selectedKakaoMember;
+        const actionKey = state.selectedInstructorAction;
+        const payload = {
+            actionKey,
+            stateToken: member.stateToken
+        };
+        if (actionRequiresConfiguration(actionKey)) {
+            payload.configuration = buildInstructorConfigurationPayload();
+        }
+
+        state.kakaoActionInFlight = true;
+        syncInstructorActionButtons();
+        renderKakaoMembers();
+        setStatus(instructorActionStatus, "서버가 최신 상태를 다시 확인하는 중", "");
+        try {
+            await requestJson(`/dev/auth/kakao-members/${member.memberId}/instructor-actions`, {
+                method: "POST",
+                body: JSON.stringify(payload)
+            });
+            instructorActionDialog.close();
+            await loadKakaoMembers(state.kakaoPage);
+            setStatus(kakaoStatus, `${member.nickname} · ${instructorActionLabels[actionKey]} 완료`, "success");
+        } catch (error) {
+            if (error.status === 409) {
+                instructorActionDialog.close();
+                await loadKakaoMembers(state.kakaoPage);
+                setStatus(kakaoStatus, "상태가 먼저 바뀌어 실행하지 않았습니다. 최신 상태를 다시 표시했습니다.", "warning");
+            } else {
+                setStatus(instructorActionStatus, error.message, "error");
+            }
+        } finally {
+            state.kakaoActionInFlight = false;
+            syncInstructorActionButtons();
+            renderKakaoMembers();
+        }
+    }
+
+    function closeInstructorActionModal() {
+        if (!state.kakaoActionInFlight) {
+            instructorActionDialog.close();
+        }
+    }
+
+    function formatWon(value) {
+        return `${Number(value || 0).toLocaleString("ko-KR")}원`;
     }
 
     function renderPersonas() {
@@ -2380,9 +3377,20 @@
             headers: {"Content-Type": "application/json"},
             ...options
         });
-        const payload = await response.json();
+        let payload;
+        try {
+            payload = await response.json();
+        } catch (parseError) {
+            const error = new Error(`HTTP ${response.status} 응답을 읽지 못했습니다.`);
+            error.status = response.status;
+            throw error;
+        }
         if (!response.ok || payload.success === false) {
-            throw new Error(payload.message || payload.code || "요청 실패");
+            const error = new Error(payload.message || payload.code || "요청 실패");
+            error.status = response.status;
+            error.code = payload.code;
+            error.payload = payload;
+            throw error;
         }
         return payload;
     }
@@ -2440,7 +3448,20 @@
             .replaceAll("'", "&#039;");
     }
 
+    if (typeof globalThis.__SSING_DEV_AUTH_TEST_HOOK__ === "function") {
+        globalThis.__SSING_DEV_AUTH_TEST_HOOK__({
+            state,
+            loadKakaoMembers,
+            openInstructorAction,
+            executeSelectedInstructorAction,
+            buildInstructorConfigurationPayload,
+            adjustPrice,
+            requestJson
+        });
+    }
+
     loadPersonas();
+    loadKakaoMembers();
 </script>
 </body>
 </html>

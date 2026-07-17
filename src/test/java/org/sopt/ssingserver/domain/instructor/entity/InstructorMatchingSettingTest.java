@@ -263,6 +263,80 @@ class InstructorMatchingSettingTest {
                 .hasMessage("isEquipmentReady must be true to start exposure.");
     }
 
+    @Test
+    void createDraft는_조건을_저장하지만_매칭에는_노출하지_않는다() {
+        InstructorMatchingSetting setting = InstructorMatchingSetting.createDraft(
+                instructorProfile(),
+                Sport.SKI,
+                List.of(LessonLevel.FIRST_TIME, LessonLevel.BEGINNER),
+                List.of(120, 180),
+                2,
+                true
+        );
+
+        assertThat(setting.getSport()).isSameAs(Sport.SKI);
+        assertThat(setting.getLessonLevels())
+                .containsExactlyInAnyOrder(LessonLevel.FIRST_TIME, LessonLevel.BEGINNER);
+        assertThat(setting.getAvailableDurationMinutes()).containsExactlyInAnyOrder(120, 180);
+        assertThat(setting.getMaxHeadcount()).isEqualTo(2);
+        assertThat(setting.isEquipmentReady()).isTrue();
+        assertThat(setting.isExposed()).isFalse();
+    }
+
+    @Test
+    void updateDraftConditions는_노출중인_설정은_바꾸지_않는다() {
+        InstructorMatchingSetting setting = InstructorMatchingSetting.create(
+                instructorProfile(),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120),
+                1,
+                true
+        );
+
+        assertThatThrownBy(() -> setting.updateDraftConditions(
+                Sport.SKI,
+                List.of(LessonLevel.CERTIFIED),
+                List.of(240),
+                5,
+                true
+        ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Exposed matching settings cannot be reconfigured.");
+        assertThat(setting.getSport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(setting.getLessonLevels()).containsExactly(LessonLevel.FIRST_TIME);
+        assertThat(setting.getAvailableDurationMinutes()).containsExactly(120);
+        assertThat(setting.getMaxHeadcount()).isEqualTo(1);
+        assertThat(setting.isExposed()).isTrue();
+    }
+
+    @Test
+    void updateDraftConditions는_중단된_설정을_바꾸고_OFF를_유지한다() {
+        InstructorMatchingSetting setting = InstructorMatchingSetting.create(
+                instructorProfile(),
+                Sport.SNOWBOARD,
+                List.of(LessonLevel.FIRST_TIME),
+                List.of(120),
+                1,
+                true
+        );
+        setting.stopExposure();
+
+        setting.updateDraftConditions(
+                Sport.SKI,
+                List.of(LessonLevel.INTERMEDIATE),
+                List.of(180, 240),
+                4,
+                true
+        );
+
+        assertThat(setting.getSport()).isSameAs(Sport.SKI);
+        assertThat(setting.getLessonLevels()).containsExactly(LessonLevel.INTERMEDIATE);
+        assertThat(setting.getAvailableDurationMinutes()).containsExactlyInAnyOrder(180, 240);
+        assertThat(setting.getMaxHeadcount()).isEqualTo(4);
+        assertThat(setting.isExposed()).isFalse();
+    }
+
     private InstructorProfile instructorProfile() {
         Member member = Member.create(
                 "승인강사",

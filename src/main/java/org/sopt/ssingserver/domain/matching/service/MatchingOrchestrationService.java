@@ -12,10 +12,13 @@ import org.sopt.ssingserver.domain.matching.error.MatchingErrorCode;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestParticipantRepository;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.sopt.ssingserver.domain.member.entity.Member;
+import org.sopt.ssingserver.domain.member.enums.MemberRole;
+import org.sopt.ssingserver.domain.member.enums.MemberStatus;
 import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.domain.resort.repository.ResortRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,8 +77,13 @@ public class MatchingOrchestrationService {
 
     // 매칭 요청 소유 회원 조회와 요청 저장 전 명시적 실패 처리
     private Member getMember(Long memberId) {
-        return memberRepository.findByIdForUpdate(memberId)
+        Member member = memberRepository.findByIdForUpdate(memberId)
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_MEMBER_NOT_FOUND));
+        // 인가 확인 뒤 역할이 바뀌는 경쟁 상황에서도 소비자 전용 요청이 저장되지 않게 DB 최신값을 재검증한다.
+        if (member.getStatus() != MemberStatus.ACTIVE || member.getRole() != MemberRole.CONSUMER) {
+            throw new BusinessException(CommonErrorCode.FORBIDDEN);
+        }
+        return member;
     }
 
     private void validateNoActiveMatchingRequest(Long memberId) {

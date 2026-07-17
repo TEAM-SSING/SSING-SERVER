@@ -1228,12 +1228,14 @@ public class DevMatchingQueryService {
     private List<String> actionLimitations(CaseContext context) {
         List<String> limitations = new ArrayList<>();
         if (context.groupItems().size() > 1) {
-            limitations.add("다중 요청 그룹의 결제 분담 정책은 아직 지원되지 않아 강습생 수락 미리보기를 숨깁니다.");
+            limitations.add("다중 요청 그룹은 연쇄 영향 범위가 커서 모든 동작을 미리보기로만 제공합니다.");
         }
         if (context.offer() != null && context.offer().getStatus() == MatchingOfferStatus.OFFERED) {
-            limitations.add("강사 거절 결과는 다음 후보 존재 여부에 따라 두 가지로 나뉩니다.");
+            limitations.add("강사 거절은 다음 후보 존재 여부에 따라 결과가 갈리므로 미리보기로만 제공합니다.");
         }
-        limitations.add("stateToken은 #159의 실행 직전 잠금 재검증에 사용할 조회 스냅샷이며, 이 API는 상태를 변경하지 않습니다.");
+        limitations.add("단일 요청의 강사 수락, 강습생 수락, 결제 완료만 기능 플래그가 켜진 dev에서 실행할 수 있습니다.");
+        limitations.add("stateToken은 실행 직전에 현재 관계가 조회 당시와 같은지 다시 확인하는 snapshot fingerprint입니다.");
+        limitations.add("실제 전이는 별도 규칙을 복제하지 않고 기존 운영 매칭 Service에 위임한 뒤 최신 상세를 다시 조회합니다.");
         return List.copyOf(limitations);
     }
 

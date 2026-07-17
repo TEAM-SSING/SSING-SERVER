@@ -155,4 +155,17 @@ public class InstructorProfile extends BaseTimeEntity {
     public void registerCertificate(InstructorCertificateType certificateType) {
         certificateTypes.add(Objects.requireNonNull(certificateType, "certificateType"));
     }
+
+    public void approve(Resort resort, Instant approvedAt) {
+        if (approvalStatus != InstructorApprovalStatus.PENDING) {
+            throw new IllegalStateException("Only pending instructor profiles can be approved.");
+        }
+        this.resort = Objects.requireNonNull(resort, "resort");
+        this.approvedAt = Objects.requireNonNull(approvedAt, "approvedAt");
+        this.approvalStatus = InstructorApprovalStatus.APPROVED;
+    }
+
+    public void changeResort(Resort resort) {
+        this.resort = Objects.requireNonNull(resort, "resort");
+    }
 }

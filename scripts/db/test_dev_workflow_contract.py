@@ -21,6 +21,7 @@ INTEGRATION_SOURCE_ROOT = ROOT / "src/integrationTest/java"
 INTEGRATION_PROFILE = ROOT / "src/integrationTest/resources/application-integration-test.properties"
 DEV_ADMINER_PLUGIN = ROOT / "deploy/adminer/001-ssing-autologin.php"
 DEV_CADDY_MANAGER = ROOT / "scripts/deploy/manage-dev-caddy.sh"
+APPLICATION_YAML = ROOT / "src/main/resources/application.yml"
 DEV_RUNNERS = (
     ROOT / "scripts/db/dev-common.sh",
     ROOT / "scripts/db/reset-dev.sh",
@@ -63,6 +64,7 @@ class DevWorkflowContractTest(unittest.TestCase):
         cls.build_gradle = BUILD_GRADLE.read_text(encoding="utf-8")
         cls.dev_env_example = DEV_ENV_EXAMPLE.read_text(encoding="utf-8")
         cls.integration_profile = INTEGRATION_PROFILE.read_text(encoding="utf-8")
+        cls.application_yaml = APPLICATION_YAML.read_text(encoding="utf-8")
         cls.reset_job = indented_block(cls.reset, "reset:", 2)
         cls.ci_verify_job = indented_block(cls.ci, "verify:", 2)
         cls.ci_build_job = indented_block(cls.ci, "build-dev-image:", 2)
@@ -252,7 +254,7 @@ class DevWorkflowContractTest(unittest.TestCase):
             "bash scripts/db/test-install-dev-release.sh",
             "bash scripts/db/test-dev-runner-contract.sh",
             "bash scripts/db/test-dev-adminer-autologin-contract.sh",
-            "node --test src/test/js/dev-matching-console.test.mjs",
+            "node --test src/test/js/*.test.mjs",
             "python3 scripts/db/test_dev_workflow_contract.py",
         )
         self.assertIn("if: matrix.shard == 'application'", self.ci_verify_job)
@@ -430,6 +432,36 @@ class DevWorkflowContractTest(unittest.TestCase):
         for workflow in (self.reset, self.deploy):
             self.assertIn("EC2_SSH_KNOWN_HOSTS", workflow)
             self.assertNotIn("ssh-keyscan", workflow)
+
+    def test_dev_state_action_flags_are_non_secret_and_fail_closed(self):
+        runtime_env_step = indented_block(
+            self.deploy_job,
+            "- name: EC2 런타임 환경변수 생성",
+            6,
+        )
+
+        for property_name, variable_name in (
+            ("dev-matching-actions", "SSING_DEV_MATCHING_ACTIONS_ENABLED"),
+            ("dev-instructor-actions", "SSING_DEV_INSTRUCTOR_ACTIONS_ENABLED"),
+        ):
+            self.assertIn(
+                f"{property_name}:\n    #",
+                self.application_yaml,
+            )
+            self.assertIn(
+                f"enabled: ${{{variable_name}:false}}",
+                self.application_yaml,
+            )
+            self.assertIn(f"{variable_name}=false", self.dev_env_example)
+            self.assertIn(
+                f"{variable_name}: ${{{{ vars.{variable_name} || 'false' }}}}",
+                self.deploy_job,
+            )
+            self.assertIn(
+                f"printf '{variable_name}=%s\\n' \"${variable_name}\"",
+                runtime_env_step,
+            )
+            self.assertNotIn(f"secrets.{variable_name}", self.deploy)
 
     def test_db_targets_are_masked_before_remote_db_commands(self):
         for job, runner_command in (

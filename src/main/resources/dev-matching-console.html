@@ -364,6 +364,8 @@
         .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
         .action-button { min-height: 74px; padding: 11px; text-align: left; }
         .action-button span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 500; }
+        .action-button.executable { border-color: rgba(98, 216, 178, .58); background: var(--mint-soft); }
+        .action-button.executable:hover { border-color: var(--mint); background: rgba(98, 216, 178, .2); }
 
         .notice {
             margin: 10px 0;
@@ -409,6 +411,7 @@
         .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 17px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
         .dialog-head h2 { margin: 0; font-size: 17px; }
         .dialog-body { max-height: calc(84vh - 70px); overflow: auto; padding: 16px; }
+        .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
         .outcome { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); }
         .outcome h3 { margin: 0; font-size: 13px; }
         .outcome p { margin: 4px 0 10px; color: var(--muted); font-size: 12px; }
@@ -474,14 +477,14 @@
         <a class="active" href="/dev/matching/console" aria-current="page">Matching</a>
         <a href="/adminer/" target="_blank" rel="noopener noreferrer" aria-label="Adminer 새 탭에서 열기">Adminer <span aria-hidden="true">↗</span></a>
     </nav>
-    <div class="dev-console-context">읽기·미리보기 전용 · 실제 상태 변경은 #159</div>
+    <div class="dev-console-context">조회 · 영향 확인 · 안전한 dev 상태 전이</div>
 </header>
 
 <main id="main-content" class="page">
     <div class="page-heading">
         <div>
-            <h1>매칭 관계 조회</h1>
-            <p>강습생 요청부터 그룹·제안·결제·강습까지, 현재 연결과 가능한 다음 동작을 확인합니다.</p>
+            <h1>매칭 관계 조회와 상태 동작</h1>
+            <p>현재 연결과 영향을 확인한 뒤, 단일 매칭의 수락·결제 흐름을 dev 데이터에서 실행할 수 있습니다.</p>
         </div>
         <div class="freshness"><span class="freshness-dot"></span><span id="observedAt">아직 조회하지 않음</span></div>
     </div>
@@ -511,7 +514,7 @@
 
         <section class="panel detail" aria-label="매칭 상세">
             <div class="panel-head">
-                <h2>관계 상세와 영향 미리보기</h2>
+                <h2>관계 상세와 상태 동작</h2>
                 <span class="summary" id="detailMeta">매칭 건을 선택하세요</span>
             </div>
             <div id="detail"></div>
@@ -555,6 +558,7 @@
         detail: null,
         detailSequence: 0,
         loading: false,
+        actionLoading: false,
         autoTimer: null
     };
 
@@ -588,8 +592,8 @@
         if (event.target === elements.dialog) elements.dialog.close();
     });
 
-    async function loadList(preserveSelection = true) {
-        if (state.loading) return;
+    async function loadList(preserveSelection = true, allowDuringAction = false) {
+        if (state.loading || (state.actionLoading && !allowDuringAction)) return;
         state.loading = true;
         elements.refresh.disabled = true;
         renderPagination();
@@ -660,16 +664,27 @@
         }
     }
 
-    async function api(path) {
-        const response = await fetch(path, {headers: {Accept: "application/json"}, cache: "no-store"});
+    class ApiError extends Error {
+        constructor(message, status, code) {
+            super(message);
+            this.name = "ApiError";
+            this.status = status;
+            this.code = code;
+        }
+    }
+
+    async function api(path, options = {}) {
+        const headers = {Accept: "application/json", ...(options.headers || {})};
+        if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+        const response = await fetch(path, {...options, headers, cache: "no-store"});
         let body;
         try {
             body = await response.json();
         } catch (_) {
-            throw new Error(`HTTP ${response.status}: JSON 응답을 읽을 수 없습니다.`);
+            throw new ApiError(`HTTP ${response.status}: JSON 응답을 읽을 수 없습니다.`, response.status, null);
         }
         if (!response.ok || body.success !== true) {
-            throw new Error(body.message || `HTTP ${response.status}`);
+            throw new ApiError(body.message || `HTTP ${response.status}`, response.status, body.code || null);
         }
         return body.data;
     }
@@ -768,7 +783,7 @@
             </section>
 
             <section class="section">
-                <div class="section-title"><h3>가능한 동작</h3><span>클릭해도 DB는 바뀌지 않습니다.</span></div>
+                <div class="section-title"><h3>가능한 동작</h3><span>수락·결제는 실행 가능, 거절은 미리보기만 제공</span></div>
                 ${actionButtons(detail.availableActions)}
             </section>
 
@@ -845,23 +860,84 @@
     function actionButtons(actions) {
         if (!actions?.length) return `<div class="notice">현재 원본 상태에서 실행 가능한 동작이 없거나, 관계 진단이 필요합니다.</div>`;
         return `<div class="action-grid">${actions.map((action, index) => `
-            <button class="button action-button" type="button" data-action-index="${index}">
+            <button class="button action-button${action.previewOnly ? "" : " executable"}" type="button" data-action-index="${index}">
                 ${escapeHtml(action.label)}
-                <span>${action.outcomes.length > 1 ? `${action.outcomes.length}개 조건부 결과` : "예상 변경 확인"} · preview only</span>
+                <span>${action.outcomes.length > 1 ? `${action.outcomes.length}개 조건부 결과` : "예상 변경 확인"} · ${action.previewOnly ? "미리보기만" : "실행 가능"}</span>
             </button>`).join("")}</div>`;
     }
 
     function openActionPreview(action) {
-        elements.dialogTitle.textContent = `${action.label} 영향 미리보기`;
+        const executable = !action.previewOnly;
+        elements.dialogTitle.textContent = executable ? `${action.label} 실행 확인` : `${action.label} 영향 미리보기`;
         elements.dialogBody.innerHTML = `
-            <div class="notice info"><strong>실행되지 않습니다.</strong> 이 화면은 #159에서 실제 실행 기능을 붙이기 전, 현재 snapshot 기준 예상 영향만 보여줍니다.</div>
+            ${executable
+                ? `<div class="notice error"><strong>dev DB가 실제로 변경됩니다.</strong> 아래 Actor와 연쇄 변경 대상을 확인한 뒤 실행하세요. 실행자는 서버가 현재 관계에서 자동으로 찾습니다.</div>`
+                : `<div class="notice info"><strong>미리보기만 제공합니다.</strong> 조건부 재매칭이 포함된 거절 동작은 안전 범위에서 제외되어 DB를 변경하지 않습니다.</div>`}
             <section class="people-grid">
                 <article class="person-card"><span class="badge blue">Actor</span><div class="name">${escapeHtml(action.actor?.displayName || "-")}</div><dl><dt>personaKey</dt><dd>${escapeHtml(action.actor?.personaKey || "-")}</dd><dt>memberId</dt><dd>#${value(action.actor?.memberId)}</dd></dl></article>
                 <article class="person-card"><span class="badge mint">Affected people</span><div class="name">${action.affectedPeople.length}명</div><div class="case-meta">${action.affectedPeople.map(person => escapeHtml(person.displayName || `member #${person.memberId}`)).join(" · ")}</div></article>
                 <article class="person-card"><span class="badge yellow">Affected resources</span><div class="name">${action.affectedResources.length}개</div><div class="case-meta">${action.affectedResources.map(resource => `${escapeHtml(resource.resourceType)} #${value(resource.resourceId)}`).join(" · ")}</div></article>
             </section>
-            ${action.outcomes.map(outcomeCard).join("")}`;
+            ${action.outcomes.map(outcomeCard).join("")}
+            ${executable ? `<div class="dialog-actions"><button class="button" type="button" id="cancelAction">취소</button><button class="button primary" type="button" id="executeAction">${escapeHtml(action.actor?.displayName || "Actor")}의 ${escapeHtml(action.label)} 실행</button></div>` : ""}`;
         elements.dialog.showModal();
+        if (executable) {
+            document.querySelector("#cancelAction").addEventListener("click", () => elements.dialog.close());
+            const executeButton = document.querySelector("#executeAction");
+            executeButton.addEventListener("click", () => executeAction(action, executeButton));
+        }
+    }
+
+    async function executeAction(action, executeButton = null) {
+        const detail = state.detail;
+        if (state.actionLoading || action.previewOnly || !detail?.matchingRequestId || !detail.stateToken) return;
+
+        const matchingRequestId = detail.matchingRequestId;
+        state.actionLoading = true;
+        if (executeButton) {
+            executeButton.disabled = true;
+            executeButton.textContent = "실행 중…";
+        }
+
+        try {
+            const result = await api(`/dev/matching/requests/${matchingRequestId}/actions`, {
+                method: "POST",
+                body: JSON.stringify({
+                    actionKey: action.actionKey,
+                    stateToken: detail.stateToken
+                })
+            });
+            if (state.selectedId === matchingRequestId) {
+                state.detail = result.after;
+                renderDetail();
+                updateFreshness(result.after.observedAt);
+            }
+            closePreview();
+            toast(`${action.label} 완료 · 최신 상태를 다시 조회했습니다.`);
+            await loadList(true, true);
+        } catch (error) {
+            if (error.code === "DEV_MATCHING_STATE_CHANGED") {
+                closePreview();
+                if (state.selectedId === matchingRequestId) {
+                    await loadDetail(matchingRequestId, true);
+                }
+                toast("다른 동작으로 상태가 바뀌어 최신 정보를 다시 조회했습니다.");
+            } else if (error.status === 409) {
+                closePreview();
+                if (state.selectedId === matchingRequestId) {
+                    await loadDetail(matchingRequestId, true);
+                }
+                toast(`현재 상태에서 실행할 수 없습니다: ${error.message}`);
+            } else {
+                toast(`${action.label} 실패: ${error.message}`);
+            }
+        } finally {
+            state.actionLoading = false;
+            if (executeButton) {
+                executeButton.disabled = false;
+                executeButton.textContent = `${action.actor?.displayName || "Actor"}의 ${action.label} 실행`;
+            }
+        }
     }
 
     function outcomeCard(outcome) {
@@ -1008,6 +1084,7 @@
             elements,
             loadList,
             loadDetail,
+            executeAction,
             initialLoadPromise
         });
     }

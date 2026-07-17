@@ -204,6 +204,41 @@ class DevAuthConsoleResourceTest {
                 .contains("rgba(255, 177, 153");
     }
 
+    @Test
+    void 실제_Kakao회원은_ID와_가능한_강사동작을_마우스로_선택할_수_있다() throws IOException {
+        String html = consoleHtml();
+
+        assertThat(html)
+                .contains("실제 Kakao 로그인 회원")
+                .contains("/dev/auth/kakao-members")
+                .contains("id=\"instructorActionDialog\"")
+                .contains("aria-labelledby=\"instructorActionTitle\"")
+                .contains("id=\"resortChoices\"")
+                .contains("id=\"sportChoices\"")
+                .contains("id=\"lessonLevelChoices\"")
+                .contains("id=\"headcountChoices\"")
+                .contains("id=\"durationChoices\"")
+                .contains("id=\"basePriceRange\"")
+                .contains("id=\"additionalPriceRange\"")
+                .contains("aria-label=\"기본 2시간 가격\"")
+                .contains("aria-label=\"추가 1인 가격\"")
+                .contains("overscroll-behavior: contain")
+                .contains(".selector-chip { min-height: 44px; }")
+                .contains("data-price-adjust")
+                .contains("oauthAccountId")
+                .contains("instructorProfileId")
+                .contains("matchingSettingId")
+                .contains("activePricePolicyIds")
+                .contains("stateToken")
+                .contains("APPROVE_WITH_CONFIGURATION")
+                .contains("START_MATCHING")
+                .contains("STOP_MATCHING")
+                .contains("__SSING_DEV_AUTH_TEST_HOOK__")
+                .contains("aria-pressed")
+                .contains("이미 생성된 제안·결제 금액은 바뀌지 않습니다")
+                .doesNotContain("providerUserId");
+    }
+
     private static String consoleHtml() throws IOException {
         return new String(
                 new ClassPathResource("dev-auth-console.html").getInputStream().readAllBytes(),

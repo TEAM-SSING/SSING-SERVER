@@ -1,6 +1,10 @@
 package org.sopt.ssingserver.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,6 +15,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +31,7 @@ import org.sopt.ssingserver.database.support.DatabaseCleaner;
 import org.sopt.ssingserver.database.support.SharedMySqlDatabase;
 import org.sopt.ssingserver.domain.auth.token.AccessTokenProvider;
 import org.sopt.ssingserver.domain.matching.service.MatchingEventDispatcher;
+import org.sopt.ssingserver.domain.matching.event.MatchingConfirmedEvent;
 import org.sopt.ssingserver.domain.member.enums.MemberRole;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -45,6 +55,7 @@ import tools.jackson.databind.ObjectMapper;
         "spring.jpa.open-in-view=false",
         "spring.jpa.properties.hibernate.jdbc.time_zone=UTC",
         "ssing.matching.search-scheduler.enabled=false",
+        "ssing.dev-matching-actions.enabled=true",
         "ssing.auth.jwt.issuer=ssing-dev-matching-explorer-test",
         "ssing.auth.jwt.secret=integration-test-secret-key-for-hs256-signature",
         "ssing.auth.kakao.app-id=1234"
@@ -53,9 +64,6 @@ import tools.jackson.databind.ObjectMapper;
 @ActiveProfiles({"integration-test", "local"})
 @Execution(ExecutionMode.SAME_THREAD)
 class DevMatchingExplorerIntegrationTest {
-
-    private static final String CONSUMER_PERSONA_KEY = "대뜸GOAT-성빈-일반강습생";
-    private static final String INSTRUCTOR_PERSONA_KEY = "보법다른-유정-승인강사";
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
@@ -89,12 +97,9 @@ class DevMatchingExplorerIntegrationTest {
     }
 
     @Test
-    void dev_조회는_실제_관계와_가능동작을_상태별로_보여주고_DB를_변경하지_않는다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
-        Long instructorMemberId = personaMemberId(INSTRUCTOR_PERSONA_KEY);
+    void dev_동작은_단일요청의_수락과_결제를_운영서비스로_이어가고_매번_최신상태를_반환한다() throws Exception {
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
-        String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
-
         long matchingRequestId = createMatchingRequest(
                 consumerToken,
                 "db/seed/scenarios/matching-price-vivaldi/request.json"
@@ -103,6 +108,189 @@ class DevMatchingExplorerIntegrationTest {
                 "update matching_request_participants set name = ? where matching_request_id = ?",
                 "테스트 참가자",
                 matchingRequestId
+        );
+        long offerId = jdbcTemplate.queryForObject(
+                "select id from matching_offers order by id desc limit 1",
+                Long.class
+        );
+
+        JsonNode waitingForInstructor = getDetail(matchingRequestId);
+        assertThat(waitingForInstructor.at("/data/participants/0/name").asText())
+                .isEqualTo("테스트 참가자");
+        String instructorToken = waitingForInstructor.at("/data/stateToken").asText();
+        assertThat(findAction(waitingForInstructor, "INSTRUCTOR_ACCEPT").path("previewOnly").asBoolean())
+                .isFalse();
+        assertThat(findAction(waitingForInstructor, "INSTRUCTOR_REJECT").path("previewOnly").asBoolean())
+                .isTrue();
+
+        Map<String, List<Map<String, Object>>> beforePreviewOnlyAttempt = matchingGraphSnapshot();
+        JsonNode previewOnly = executeDevActionConflict(
+                matchingRequestId,
+                "INSTRUCTOR_REJECT",
+                instructorToken
+        );
+        assertThat(previewOnly.path("code").asText()).isEqualTo("DEV_MATCHING_ACTION_NOT_AVAILABLE");
+        assertThat(matchingGraphSnapshot()).isEqualTo(beforePreviewOnlyAttempt);
+
+        JsonNode instructorAccepted = executeDevAction(
+                matchingRequestId,
+                "INSTRUCTOR_ACCEPT",
+                instructorToken
+        );
+        assertThat(instructorAccepted.at("/data/actionKey").asText()).isEqualTo("INSTRUCTOR_ACCEPT");
+        assertThat(instructorAccepted.at("/data/before/matchingStatus").asText())
+                .isEqualTo("WAITING_FOR_INSTRUCTOR");
+        assertThat(instructorAccepted.at("/data/after/matchingStatus").asText())
+                .isEqualTo("WAITING_FOR_CONFIRMATION");
+
+        Map<String, List<Map<String, Object>>> beforeStaleRetry = matchingGraphSnapshot();
+        JsonNode stale = executeDevActionConflict(
+                matchingRequestId,
+                "INSTRUCTOR_ACCEPT",
+                instructorToken
+        );
+        assertThat(stale.path("code").asText()).isEqualTo("DEV_MATCHING_STATE_CHANGED");
+        assertThat(matchingGraphSnapshot()).isEqualTo(beforeStaleRetry);
+
+        JsonNode waitingForConfirmation = instructorAccepted.at("/data/after");
+        assertThat(waitingForConfirmation.path("availableActions").valueStream()
+                .filter(action -> "CONSUMER_ACCEPT".equals(action.path("actionKey").asText()))
+                .findFirst()
+                .orElseThrow()
+                .path("previewOnly")
+                .asBoolean()).isFalse();
+        JsonNode paymentPending = executeDevAction(
+                matchingRequestId,
+                "CONSUMER_ACCEPT",
+                waitingForConfirmation.path("stateToken").asText()
+        );
+        assertThat(paymentPending.at("/data/after/matchingStatus").asText()).isEqualTo("PAYMENT_PENDING");
+        long paymentId = paymentPending.at("/data/after/requestRelations/0/paymentId").asLong();
+        assertThat(paymentId).isPositive();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from matching_request_payments where matching_request_id = ?",
+                Integer.class,
+                matchingRequestId
+        )).isEqualTo(1);
+
+        JsonNode confirmed = executeDevAction(
+                matchingRequestId,
+                "PAYMENT_COMPLETE",
+                paymentPending.at("/data/after/stateToken").asText()
+        );
+        assertThat(confirmed.at("/data/after/matchingStatus").asText()).isEqualTo("CONFIRMED");
+        assertThat(confirmed.at("/data/after/availableActions").isEmpty()).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from lessons where matching_offer_id = ?",
+                Integer.class,
+                offerId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from matching_request_payments where matching_request_id = ?",
+                Integer.class,
+                matchingRequestId
+        )).isEqualTo(1);
+
+        Map<String, List<Map<String, Object>>> beforeDuplicatePayment = matchingGraphSnapshot();
+        JsonNode duplicatePayment = executeDevActionConflict(
+                matchingRequestId,
+                "PAYMENT_COMPLETE",
+                paymentPending.at("/data/after/stateToken").asText()
+        );
+        assertThat(duplicatePayment.path("code").asText()).isEqualTo("DEV_MATCHING_STATE_CHANGED");
+        assertThat(matchingGraphSnapshot()).isEqualTo(beforeDuplicatePayment);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from lessons where matching_offer_id = ?",
+                Integer.class,
+                offerId
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void 같은_stateToken으로_결제완료를_동시에_실행해도_하나만_성공하고_lesson은_하나만_생긴다() throws Exception {
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
+        long matchingRequestId = createMatchingRequest(
+                consumerToken,
+                "db/seed/scenarios/matching-price-vivaldi/request.json"
+        );
+        long offerId = jdbcTemplate.queryForObject(
+                "select id from matching_offers order by id desc limit 1",
+                Long.class
+        );
+        JsonNode waitingForInstructor = getDetail(matchingRequestId);
+        JsonNode waitingForConfirmation = executeDevAction(
+                matchingRequestId,
+                "INSTRUCTOR_ACCEPT",
+                waitingForInstructor.at("/data/stateToken").asText()
+        );
+        JsonNode paymentPending = executeDevAction(
+                matchingRequestId,
+                "CONSUMER_ACCEPT",
+                waitingForConfirmation.at("/data/after/stateToken").asText()
+        );
+        String paymentToken = paymentPending.at("/data/after/stateToken").asText();
+        clearInvocations(matchingEventDispatcher);
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        MvcResult firstResult;
+        MvcResult secondResult;
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<MvcResult> first = executor.submit(() -> executeDevActionAfterLatch(
+                    ready,
+                    start,
+                    matchingRequestId,
+                    "PAYMENT_COMPLETE",
+                    paymentToken
+            ));
+            Future<MvcResult> second = executor.submit(() -> executeDevActionAfterLatch(
+                    ready,
+                    start,
+                    matchingRequestId,
+                    "PAYMENT_COMPLETE",
+                    paymentToken
+            ));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            firstResult = first.get(10, TimeUnit.SECONDS);
+            secondResult = second.get(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(List.of(
+                firstResult.getResponse().getStatus(),
+                secondResult.getResponse().getStatus()
+        )).containsExactlyInAnyOrder(200, 409);
+        MvcResult conflictResult = firstResult.getResponse().getStatus() == 409 ? firstResult : secondResult;
+        assertThat(objectMapper.readTree(conflictResult.getResponse().getContentAsByteArray())
+                .path("code")
+                .asText()).isEqualTo("DEV_MATCHING_STATE_CHANGED");
+        assertThat(getDetail(matchingRequestId).at("/data/matchingStatus").asText()).isEqualTo("CONFIRMED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from lessons where matching_offer_id = ?",
+                Integer.class,
+                offerId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from matching_request_payments where matching_request_id = ? and status = 'COMPLETED'",
+                Integer.class,
+                matchingRequestId
+        )).isEqualTo(1);
+        verify(matchingEventDispatcher, times(1)).publishAfterCommit(argThat(
+                event -> event instanceof MatchingConfirmedEvent
+        ));
+    }
+
+    @Test
+    void dev_조회는_실제_관계와_가능동작을_상태별로_보여주고_DB를_변경하지_않는다() throws Exception {
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
+        String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
+        String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
+
+        long matchingRequestId = createMatchingRequest(
+                consumerToken,
+                "db/seed/scenarios/matching-price-vivaldi/request.json"
         );
         long offerId = jdbcTemplate.queryForObject(
                 "select id from matching_offers order by id desc limit 1",
@@ -133,14 +321,13 @@ class DevMatchingExplorerIntegrationTest {
         JsonNode repeatedRead = getDetail(matchingRequestId);
 
         assertResolved(waitingForInstructor, matchingRequestId, "WAITING_FOR_INSTRUCTOR");
-        assertThat(waitingForInstructor.at("/data/participants/0/name").asText()).isEqualTo("테스트 참가자");
         assertThat(waitingForInstructor.at("/data/stateToken").asText()).isNotBlank();
         assertThat(repeatedRead.at("/data/stateToken").asText())
                 .isEqualTo(waitingForInstructor.at("/data/stateToken").asText());
         assertThat(actionKeys(waitingForInstructor))
                 .containsExactlyInAnyOrder("INSTRUCTOR_ACCEPT", "INSTRUCTOR_REJECT");
         assertThat(personaKeys(waitingForInstructor))
-                .contains(CONSUMER_PERSONA_KEY, INSTRUCTOR_PERSONA_KEY);
+                .contains("대뜸GOAT-성빈-일반강습생", "보법다른-유정-승인강사");
         assertThat(resourceIds(waitingForInstructor, "MATCHING_REQUEST")).contains(matchingRequestId);
         assertThat(resourceIds(waitingForInstructor, "MATCHING_REQUEST_GROUP")).contains(groupId);
         assertThat(resourceIds(waitingForInstructor, "MATCHING_OFFER")).contains(offerId);
@@ -211,8 +398,8 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 결제완료_뒤_CONFIRMED와_강습진행중_이력은_정상관계로_조회한다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
-        Long instructorMemberId = personaMemberId(INSTRUCTOR_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
         long matchingRequestId = createMatchingRequest(
@@ -244,7 +431,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 후보가_없는_REQUESTED_요청은_SEARCHING이고_가능동작이_없다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         long matchingRequestId = createMatchingRequest(
                 consumerToken,
@@ -263,7 +450,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 관계가_깨진_요청은_다른_목록을_500으로_만들지_않고_진단만_반환한다() throws Exception {
-        Long validConsumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long validConsumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String validConsumerToken = accessTokenProvider.createAccessToken(validConsumerMemberId, MemberRole.CONSUMER);
         long validRequestId = createMatchingRequest(
                 validConsumerToken,
@@ -304,7 +491,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 한_요청이_두_활성그룹에_동시에_묶이면_두_groupId를_진단하고_다른_요청은_정상조회한다() throws Exception {
-        Long duplicatedConsumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long duplicatedConsumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String duplicatedConsumerToken = accessTokenProvider.createAccessToken(
                 duplicatedConsumerMemberId,
                 MemberRole.CONSUMER
@@ -365,7 +552,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 더_최신인_종료그룹은_기존_활성그룹_선택을_가리지_않는다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         long matchingRequestId = createMatchingRequest(
                 consumerToken,
@@ -403,7 +590,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 가격snapshot이나_participant가_누락되면_목록과_상세에서_동작을_숨긴다() throws Exception {
-        Long firstConsumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long firstConsumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String firstConsumerToken = accessTokenProvider.createAccessToken(firstConsumerMemberId, MemberRole.CONSUMER);
         long missingSnapshotRequestId = createMatchingRequest(
                 firstConsumerToken,
@@ -446,7 +633,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 현재_page_밖_다른그룹에도_같은_강사_live제안이_있으면_관계오류다() throws Exception {
-        Long firstConsumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long firstConsumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String firstConsumerToken = accessTokenProvider.createAccessToken(firstConsumerMemberId, MemberRole.CONSUMER);
         long firstRequestId = createMatchingRequest(
                 firstConsumerToken,
@@ -536,7 +723,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 같은_group에_live_offer가_둘이면_두_offerId를_진단하고_동작을_숨긴다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         long matchingRequestId = createMatchingRequest(
                 consumerToken,
@@ -589,8 +776,8 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void PAYMENT_PENDING의_payment가_누락되면_group요청_구성불일치를_진단한다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
-        Long instructorMemberId = personaMemberId(INSTRUCTOR_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
         long matchingRequestId = createMatchingRequest(
@@ -625,7 +812,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 확정전_lesson은_관계오류지만_사용자_직접취소와_lesson없음은_정상이다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         long matchingRequestId = createMatchingRequest(
                 consumerToken,
@@ -656,8 +843,8 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 결제row가_있어도_원본_실행조건이_깨지면_PAYMENT_PENDING으로_정상표시하지_않는다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
-        Long instructorMemberId = personaMemberId(INSTRUCTOR_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
         long matchingRequestId = createMatchingRequest(
@@ -693,8 +880,8 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void MATCHED_요청의_matchingOffer_연결이_끊기면_실행가능동작을_숨긴다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
-        Long instructorMemberId = personaMemberId(INSTRUCTOR_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
         long matchingRequestId = createMatchingRequest(
@@ -725,7 +912,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 제안전_CANDIDATE_그룹만_WAITING_FOR_TEAM이고_EXPOSED_무제안_그룹은_관계오류다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         long matchingRequestId = createMatchingRequest(
                 consumerToken,
@@ -776,7 +963,7 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 재매칭이나_취소요청에_이전_EXPOSED_그룹이_살아있으면_동작을_숨기고_관계오류로_표시한다() throws Exception {
-        Long consumerMemberId = personaMemberId(CONSUMER_PERSONA_KEY);
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
         long matchingRequestId = createMatchingRequest(
                 consumerToken,
@@ -816,8 +1003,8 @@ class DevMatchingExplorerIntegrationTest {
 
     @Test
     void 다중요청_그룹은_강습생별_관계와_강사수락_영향을_실제_ID로_연결한다() throws Exception {
-        Long firstConsumerId = personaMemberId(CONSUMER_PERSONA_KEY);
-        Long instructorId = personaMemberId(INSTRUCTOR_PERSONA_KEY);
+        Long firstConsumerId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorId = personaMemberId("보법다른-유정-승인강사");
         String firstConsumerToken = accessTokenProvider.createAccessToken(firstConsumerId, MemberRole.CONSUMER);
         long firstRequestId = createMatchingRequest(
                 firstConsumerToken,
@@ -896,6 +1083,54 @@ class DevMatchingExplorerIntegrationTest {
 
     private JsonNode getDetail(long matchingRequestId) throws Exception {
         return getJson("/dev/matching/requests/" + matchingRequestId);
+    }
+
+    private JsonNode executeDevAction(long matchingRequestId, String actionKey, String stateToken) throws Exception {
+        MvcResult result = executeDevActionRaw(matchingRequestId, actionKey, stateToken)
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    private JsonNode executeDevActionConflict(
+            long matchingRequestId,
+            String actionKey,
+            String stateToken
+    ) throws Exception {
+        MvcResult result = executeDevActionRaw(matchingRequestId, actionKey, stateToken)
+                .andExpect(status().isConflict())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions executeDevActionRaw(
+            long matchingRequestId,
+            String actionKey,
+            String stateToken
+    ) throws Exception {
+        return mockMvc.perform(post(
+                        "/dev/matching/requests/{matchingRequestId}/actions",
+                        matchingRequestId
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(Map.of(
+                                "actionKey", actionKey,
+                                "stateToken", stateToken
+                        ))));
+    }
+
+    private MvcResult executeDevActionAfterLatch(
+            CountDownLatch ready,
+            CountDownLatch start,
+            long matchingRequestId,
+            String actionKey,
+            String stateToken
+    ) throws Exception {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("동시 실행 시작 신호를 기다리지 못했습니다.");
+        }
+        return executeDevActionRaw(matchingRequestId, actionKey, stateToken).andReturn();
     }
 
     private JsonNode getJson(String path) throws Exception {

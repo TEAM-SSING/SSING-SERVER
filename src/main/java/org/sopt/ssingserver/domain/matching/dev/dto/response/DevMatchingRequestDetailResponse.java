@@ -32,11 +32,11 @@ public record DevMatchingRequestDetailResponse(
         List<DevMatchingParticipantResponse> participants,
         @Schema(description = "상태 판단에 사용한 원본 리소스 row")
         List<DevMatchingResourceResponse> resources,
-        @Schema(description = "현재 상태에서 가능한 읽기 전용 동작 영향 미리보기")
+        @Schema(description = "현재 상태의 동작 영향과 dev 실행 허용 여부")
         List<DevMatchingActionPreviewResponse> availableActions,
         @Schema(description = "깨진 관계나 상태 조합을 설명하는 진단 메시지")
         List<String> diagnostics,
-        @Schema(description = "미리보기가 실제 동작과 다른 범위 또는 후속 구현 안내")
+        @Schema(description = "실행을 제한한 범위와 상태 변경 충돌 안내")
         List<String> actionLimitations
 ) {
 }

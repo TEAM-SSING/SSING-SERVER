@@ -72,7 +72,7 @@ jobs:
           bash scripts/db/test-install-dev-release.sh
           bash scripts/db/test-dev-runner-contract.sh
           bash scripts/db/test-dev-adminer-autologin-contract.sh
-          node --test src/test/js/dev-matching-console.test.mjs
+          node --test src/test/js/*.test.mjs
           python3 scripts/db/test_dev_workflow_contract.py
 
       - name: ${{ matrix.name }} 실행

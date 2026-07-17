@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.sopt.ssingserver.domain.auth.dev.repository.DevPersonaRepository;
 import org.sopt.ssingserver.domain.auth.repository.OAuthAccountRepository;
 import org.sopt.ssingserver.domain.auth.repository.RefreshTokenRepository;
+import org.sopt.ssingserver.domain.matching.dev.controller.DevMatchingActionController;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
@@ -35,6 +36,7 @@ import org.sopt.ssingserver.domain.review.repository.ReviewRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -43,7 +45,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @ActiveProfiles({"test", "local"})
-@SpringBootTest
+@SpringBootTest(properties = "ssing.dev-matching-actions.enabled=true")
 @AutoConfigureMockMvc
 class SsingServerApplicationTests {
 
@@ -96,6 +98,9 @@ class SsingServerApplicationTests {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	@Autowired
+	private ApplicationContext applicationContext;
 
 	@MockitoBean
 	private OAuthAccountRepository oauthAccountRepository;
@@ -943,6 +948,14 @@ class SsingServerApplicationTests {
 				.contains("강습 상세 조회", "CONFIRMED/IN_PROGRESS");
 		assertThat(cardSchema.path("required").toString())
 				.doesNotContain("\"offerId\"", "\"lessonId\"");
+	}
+
+	@Test
+	void enabledDevMatchingActionControllerIsRegisteredButHiddenFromOpenApi() throws Exception {
+		assertThat(applicationContext.getBeansOfType(DevMatchingActionController.class)).hasSize(1);
+
+		JsonNode paths = generatedOpenApi().path("paths");
+		assertThat(paths.has("/dev/matching/requests/{matchingRequestId}/actions")).isFalse();
 	}
 
 	@Test
