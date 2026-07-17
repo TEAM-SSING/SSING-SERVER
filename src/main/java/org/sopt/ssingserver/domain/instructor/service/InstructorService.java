@@ -40,6 +40,7 @@ public class InstructorService {
     private final LessonRepository lessonRepository;
     private final MatchingSearchTriggerService matchingSearchTriggerService;
     private final MatchingAfterCommitExecutor matchingAfterCommitExecutor;
+    private final InstructorWaitingPriceEstimator waitingPriceEstimator;
     private final TransactionTemplate transactionTemplate;
 
     public InstructorService(
@@ -49,6 +50,7 @@ public class InstructorService {
             LessonRepository lessonRepository,
             MatchingSearchTriggerService matchingSearchTriggerService,
             MatchingAfterCommitExecutor matchingAfterCommitExecutor,
+            InstructorWaitingPriceEstimator waitingPriceEstimator,
             PlatformTransactionManager transactionManager
     ) {
         this.instructorProfileRepository = instructorProfileRepository;
@@ -57,6 +59,7 @@ public class InstructorService {
         this.lessonRepository = lessonRepository;
         this.matchingSearchTriggerService = matchingSearchTriggerService;
         this.matchingAfterCommitExecutor = matchingAfterCommitExecutor;
+        this.waitingPriceEstimator = waitingPriceEstimator;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -134,10 +137,17 @@ public class InstructorService {
                 request,
                 createWhenMissing
         );
+        int estimatedLessonPriceAmount = waitingPriceEstimator.estimate(
+                pricePolicy.getBasePriceAmount(),
+                pricePolicy.getAdditionalPersonPriceAmount(),
+                setting.getAvailableDurationMinutes(),
+                setting.getMaxHeadcount()
+        );
         instructorMatchingSettingRepository.save(setting);
         triggerRequestedSearchAfterCommit();
         return new ExposureState(
                 setting.isExposed(),
+                estimatedLessonPriceAmount,
                 pricePolicy.getBasePriceAmount(),
                 pricePolicy.getAdditionalPersonPriceAmount()
         );
@@ -152,6 +162,7 @@ public class InstructorService {
     private InstructorMatchingExposureResponse toExposureResponse(ExposureState exposureState) {
         return InstructorMatchingExposureResponse.of(
                 exposureState.isExposed(),
+                exposureState.estimatedLessonPriceAmount(),
                 exposureState.basePriceAmount(),
                 exposureState.additionalPersonPriceAmount()
         );
@@ -256,6 +267,7 @@ public class InstructorService {
 
     private record ExposureState(
             boolean isExposed,
+            int estimatedLessonPriceAmount,
             int basePriceAmount,
             int additionalPersonPriceAmount
     ) {

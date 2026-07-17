@@ -29,7 +29,8 @@ public interface InstructorMatchingOfferApiDocs {
             summary = "강사 매칭 대기 화면 및 새 제안 재확인",
             description = "홈의 MATCHING 카드에 offerId가 없을 때 호출합니다. 홈 조회 뒤 생긴 활성 실시간 제안이 있으면 "
                     + "상세 조회용 offerId를, 없으면 null을 반환합니다. matchingSetting으로 저장된 매칭 대기 조건을 복구하며, "
-                    + "제안 상세와 예상 가격은 이 응답에 포함하지 않습니다.",
+                    + "저장 가격 정책과 대기 조건 중간값으로 계산한 예상 강습비를 함께 반환합니다. "
+                    + "예상 강습비는 화면 표시용이며 실제 정산 금액과 다를 수 있고 실제 금액으로 사용되지 않습니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "매칭 대기 조건 및 현재 제안 조회 성공")

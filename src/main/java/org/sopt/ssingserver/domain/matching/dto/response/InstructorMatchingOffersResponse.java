@@ -88,6 +88,13 @@ public record InstructorMatchingOffersResponse(
             boolean equipmentReady,
 
             @Schema(
+                    description = "선택 시간 범위와 최대 인원의 중간값으로 계산해 500원 단위로 반올림한 예상 강습비",
+                    example = "105000",
+                    requiredMode = Schema.RequiredMode.REQUIRED
+            )
+            int estimatedLessonPriceAmount,
+
+            @Schema(
                     description = "최초 진입과 재접속에서 동일하게 복구하는 120분 기준 강사 가격",
                     requiredMode = Schema.RequiredMode.REQUIRED
             )
@@ -105,6 +112,7 @@ public record InstructorMatchingOffersResponse(
                     result.availableDurationMinutes(),
                     result.maxHeadcount(),
                     result.equipmentReady(),
+                    result.estimatedLessonPriceAmount(),
                     InstructorPricePolicyResponse.of(
                             result.pricePolicy().basePriceAmount(),
                             result.pricePolicy().additionalPersonPriceAmount()

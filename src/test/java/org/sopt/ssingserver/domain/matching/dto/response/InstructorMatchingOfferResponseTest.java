@@ -61,6 +61,7 @@ class InstructorMatchingOfferResponseTest {
         assertThat(json).contains("\"availableDurationMinutes\":[120,240]");
         assertThat(json).contains("\"maxHeadcount\":3");
         assertThat(json).contains("\"equipmentReady\":true");
+        assertThat(json).contains("\"estimatedLessonPriceAmount\":105000");
         assertThat(json).contains(
                 "\"pricePolicy\":{\"baseDurationMinutes\":120,"
                         + "\"basePriceAmount\":60000,\"additionalPersonPriceAmount\":20000}"
@@ -93,6 +94,7 @@ class InstructorMatchingOfferResponseTest {
         assertThat(json).contains("\"matchingStatus\":\"WAITING_FOR_CONFIRMATION\"");
         assertThat(json).contains("\"requesterName\":\"홍길동\"");
         assertThat(json).contains("\"priceSummary\":{\"instructorSettlementAmount\":80000}");
+        assertThat(json).doesNotContain("estimatedLessonPriceAmount");
         assertThat(json).doesNotContain("lessonPriceAmount", "resortPassFeeAmount", "totalPaymentAmount");
         assertThat(json).contains("\"participants\":[{\"age\":10,\"gender\":\"MALE\"},{\"age\":12,\"gender\":\"FEMALE\"}]");
         assertThat(json).doesNotContain("participantId");
@@ -141,6 +143,7 @@ class InstructorMatchingOfferResponseTest {
                 List.of(120, 240),
                 3,
                 true,
+                105_000,
                 new InstructorMatchingOffersResult.PricePolicyResult(60_000, 20_000)
         );
     }

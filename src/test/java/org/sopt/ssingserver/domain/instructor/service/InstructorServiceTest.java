@@ -97,6 +97,7 @@ class InstructorServiceTest {
 
         InstructorMatchingSetting savedSetting = settingCaptor.getValue();
         assertThat(response.isExposed()).isTrue();
+        assertThat(response.estimatedLessonPriceAmount()).isEqualTo(105_000);
         assertThat(response.pricePolicy().baseDurationMinutes()).isEqualTo(120);
         assertThat(response.pricePolicy().basePriceAmount()).isEqualTo(60_000);
         assertThat(response.pricePolicy().additionalPersonPriceAmount()).isEqualTo(20_000);
@@ -405,6 +406,7 @@ class InstructorServiceTest {
         InstructorMatchingExposureResponse response = service.startExposure(1L, request());
 
         assertThat(response.isExposed()).isTrue();
+        assertThat(response.estimatedLessonPriceAmount()).isEqualTo(105_000);
         assertThat(concurrentlyCreatedSetting.getSport()).isSameAs(Sport.SNOWBOARD);
         assertThat(concurrentlyCreatedSetting.getLessonLevels())
                 .containsExactlyInAnyOrder(LessonLevel.FIRST_TIME, LessonLevel.BEGINNER);
@@ -456,6 +458,7 @@ class InstructorServiceTest {
                 lessonRepository,
                 matchingSearchTriggerService,
                 new MatchingAfterCommitExecutor(),
+                new InstructorWaitingPriceEstimator(),
                 new NoOpTransactionManager()
         );
     }

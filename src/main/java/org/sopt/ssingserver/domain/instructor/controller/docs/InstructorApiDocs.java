@@ -46,7 +46,7 @@ public interface InstructorApiDocs {
     @Operation(
             summary = "강사 즉시 매칭 조건 저장 및 시작",
             description = "강사가 즉시 매칭에 노출될 조건을 저장하고 매칭을 시작합니다. "
-                    + "응답에는 매칭 대기 화면에서 사용할 120분 기준 저장 가격을 포함합니다.",
+                    + "응답에는 120분 기준 저장 가격과 선택 시간·최대 인원의 중간값으로 계산한 예상 강습비를 포함합니다.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "즉시 매칭 조건 저장 및 매칭 시작 성공")

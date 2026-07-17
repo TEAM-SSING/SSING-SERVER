@@ -19,6 +19,7 @@ public record InstructorMatchingOffersResult(
             List<Integer> availableDurationMinutes,
             int maxHeadcount,
             boolean equipmentReady,
+            int estimatedLessonPriceAmount,
             PricePolicyResult pricePolicy
     ) {
     }

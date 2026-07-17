@@ -615,6 +615,7 @@ class SsingServerApplicationTests {
 		assertThat(searchingExample.has("instructorProfile")).isFalse();
 		assertThat(searchingExample.has("progressSummary")).isFalse();
 		assertThat(searchingExample.has("priceSummary")).isFalse();
+		assertThat(searchingExample.has("estimatedLessonPriceAmount")).isFalse();
 		JsonNode rematchingExample = consumerExamples.path("REMATCHING").path("value").path("data");
 		assertThat(rematchingExample.path("matchingStatus").asString()).isEqualTo("REMATCHING");
 		assertThat(rematchingExample.path("requestStatusReason").asString())
@@ -664,6 +665,36 @@ class SsingServerApplicationTests {
 				.path("data")
 				.path("$ref")
 				.asString()).isEqualTo("#/components/schemas/ConsumerMatchingStatusResponse");
+
+		JsonNode exposureOperation = findOperation(
+				openApi,
+				"PUT /api/v1/instructor/matching-exposure"
+		);
+		assertThat(exposureOperation.path("responses")
+				.path("200")
+				.path("content")
+				.path("application/json")
+				.path("schema")
+				.path("properties")
+				.path("data")
+				.path("$ref")
+				.asString()).isEqualTo("#/components/schemas/InstructorMatchingExposureResponse");
+		JsonNode exposureSchema = schemas.path("InstructorMatchingExposureResponse");
+		JsonNode exposureProperties = exposureSchema.path("properties");
+		assertThat(fieldNames(exposureProperties)).containsExactlyInAnyOrder(
+				"isExposed",
+				"estimatedLessonPriceAmount",
+				"pricePolicy"
+		);
+		assertThat(exposureProperties.path("estimatedLessonPriceAmount").path("example").asInt())
+				.isEqualTo(87_500);
+		assertThat(exposureProperties.path("pricePolicy").path("$ref").asString())
+				.isEqualTo("#/components/schemas/InstructorPricePolicy");
+		assertThat(textValues(exposureSchema.path("required"))).contains(
+				"isExposed",
+				"estimatedLessonPriceAmount",
+				"pricePolicy"
+		);
 
 		JsonNode currentOffersOperation = findOperation(
 				openApi,
@@ -721,8 +752,11 @@ class SsingServerApplicationTests {
 				"availableDurationMinutes",
 				"maxHeadcount",
 				"equipmentReady",
+				"estimatedLessonPriceAmount",
 				"pricePolicy"
 		);
+		assertThat(matchingSettingProperties.path("estimatedLessonPriceAmount").path("example").asInt())
+				.isEqualTo(105_000);
 		assertThat(matchingSettingProperties.path("pricePolicy").path("$ref").asString())
 				.isEqualTo("#/components/schemas/InstructorPricePolicy");
 		assertThat(textValues(matchingSettingSchema.path("required"))).contains(
@@ -733,6 +767,7 @@ class SsingServerApplicationTests {
 				"availableDurationMinutes",
 				"maxHeadcount",
 				"equipmentReady",
+				"estimatedLessonPriceAmount",
 				"pricePolicy"
 		);
 
@@ -745,6 +780,8 @@ class SsingServerApplicationTests {
 		assertThat(waitingOfferExample.has("offerId")).isTrue();
 		assertThat(waitingOfferExample.path("offerId").isNull()).isTrue();
 		assertThat(waitingOfferExample.path("matchingSetting").path("isExposed").asBoolean()).isTrue();
+		assertThat(waitingOfferExample.path("matchingSetting")
+				.path("estimatedLessonPriceAmount").asInt()).isEqualTo(105_000);
 		assertThat(waitingOfferExample.path("matchingSetting").path("pricePolicy")
 				.path("basePriceAmount").asInt()).isEqualTo(60_000);
 		assertThat(waitingOfferExample.has("activeOffer")).isFalse();

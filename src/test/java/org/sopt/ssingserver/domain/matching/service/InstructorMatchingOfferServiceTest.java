@@ -32,6 +32,7 @@ import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
+import org.sopt.ssingserver.domain.instructor.service.InstructorWaitingPriceEstimator;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
@@ -322,6 +323,7 @@ class InstructorMatchingOfferServiceTest {
 
         assertThat(result.offerId()).isEqualTo(50L);
         assertThat(result.matchingSetting().sport()).isSameAs(Sport.SNOWBOARD);
+        assertThat(result.matchingSetting().estimatedLessonPriceAmount()).isEqualTo(105_000);
         verifyNoInteractions(matchingRequestGroupItemRepository, matchingOfferPriceSnapshotRepository);
     }
 
@@ -379,6 +381,7 @@ class InstructorMatchingOfferServiceTest {
         assertThat(result.matchingSetting().availableDurationMinutes()).containsExactly(120, 240);
         assertThat(result.matchingSetting().maxHeadcount()).isEqualTo(3);
         assertThat(result.matchingSetting().equipmentReady()).isTrue();
+        assertThat(result.matchingSetting().estimatedLessonPriceAmount()).isEqualTo(105_000);
         assertThat(result.matchingSetting().pricePolicy().basePriceAmount()).isEqualTo(60_000);
         assertThat(result.matchingSetting().pricePolicy().additionalPersonPriceAmount()).isEqualTo(20_000);
         verifyNoInteractions(matchingRequestGroupItemRepository, matchingOfferPriceSnapshotRepository);
@@ -411,6 +414,7 @@ class InstructorMatchingOfferServiceTest {
 
         assertThat(result.offerId()).isEqualTo(50L);
         assertThat(result.matchingSetting().isExposed()).isFalse();
+        assertThat(result.matchingSetting().estimatedLessonPriceAmount()).isEqualTo(70_000);
     }
 
     @Test
@@ -716,6 +720,7 @@ class InstructorMatchingOfferServiceTest {
                 instructorProfileRepository,
                 instructorMatchingSettingRepository,
                 instructorPricePolicyRepository,
+                new InstructorWaitingPriceEstimator(),
                 matchingOfferRepository,
                 matchingRequestGroupRepository,
                 matchingRequestGroupItemRepository,

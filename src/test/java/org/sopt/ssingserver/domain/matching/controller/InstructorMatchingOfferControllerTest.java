@@ -120,6 +120,7 @@ class InstructorMatchingOfferControllerTest {
                         List.of(120, 240),
                         3,
                         true,
+                        105_000,
                         new InstructorMatchingOffersResult.PricePolicyResult(60_000, 20_000)
                 )
         );
@@ -139,6 +140,8 @@ class InstructorMatchingOfferControllerTest {
                 .andExpect(jsonPath("$.data.matchingSetting.availableDurationMinutes[0]").value(120))
                 .andExpect(jsonPath("$.data.matchingSetting.maxHeadcount").value(3))
                 .andExpect(jsonPath("$.data.matchingSetting.equipmentReady").value(true))
+                .andExpect(jsonPath("$.data.matchingSetting.estimatedLessonPriceAmount").value(105_000))
+                .andExpect(jsonPath("$.data.matchingSetting.pricePolicy.basePriceAmount").value(60_000))
                 .andExpect(jsonPath("$.data.items").doesNotExist())
                 .andExpect(jsonPath("$.data.currentPage").doesNotExist())
                 .andExpect(jsonPath("$.data.size").doesNotExist())
