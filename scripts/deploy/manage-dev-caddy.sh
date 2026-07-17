@@ -53,6 +53,30 @@ rollback_domain_path_for() {
   printf 'Caddyfile.rollback-domain-%s\n' "$1"
 }
 
+preflight_state_path_for() {
+  printf 'Caddyfile.preflight-state-%s\n' "$1"
+}
+
+is_valid_container_id() {
+  [[ "$1" =~ ^[0-9a-f]{12,64}$ ]]
+}
+
+is_valid_sha256() {
+  [[ "$1" =~ ^[0-9a-f]{64}$ ]]
+}
+
+file_sha256() {
+  local path="$1"
+  local digest_line
+  local digest
+
+  [ -f "$path" ] || fail "SHA-256을 계산할 파일이 없습니다: $path"
+  digest_line="$(sha256sum "$path")"
+  digest="${digest_line%% *}"
+  is_valid_sha256 "$digest" || fail "파일 SHA-256을 안전하게 계산하지 못했습니다: $path"
+  printf '%s\n' "$digest"
+}
+
 read_marker_id() {
   local marker_id
   marker_id="$(< "$MARKER_NAME")"
@@ -65,6 +89,11 @@ read_marker_id() {
 running_caddy_id() {
   local env_file="${1:-.env}"
   compose_with_env "$env_file" ps --status running -q caddy
+}
+
+existing_caddy_id() {
+  local env_file="${1:-.env}"
+  compose_with_env "$env_file" ps --all -q caddy
 }
 
 assert_running_caddy() {
@@ -82,55 +111,300 @@ read_running_domain() {
   printf '%s\n' "${domain%$'\r'}"
 }
 
-assert_caddy_recreate_not_needed() {
-  local container_id
-  local running_domain
-  local current_hash
+read_container_config_hash() {
+  local container_id="$1"
+  local config_hash
+
+  is_valid_container_id "$container_id" \
+    || fail "Caddy 컨테이너 ID 형식이 올바르지 않습니다."
+  config_hash="$(sudo docker inspect \
+    --format '{{ index .Config.Labels "com.docker.compose.config-hash" }}' \
+    "$container_id")"
+  is_valid_sha256 "$config_hash" \
+    || fail "실행 중 Caddy의 Compose config hash를 안전하게 읽지 못했습니다."
+  printf '%s\n' "$config_hash"
+}
+
+read_desired_config_hash() {
+  local env_file="$1"
   local desired_hash_line
   local desired_hash
 
-  container_id="$(running_caddy_id .env.next)"
-  if [ -z "$container_id" ]; then
-    echo "실행 중인 Caddy가 없어 최초 기동 또는 명시적 복구 경로로 진행합니다."
-    return 0
-  fi
-
-  running_domain="$(read_running_domain .env.next)"
-  is_valid_domain "$running_domain" \
-    || fail "실행 중 Caddy의 domain 형식이 올바르지 않습니다."
-  if [ "$running_domain" != "$SSING_DEV_DOMAIN" ]; then
-    fail "Caddy domain 변경은 무중단 Caddyfile reload와 분리해야 합니다."
-  fi
-
-  current_hash="$(sudo docker inspect \
-    --format '{{ index .Config.Labels "com.docker.compose.config-hash" }}' \
-    "$container_id")"
-  desired_hash_line="$(compose_with_env .env.next config --hash caddy)"
+  desired_hash_line="$(compose_with_env "$env_file" config --hash caddy)"
   desired_hash="${desired_hash_line##* }"
-  if [[ ! "$current_hash" =~ ^[0-9a-f]{64}$ \
-      || ! "$desired_hash" =~ ^[0-9a-f]{64}$ ]]; then
-    fail "Caddy Compose config hash를 안전하게 비교하지 못했습니다."
+  is_valid_sha256 "$desired_hash" \
+    || fail "배포할 Caddy Compose config hash를 안전하게 읽지 못했습니다."
+  printf '%s\n' "$desired_hash"
+}
+
+write_preflight_state() {
+  local candidate_caddy="$1"
+  local state_path
+  local state_tmp
+  local mode
+  local running_id
+  local existing_id
+  local container_id="-"
+  local running_domain="-"
+  local container_hash="-"
+  local desired_hash
+  local candidate_hash
+  local live_hash
+
+  state_path="$(preflight_state_path_for "$CURRENT_ACTIVATION_ID")"
+  state_tmp="${state_path}.tmp"
+  running_id="$(running_caddy_id .env.next)"
+  existing_id="$(existing_caddy_id .env.next)"
+  desired_hash="$(read_desired_config_hash .env.next)"
+  candidate_hash="$(file_sha256 "$candidate_caddy")"
+  live_hash="$(file_sha256 Caddyfile)"
+
+  if [ -n "$running_id" ]; then
+    is_valid_container_id "$running_id" \
+      || fail "실행 중 Caddy 컨테이너 ID 형식이 올바르지 않습니다."
+    [ "$existing_id" = "$running_id" ] \
+      || fail "Caddy 컨테이너를 하나로 식별하지 못했습니다."
+    mode="running"
+    container_id="$running_id"
+    running_domain="$(read_running_domain .env.next)"
+    is_valid_domain "$running_domain" \
+      || fail "실행 중 Caddy의 domain 형식이 올바르지 않습니다."
+    [ "$running_domain" = "$SSING_DEV_DOMAIN" ] \
+      || fail "Caddy domain 변경은 무중단 Caddyfile reload와 분리해야 합니다."
+    container_hash="$(read_container_config_hash "$container_id")"
+    [ "$container_hash" = "$desired_hash" ] \
+      || fail "Caddy service 설정 변경은 app 배포와 분리된 명시적 전환이 필요합니다."
+  elif [ -n "$existing_id" ]; then
+    is_valid_container_id "$existing_id" \
+      || fail "중지된 Caddy 컨테이너 ID 형식이 올바르지 않습니다."
+    mode="stopped"
+    container_id="$existing_id"
+    container_hash="$(read_container_config_hash "$container_id")"
+    echo "중지된 Caddy를 확인했습니다. 활성화 직전 동일 상태인지 다시 검증합니다."
+  else
+    mode="first_start"
+    echo "Caddy 컨테이너가 없어 최초 기동 상태로 기록합니다."
   fi
-  if [ "$current_hash" != "$desired_hash" ]; then
-    fail "Caddy service 설정 변경은 app 배포와 분리된 명시적 전환이 필요합니다."
+
+  {
+    printf 'mode=%s\n' "$mode"
+    printf 'target_domain=%s\n' "$SSING_DEV_DOMAIN"
+    printf 'container_id=%s\n' "$container_id"
+    printf 'running_domain=%s\n' "$running_domain"
+    printf 'container_hash=%s\n' "$container_hash"
+    printf 'desired_hash=%s\n' "$desired_hash"
+    printf 'candidate_sha256=%s\n' "$candidate_hash"
+    printf 'live_sha256=%s\n' "$live_hash"
+  } > "$state_tmp"
+  chmod 600 "$state_tmp"
+  mv -f "$state_tmp" "$state_path"
+}
+
+load_preflight_state() {
+  local state_path
+  local -a state_lines
+  local state_line
+  local state_line_count=0
+
+  state_path="$(preflight_state_path_for "$CURRENT_ACTIVATION_ID")"
+  [ -f "$state_path" ] \
+    || fail "현재 run의 Caddy 사전검사 상태가 없습니다: $state_path"
+  while IFS= read -r state_line || [ -n "$state_line" ]; do
+    state_lines[$state_line_count]="$state_line"
+    state_line_count=$((state_line_count + 1))
+  done < "$state_path"
+  [ "$state_line_count" -eq 8 ] \
+    || fail "Caddy 사전검사 상태 줄 수가 올바르지 않습니다."
+
+  [[ "${state_lines[0]}" == mode=* ]] \
+    || fail "Caddy 사전검사 mode가 없습니다."
+  [[ "${state_lines[1]}" == target_domain=* ]] \
+    || fail "Caddy 사전검사 target domain이 없습니다."
+  [[ "${state_lines[2]}" == container_id=* ]] \
+    || fail "Caddy 사전검사 container ID가 없습니다."
+  [[ "${state_lines[3]}" == running_domain=* ]] \
+    || fail "Caddy 사전검사 running domain이 없습니다."
+  [[ "${state_lines[4]}" == container_hash=* ]] \
+    || fail "Caddy 사전검사 container hash가 없습니다."
+  [[ "${state_lines[5]}" == desired_hash=* ]] \
+    || fail "Caddy 사전검사 desired hash가 없습니다."
+  [[ "${state_lines[6]}" == candidate_sha256=* ]] \
+    || fail "Caddy 사전검사 candidate SHA-256이 없습니다."
+  [[ "${state_lines[7]}" == live_sha256=* ]] \
+    || fail "Caddy 사전검사 live SHA-256이 없습니다."
+
+  PREFLIGHT_MODE="${state_lines[0]#mode=}"
+  PREFLIGHT_TARGET_DOMAIN="${state_lines[1]#target_domain=}"
+  PREFLIGHT_CONTAINER_ID="${state_lines[2]#container_id=}"
+  PREFLIGHT_RUNNING_DOMAIN="${state_lines[3]#running_domain=}"
+  PREFLIGHT_CONTAINER_HASH="${state_lines[4]#container_hash=}"
+  PREFLIGHT_DESIRED_HASH="${state_lines[5]#desired_hash=}"
+  PREFLIGHT_CANDIDATE_SHA="${state_lines[6]#candidate_sha256=}"
+  PREFLIGHT_LIVE_SHA="${state_lines[7]#live_sha256=}"
+
+  is_valid_domain "$PREFLIGHT_TARGET_DOMAIN" \
+    || fail "Caddy 사전검사 target domain 형식이 올바르지 않습니다."
+  is_valid_sha256 "$PREFLIGHT_DESIRED_HASH" \
+    || fail "Caddy 사전검사 desired hash 형식이 올바르지 않습니다."
+  is_valid_sha256 "$PREFLIGHT_CANDIDATE_SHA" \
+    || fail "Caddy 사전검사 candidate SHA-256 형식이 올바르지 않습니다."
+  is_valid_sha256 "$PREFLIGHT_LIVE_SHA" \
+    || fail "Caddy 사전검사 live SHA-256 형식이 올바르지 않습니다."
+
+  case "$PREFLIGHT_MODE" in
+    running)
+      is_valid_container_id "$PREFLIGHT_CONTAINER_ID" \
+        || fail "Caddy 사전검사 container ID 형식이 올바르지 않습니다."
+      is_valid_domain "$PREFLIGHT_RUNNING_DOMAIN" \
+        || fail "Caddy 사전검사 running domain 형식이 올바르지 않습니다."
+      is_valid_sha256 "$PREFLIGHT_CONTAINER_HASH" \
+        || fail "Caddy 사전검사 container hash 형식이 올바르지 않습니다."
+      ;;
+    stopped)
+      is_valid_container_id "$PREFLIGHT_CONTAINER_ID" \
+        || fail "Caddy 사전검사 stopped container ID 형식이 올바르지 않습니다."
+      [ "$PREFLIGHT_RUNNING_DOMAIN" = "-" ] \
+        || fail "중지 상태의 Caddy에 running domain이 기록되었습니다."
+      is_valid_sha256 "$PREFLIGHT_CONTAINER_HASH" \
+        || fail "Caddy 사전검사 stopped container hash 형식이 올바르지 않습니다."
+      ;;
+    first_start)
+      [ "$PREFLIGHT_CONTAINER_ID" = "-" \
+        ] && [ "$PREFLIGHT_RUNNING_DOMAIN" = "-" \
+        ] && [ "$PREFLIGHT_CONTAINER_HASH" = "-" ] \
+        || fail "최초 기동 Caddy 사전검사 상태가 올바르지 않습니다."
+      ;;
+    *)
+      fail "Caddy 사전검사 실행 상태가 올바르지 않습니다."
+      ;;
+  esac
+}
+
+assert_preflight_state_unchanged() {
+  local candidate_caddy="$1"
+  local current_running_id
+  local current_existing_id
+  local current_domain
+  local current_container_hash
+  local current_desired_hash
+
+  load_preflight_state
+  [ "$PREFLIGHT_TARGET_DOMAIN" = "$SSING_DEV_DOMAIN" ] \
+    || fail "사전검사 후 Caddy target domain이 변경되었습니다."
+  [ "$(file_sha256 "$candidate_caddy")" = "$PREFLIGHT_CANDIDATE_SHA" ] \
+    || fail "사전검사 후 Caddy 후보 파일이 변경되었습니다."
+  [ "$(file_sha256 Caddyfile)" = "$PREFLIGHT_LIVE_SHA" ] \
+    || fail "사전검사 후 현재 Caddyfile이 변경되었습니다."
+
+  current_desired_hash="$(read_desired_config_hash .env)"
+  [ "$current_desired_hash" = "$PREFLIGHT_DESIRED_HASH" ] \
+    || fail "사전검사 후 Caddy Compose service 설정이 변경되었습니다."
+  current_running_id="$(running_caddy_id .env)"
+  current_existing_id="$(existing_caddy_id .env)"
+
+  case "$PREFLIGHT_MODE" in
+    running)
+      [ "$current_running_id" = "$PREFLIGHT_CONTAINER_ID" \
+        ] && [ "$current_existing_id" = "$PREFLIGHT_CONTAINER_ID" ] \
+        || fail "사전검사 후 실행 중 Caddy 컨테이너가 변경되었습니다."
+      current_domain="$(read_running_domain .env)"
+      [ "$current_domain" = "$PREFLIGHT_RUNNING_DOMAIN" ] \
+        || fail "사전검사 후 실행 중 Caddy domain이 변경되었습니다."
+      current_container_hash="$(read_container_config_hash "$current_running_id")"
+      [ "$current_container_hash" = "$PREFLIGHT_CONTAINER_HASH" \
+        ] && [ "$current_container_hash" = "$current_desired_hash" ] \
+        || fail "사전검사 후 실행 중 Caddy config hash가 변경되었습니다."
+      ;;
+    stopped)
+      [ -z "$current_running_id" ] \
+        || fail "사전검사 후 중지 상태였던 Caddy가 실행되었습니다."
+      [ "$current_existing_id" = "$PREFLIGHT_CONTAINER_ID" ] \
+        || fail "사전검사 후 중지된 Caddy 컨테이너가 변경되었습니다."
+      current_container_hash="$(read_container_config_hash "$current_existing_id")"
+      [ "$current_container_hash" = "$PREFLIGHT_CONTAINER_HASH" ] \
+        || fail "사전검사 후 중지된 Caddy config hash가 변경되었습니다."
+      ;;
+    first_start)
+      [ -z "$current_running_id" ] && [ -z "$current_existing_id" ] \
+        || fail "사전검사 후 없었던 Caddy 컨테이너가 생성되었습니다."
+      ;;
+  esac
+}
+
+assert_running_caddy_matches_preflight() {
+  local candidate_caddy="$1"
+  local container_id
+  local existing_id
+  local running_domain
+  local container_hash
+  local desired_hash
+
+  container_id="$(running_caddy_id .env)"
+  is_valid_container_id "$container_id" \
+    || fail "활성화할 Caddy 컨테이너를 하나로 식별하지 못했습니다."
+  if [ -n "${ACTIVATION_CADDY_ID:-}" ]; then
+    [ "$container_id" = "$ACTIVATION_CADDY_ID" ] \
+      || fail "검증을 시작한 Caddy 컨테이너가 활성화 직전에 교체되었습니다."
   fi
+  existing_id="$(existing_caddy_id .env)"
+  [ "$existing_id" = "$container_id" ] \
+    || fail "활성화할 Caddy 컨테이너가 하나가 아닙니다."
+  if [ "$PREFLIGHT_MODE" = "running" ]; then
+    [ "$container_id" = "$PREFLIGHT_CONTAINER_ID" ] \
+      || fail "사전검사한 Caddy 컨테이너가 활성화 직전에 교체되었습니다."
+  fi
+  running_domain="$(read_running_domain .env)"
+  [ "$running_domain" = "$PREFLIGHT_TARGET_DOMAIN" ] \
+    || fail "활성화할 Caddy domain이 사전검사와 일치하지 않습니다."
+  if [ "$PREFLIGHT_MODE" = "running" ]; then
+    [ "$running_domain" = "$PREFLIGHT_RUNNING_DOMAIN" ] \
+      || fail "사전검사한 Caddy domain이 활성화 직전에 변경되었습니다."
+  fi
+  container_hash="$(read_container_config_hash "$container_id")"
+  [ "$container_hash" = "$PREFLIGHT_DESIRED_HASH" ] \
+    || fail "활성화할 Caddy config hash가 사전검사와 일치하지 않습니다."
+  desired_hash="$(read_desired_config_hash .env)"
+  [ "$desired_hash" = "$PREFLIGHT_DESIRED_HASH" ] \
+    || fail "활성화 직전 Caddy Compose service 설정이 변경되었습니다."
+  [ "$(file_sha256 "$candidate_caddy")" = "$PREFLIGHT_CANDIDATE_SHA" ] \
+    || fail "활성화 직전 Caddy 후보 파일이 변경되었습니다."
+  [ "$(file_sha256 Caddyfile)" = "$PREFLIGHT_LIVE_SHA" ] \
+    || fail "활성화 직전 현재 Caddyfile이 변경되었습니다."
+
+  ACTIVATION_CADDY_ID="$container_id"
 }
 
 validate_running_config() {
   local config_path="$1"
   local domain="$2"
-  compose_with_env .env exec -T \
+  local container_id="${3:-}"
+
+  if [ -z "$container_id" ]; then
+    container_id="$(running_caddy_id .env)"
+  fi
+  is_valid_container_id "$container_id" \
+    || fail "Caddy 설정을 검증할 컨테이너를 하나로 식별하지 못했습니다."
+  sudo docker exec -i \
     -e "SSING_DEV_DOMAIN=$domain" \
-    caddy caddy validate --config - --adapter caddyfile \
+    "$container_id" \
+    caddy validate --config - --adapter caddyfile \
     < "$config_path"
 }
 
 reload_running_config() {
   local config_path="$1"
   local domain="$2"
-  compose_with_env .env exec -T \
+  local container_id="${3:-}"
+
+  if [ -z "$container_id" ]; then
+    container_id="$(running_caddy_id .env)"
+  fi
+  is_valid_container_id "$container_id" \
+    || fail "Caddy 설정을 reload할 컨테이너를 하나로 식별하지 못했습니다."
+  sudo docker exec -i \
     -e "SSING_DEV_DOMAIN=$domain" \
-    caddy caddy reload --config - --adapter caddyfile \
+    "$container_id" \
+    caddy reload --config - --adapter caddyfile \
     < "$config_path"
 }
 
@@ -168,11 +442,14 @@ rollback_activation() {
   local candidate_caddy
   local rollback_caddy
   local rollback_domain_file
+  local preflight_state
   local previous_domain
+  local rollback_container_id
 
   candidate_caddy="$(candidate_path_for "$activation_id")"
   rollback_caddy="$(rollback_path_for "$activation_id")"
   rollback_domain_file="$(rollback_domain_path_for "$activation_id")"
+  preflight_state="$(preflight_state_path_for "$activation_id")"
 
   [ -f "$rollback_caddy" ] \
     || fail "복구할 이전 Caddyfile이 없습니다: $rollback_caddy"
@@ -202,18 +479,35 @@ rollback_activation() {
     compose_with_env .env up --pull never -d --no-deps caddy
   fi
   assert_running_caddy
+  rollback_container_id="$(running_caddy_id)"
+  is_valid_container_id "$rollback_container_id" \
+    || fail "Caddy를 복구할 컨테이너를 하나로 식별하지 못했습니다."
   if [ "$(read_running_domain)" != "$previous_domain" ]; then
     fail "복구 기동한 Caddy domain이 이전 정상 설정과 일치하지 않습니다."
   fi
 
   echo "이전 Caddy 설정 running 검증"
-  validate_running_config "$rollback_caddy" "$previous_domain"
+  validate_running_config \
+    "$rollback_caddy" \
+    "$previous_domain" \
+    "$rollback_container_id"
+  [ "$(running_caddy_id)" = "$rollback_container_id" ] \
+    || fail "복구 검증 중 Caddy 컨테이너가 교체되어 reload를 중단합니다."
   echo "이전 Caddy 설정 reload"
-  reload_running_config "$rollback_caddy" "$previous_domain"
+  reload_running_config \
+    "$rollback_caddy" \
+    "$previous_domain" \
+    "$rollback_container_id"
+  [ "$(running_caddy_id)" = "$rollback_container_id" ] \
+    || fail "복구 reload 중 Caddy 컨테이너가 교체되어 확정을 중단합니다."
   probe_app_route "$previous_domain"
 
   rm -f "$MARKER_NAME"
-  rm -f "$candidate_caddy" "$rollback_caddy" "$rollback_domain_file"
+  rm -f \
+    "$candidate_caddy" \
+    "$rollback_caddy" \
+    "$rollback_domain_file" \
+    "$preflight_state"
   echo "이전 Caddy 설정 복구 완료"
 }
 
@@ -230,14 +524,16 @@ recover_pending_activation() {
 
 preflight_candidate() {
   local candidate_caddy
+  local preflight_state
   local bootstrap_live=0
 
   recover_pending_activation
   candidate_caddy="$(candidate_path_for "$CURRENT_ACTIVATION_ID")"
+  preflight_state="$(preflight_state_path_for "$CURRENT_ACTIVATION_ID")"
+  rm -f "$preflight_state" "${preflight_state}.tmp"
   [ -f "$candidate_caddy" ] \
     || fail "현재 run의 Caddy 후보 설정이 없습니다: $candidate_caddy"
   [ -f .env.next ] || fail "Caddy 후보 검증에 사용할 .env.next가 없습니다."
-  assert_caddy_recreate_not_needed
 
   # 파일 bind mount를 만들기 위한 빈 파일이며, 검증 실패 시 반드시 제거한다.
   if [ ! -s Caddyfile ]; then
@@ -264,6 +560,9 @@ preflight_candidate() {
     cmp -s "$candidate_caddy" Caddyfile \
       || fail "최초 Caddyfile을 검증한 후보로 준비하지 못했습니다."
   fi
+
+  # DB 초기화 전에 확인한 Caddy runtime과 파일을 저장해 실제 reload 직전에 다시 대조한다.
+  write_preflight_state "$candidate_caddy"
 }
 
 activate_candidate() {
@@ -282,18 +581,28 @@ activate_candidate() {
   [ -s Caddyfile ] || fail "복구 기준이 될 현재 Caddyfile이 없습니다."
   [ -f .env ] || fail "Caddy 반영에 사용할 승격된 .env가 없습니다."
 
+  # 사전검사 뒤 app 배포 중 Caddy나 설정 파일이 바뀌었다면 기존 runtime을 건드리지 않는다.
+  assert_preflight_state_unchanged "$candidate_caddy"
+
   # app 배포에서 Caddy를 제외하므로 최초 기동·중지 상태만 검증된 live 설정으로 명시적으로 시작한다.
   if [ -z "$(running_caddy_id)" ]; then
     compose_with_env .env up --pull never -d --no-deps caddy
   fi
   assert_running_caddy
+  assert_running_caddy_matches_preflight "$candidate_caddy"
 
   previous_domain="$(read_running_domain)"
   is_valid_domain "$previous_domain" \
     || fail "실행 중 Caddy의 기존 domain 형식이 올바르지 않습니다."
 
   echo "현재 run의 Caddy 후보 설정 검증"
-  validate_running_config "$candidate_caddy" "$SSING_DEV_DOMAIN"
+  validate_running_config \
+    "$candidate_caddy" \
+    "$SSING_DEV_DOMAIN" \
+    "$ACTIVATION_CADDY_ID"
+
+  # 검증 명령 중에도 runtime이 바뀌지 않았는지 reload 대상과 입력을 마지막으로 고정한다.
+  assert_running_caddy_matches_preflight "$candidate_caddy"
 
   cp -p Caddyfile "$rollback_caddy"
   printf '%s\n' "$previous_domain" > "${rollback_domain_file}.tmp"
@@ -305,7 +614,10 @@ activate_candidate() {
   if ! cp -f "$candidate_caddy" Caddyfile \
       || ! chmod 644 Caddyfile \
       || ! cmp -s "$candidate_caddy" Caddyfile \
-      || ! reload_running_config "$candidate_caddy" "$SSING_DEV_DOMAIN"; then
+      || ! reload_running_config \
+        "$candidate_caddy" \
+        "$SSING_DEV_DOMAIN" \
+        "$ACTIVATION_CADDY_ID"; then
     echo "Caddy 후보 반영 실패로 이전 설정 복구를 시도합니다."
     rollback_activation "$CURRENT_ACTIVATION_ID"
     fail "Caddy 후보 설정을 반영하지 못했습니다."
@@ -321,6 +633,7 @@ finalize_activation() {
   local candidate_caddy
   local rollback_caddy
   local rollback_domain_file
+  local preflight_state
   marker_id="$(read_marker_id)"
   [ "$marker_id" = "$CURRENT_ACTIVATION_ID" ] \
     || fail "Caddy 활성화 marker가 현재 배포 run과 일치하지 않습니다."
@@ -328,10 +641,15 @@ finalize_activation() {
   candidate_caddy="$(candidate_path_for "$marker_id")"
   rollback_caddy="$(rollback_path_for "$marker_id")"
   rollback_domain_file="$(rollback_domain_path_for "$marker_id")"
+  preflight_state="$(preflight_state_path_for "$marker_id")"
 
   # marker를 먼저 제거하면 이후 파일 정리가 중단돼도 정상 설정을 다시 rollback하지 않는다.
   rm -f "$MARKER_NAME"
-  rm -f "$candidate_caddy" "$rollback_caddy" "$rollback_domain_file"
+  rm -f \
+    "$candidate_caddy" \
+    "$rollback_caddy" \
+    "$rollback_domain_file" \
+    "$preflight_state"
   echo "Caddy 설정 확정 완료"
 }
 
@@ -362,6 +680,7 @@ cleanup_current_artifacts() {
   local candidate_caddy
   local rollback_caddy
   local rollback_domain_file
+  local preflight_state
 
   if [ -e "$MARKER_NAME" ]; then
     echo "미완료 Caddy transaction의 복구 파일을 보존합니다: $(read_marker_id)"
@@ -371,10 +690,13 @@ cleanup_current_artifacts() {
   candidate_caddy="$(candidate_path_for "$CURRENT_ACTIVATION_ID")"
   rollback_caddy="$(rollback_path_for "$CURRENT_ACTIVATION_ID")"
   rollback_domain_file="$(rollback_domain_path_for "$CURRENT_ACTIVATION_ID")"
+  preflight_state="$(preflight_state_path_for "$CURRENT_ACTIVATION_ID")"
   rm -f \
     "$candidate_caddy" \
     "$rollback_caddy" \
     "$rollback_domain_file" \
+    "$preflight_state" \
+    "${preflight_state}.tmp" \
     "${rollback_domain_file}.tmp" \
     "${MARKER_NAME}.tmp"
 }

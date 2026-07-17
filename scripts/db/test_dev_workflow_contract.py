@@ -804,6 +804,10 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertIn("probe_app_route", caddy_manager)
         self.assertIn("config --hash caddy", caddy_manager)
         self.assertIn("com.docker.compose.config-hash", caddy_manager)
+        self.assertIn("Caddyfile.preflight-state-", caddy_manager)
+        self.assertIn("candidate_sha256=", caddy_manager)
+        self.assertIn("live_sha256=", caddy_manager)
+        self.assertIn("assert_preflight_state_unchanged", caddy_manager)
         self.assertIn("Caddy domain 변경은", caddy_manager)
         self.assertIn("up --pull never -d --no-deps caddy", caddy_manager)
         self.assertIn("smoke 결과 대기", caddy_manager)
@@ -827,12 +831,24 @@ class DevWorkflowContractTest(unittest.TestCase):
                     #!/usr/bin/env bash
                     set -euo pipefail
                     args="$*"
+                    caddy_id="${FAKE_CADDY_ID}"
+                    if [[ -n "${FAKE_CADDY_ID_FILE:-}" ]]; then
+                      caddy_id="$(cat "$FAKE_CADDY_ID_FILE")"
+                    fi
                     if [[ "$args" == *" ps --status running -q caddy"* ]]; then
                       if [[ -n "${FAKE_CADDY_STATE_FILE:-}" \
                           && "$(cat "$FAKE_CADDY_STATE_FILE")" != "running" ]]; then
                         exit 0
                       fi
-                      echo "fake-caddy-id"
+                      echo "$caddy_id"
+                      exit 0
+                    fi
+                    if [[ "$args" == *" ps --all -q caddy"* ]]; then
+                      if [[ -n "${FAKE_CADDY_STATE_FILE:-}" \
+                          && "$(cat "$FAKE_CADDY_STATE_FILE")" == "absent" ]]; then
+                        exit 0
+                      fi
+                      echo "$caddy_id"
                       exit 0
                     fi
                     if [[ "$args" == *" up --pull never -d --no-deps caddy"* ]]; then
@@ -856,15 +872,23 @@ class DevWorkflowContractTest(unittest.TestCase):
                     if [[ "$args" == *"caddy validate --config - --adapter caddyfile"* ]]; then
                       config="$(cat)"
                       printf 'validate:%s\\n' "$config" >> "$FAKE_CADDY_LOG"
+                      printf 'validate-command:%s\\n' "$args" >> "$FAKE_CADDY_LOG"
                       if [[ -n "${FAKE_VALIDATE_FAIL_CONFIG:-}" \
                           && "$config" == "$FAKE_VALIDATE_FAIL_CONFIG" ]]; then
                         exit 1
+                      fi
+                      if [[ "$args" == *"docker exec -i"* \
+                          && -n "${FAKE_CADDY_ID_FILE:-}" \
+                          && -n "${FAKE_CHANGE_CADDY_ID_AFTER_VALIDATE:-}" ]]; then
+                        printf '%s' "$FAKE_CHANGE_CADDY_ID_AFTER_VALIDATE" \
+                          > "$FAKE_CADDY_ID_FILE"
                       fi
                       exit 0
                     fi
                     if [[ "$args" == *"caddy reload --config - --adapter caddyfile"* ]]; then
                       config="$(cat)"
                       printf 'reload:%s\\n' "$config" >> "$FAKE_CADDY_LOG"
+                      printf 'reload-command:%s\\n' "$args" >> "$FAKE_CADDY_LOG"
                       if [[ -n "${FAKE_RELOAD_FAIL_CONFIG:-}" \
                           && "$config" == "$FAKE_RELOAD_FAIL_CONFIG" ]]; then
                         exit 1
@@ -895,6 +919,7 @@ class DevWorkflowContractTest(unittest.TestCase):
                 "DEPLOY_RUN_ATTEMPT": "1",
                 "SSING_DEV_DOMAIN": ":80",
                 "FAKE_CADDY_LOG": str(fake_log),
+                "FAKE_CADDY_ID": "d" * 64,
                 "FAKE_CURRENT_HASH": "b" * 64,
                 "FAKE_DESIRED_HASH": "b" * 64,
             }
@@ -924,11 +949,32 @@ class DevWorkflowContractTest(unittest.TestCase):
                     text=True,
                 )
 
+            def reload_count():
+                if not fake_log.exists():
+                    return 0
+                return fake_log.read_text(encoding="utf-8").count("reload:")
+
             success_path = prepare_deploy("success")
             self.assertEqual(0, run_manager(success_path, "preflight").returncode)
+            success_preflight_state = (
+                success_path / f"Caddyfile.preflight-state-{activation_id}"
+            )
+            self.assertTrue(success_preflight_state.exists())
             self.assertEqual(0, run_manager(success_path, "activate").returncode)
             self.assertEqual("candidate", (success_path / "Caddyfile").read_text())
             self.assertTrue((success_path / ".dev-deploy-caddy-activated").exists())
+            successful_log = fake_log.read_text(encoding="utf-8")
+            pinned_container = base_env["FAKE_CADDY_ID"]
+            self.assertIn(
+                "validate-command:docker exec -i -e SSING_DEV_DOMAIN=:80 "
+                f"{pinned_container} caddy validate",
+                successful_log,
+            )
+            self.assertIn(
+                "reload-command:docker exec -i -e SSING_DEV_DOMAIN=:80 "
+                f"{pinned_container} caddy reload",
+                successful_log,
+            )
             self.assertTrue(
                 (success_path / f"Caddyfile.rollback-{activation_id}").exists()
             )
@@ -941,6 +987,7 @@ class DevWorkflowContractTest(unittest.TestCase):
                 ).returncode,
             )
             self.assertFalse((success_path / ".dev-deploy-caddy-activated").exists())
+            self.assertFalse(success_preflight_state.exists())
 
             smoke_failure_path = prepare_deploy("smoke-failure")
             self.assertEqual(0, run_manager(smoke_failure_path, "preflight").returncode)
@@ -959,6 +1006,32 @@ class DevWorkflowContractTest(unittest.TestCase):
             self.assertEqual("last-good", (smoke_failure_path / "Caddyfile").read_text())
             self.assertFalse(
                 (smoke_failure_path / ".dev-deploy-caddy-activated").exists()
+            )
+
+            rollback_pin_path = prepare_deploy("rollback-pin")
+            self.assertEqual(0, run_manager(rollback_pin_path, "preflight").returncode)
+            self.assertEqual(0, run_manager(rollback_pin_path, "activate").returncode)
+            rollback_pin_id = temp_path / "rollback-pin.id"
+            rollback_pin_id.write_text(base_env["FAKE_CADDY_ID"], encoding="utf-8")
+            rollback_log_offset = len(fake_log.read_text(encoding="utf-8"))
+            rollback_reload_count = reload_count()
+            rollback_pin = run_manager(
+                rollback_pin_path,
+                "rollback",
+                FAKE_CADDY_ID_FILE=str(rollback_pin_id),
+                FAKE_CHANGE_CADDY_ID_AFTER_VALIDATE="e" * 64,
+            )
+            self.assertNotEqual(0, rollback_pin.returncode)
+            rollback_log = fake_log.read_text(encoding="utf-8")[rollback_log_offset:]
+            self.assertIn(
+                "validate-command:docker exec -i -e SSING_DEV_DOMAIN=:80 "
+                f"{pinned_container} caddy validate",
+                rollback_log,
+            )
+            self.assertNotIn("reload-command:", rollback_log)
+            self.assertEqual(rollback_reload_count, reload_count())
+            self.assertTrue(
+                (rollback_pin_path / ".dev-deploy-caddy-activated").exists()
             )
 
             reload_failure_path = prepare_deploy("reload-failure")
@@ -1022,7 +1095,7 @@ class DevWorkflowContractTest(unittest.TestCase):
                 candidate="candidate",
             )
             first_start_state = temp_path / "first-start.state"
-            first_start_state.write_text("stopped", encoding="utf-8")
+            first_start_state.write_text("absent", encoding="utf-8")
             self.assertEqual(
                 0,
                 run_manager(
@@ -1049,6 +1122,38 @@ class DevWorkflowContractTest(unittest.TestCase):
                     "settle",
                     CADDY_SMOKE_SUCCEEDED="true",
                     FAKE_CADDY_STATE_FILE=str(first_start_state),
+                ).returncode,
+            )
+
+            stopped_start_path = prepare_deploy("stopped-start")
+            stopped_start_state = temp_path / "stopped-start.state"
+            stopped_start_state.write_text("stopped", encoding="utf-8")
+            self.assertEqual(
+                0,
+                run_manager(
+                    stopped_start_path,
+                    "preflight",
+                    FAKE_CADDY_STATE_FILE=str(stopped_start_state),
+                ).returncode,
+            )
+            stopped_start = run_manager(
+                stopped_start_path,
+                "activate",
+                FAKE_CADDY_STATE_FILE=str(stopped_start_state),
+            )
+            self.assertEqual(
+                0,
+                stopped_start.returncode,
+                msg=stopped_start.stdout + stopped_start.stderr,
+            )
+            self.assertEqual("running", stopped_start_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                0,
+                run_manager(
+                    stopped_start_path,
+                    "settle",
+                    CADDY_SMOKE_SUCCEEDED="true",
+                    FAKE_CADDY_STATE_FILE=str(stopped_start_state),
                 ).returncode,
             )
 
@@ -1108,6 +1213,167 @@ class DevWorkflowContractTest(unittest.TestCase):
             self.assertEqual(
                 "last-good",
                 (service_change_path / "Caddyfile").read_text(encoding="utf-8"),
+            )
+
+            runtime_drift_cases = (
+                ("container-id-drift", {"FAKE_CADDY_ID": "e" * 64}),
+                (
+                    "domain-drift",
+                    {"FAKE_PREVIOUS_DOMAIN": "changed-api.ssing.app"},
+                ),
+                ("container-hash-drift", {"FAKE_CURRENT_HASH": "c" * 64}),
+                ("desired-hash-drift", {"FAKE_DESIRED_HASH": "c" * 64}),
+            )
+            for name, activate_env in runtime_drift_cases:
+                with self.subTest(name=name):
+                    drift_path = prepare_deploy(name)
+                    self.assertEqual(0, run_manager(drift_path, "preflight").returncode)
+                    before_reload_count = reload_count()
+                    drift_result = run_manager(drift_path, "activate", **activate_env)
+                    self.assertNotEqual(0, drift_result.returncode)
+                    self.assertEqual(
+                        "last-good",
+                        (drift_path / "Caddyfile").read_text(encoding="utf-8"),
+                    )
+                    self.assertFalse(
+                        (drift_path / ".dev-deploy-caddy-activated").exists()
+                    )
+                    self.assertTrue(
+                        (
+                            drift_path
+                            / f"Caddyfile.preflight-state-{activation_id}"
+                        ).exists()
+                    )
+                    self.assertEqual(before_reload_count, reload_count())
+
+            execution_drift_path = prepare_deploy("execution-state-drift")
+            execution_state = temp_path / "execution-state-drift.state"
+            execution_state.write_text("running", encoding="utf-8")
+            self.assertEqual(
+                0,
+                run_manager(
+                    execution_drift_path,
+                    "preflight",
+                    FAKE_CADDY_STATE_FILE=str(execution_state),
+                ).returncode,
+            )
+            execution_state.write_text("stopped", encoding="utf-8")
+            before_reload_count = reload_count()
+            execution_drift = run_manager(
+                execution_drift_path,
+                "activate",
+                FAKE_CADDY_STATE_FILE=str(execution_state),
+            )
+            self.assertNotEqual(0, execution_drift.returncode)
+            self.assertEqual(before_reload_count, reload_count())
+            self.assertEqual(
+                "last-good",
+                (execution_drift_path / "Caddyfile").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(0, run_manager(execution_drift_path, "cleanup").returncode)
+            self.assertFalse(
+                (
+                    execution_drift_path
+                    / f"Caddyfile.preflight-state-{activation_id}"
+                ).exists()
+            )
+            self.assertFalse(
+                (
+                    execution_drift_path
+                    / f"Caddyfile.candidate-{activation_id}"
+                ).exists()
+            )
+            self.assertEqual(
+                "last-good",
+                (execution_drift_path / "Caddyfile").read_text(encoding="utf-8"),
+            )
+
+            validate_race_cases = (
+                ("running", "last-good", None),
+                ("stopped", "last-good", "stopped"),
+                ("first-start", None, "absent"),
+            )
+            for mode, live, execution_state_value in validate_race_cases:
+                with self.subTest(validate_race_mode=mode):
+                    validate_race_path = prepare_deploy(
+                        f"validate-race-{mode}",
+                        live=live,
+                    )
+                    validate_race_id = temp_path / f"validate-race-{mode}.id"
+                    validate_race_id.write_text(
+                        base_env["FAKE_CADDY_ID"],
+                        encoding="utf-8",
+                    )
+                    validate_race_env = {
+                        "FAKE_CADDY_ID_FILE": str(validate_race_id),
+                    }
+                    if execution_state_value is not None:
+                        validate_race_state = (
+                            temp_path / f"validate-race-{mode}.state"
+                        )
+                        validate_race_state.write_text(
+                            execution_state_value,
+                            encoding="utf-8",
+                        )
+                        validate_race_env["FAKE_CADDY_STATE_FILE"] = str(
+                            validate_race_state
+                        )
+                    self.assertEqual(
+                        0,
+                        run_manager(
+                            validate_race_path,
+                            "preflight",
+                            **validate_race_env,
+                        ).returncode,
+                    )
+                    before_reload_count = reload_count()
+                    validate_race = run_manager(
+                        validate_race_path,
+                        "activate",
+                        **validate_race_env,
+                        FAKE_CHANGE_CADDY_ID_AFTER_VALIDATE="e" * 64,
+                    )
+                    self.assertNotEqual(0, validate_race.returncode)
+                    self.assertEqual(before_reload_count, reload_count())
+                    expected_live = "candidate" if live is None else live
+                    self.assertEqual(
+                        expected_live,
+                        (validate_race_path / "Caddyfile").read_text(
+                            encoding="utf-8"
+                        ),
+                    )
+
+            candidate_drift_path = prepare_deploy("candidate-file-drift")
+            self.assertEqual(
+                0,
+                run_manager(candidate_drift_path, "preflight").returncode,
+            )
+            candidate_file = (
+                candidate_drift_path / f"Caddyfile.candidate-{activation_id}"
+            )
+            candidate_file.write_text("changed-candidate", encoding="utf-8")
+            before_reload_count = reload_count()
+            candidate_drift = run_manager(candidate_drift_path, "activate")
+            self.assertNotEqual(0, candidate_drift.returncode)
+            self.assertEqual(before_reload_count, reload_count())
+            self.assertEqual(
+                "last-good",
+                (candidate_drift_path / "Caddyfile").read_text(encoding="utf-8"),
+            )
+
+            live_drift_path = prepare_deploy("live-file-drift")
+            self.assertEqual(0, run_manager(live_drift_path, "preflight").returncode)
+            (live_drift_path / "Caddyfile").write_text(
+                "changed-live",
+                encoding="utf-8",
+            )
+            before_reload_count = reload_count()
+            live_drift = run_manager(live_drift_path, "activate")
+            self.assertNotEqual(0, live_drift.returncode)
+            self.assertEqual(before_reload_count, reload_count())
+            self.assertEqual(
+                "changed-live",
+                (live_drift_path / "Caddyfile").read_text(encoding="utf-8"),
             )
 
     def test_main_sha_is_rechecked_before_db_mutation_and_restart(self):
