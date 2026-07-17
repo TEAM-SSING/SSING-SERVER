@@ -36,6 +36,7 @@ import org.sopt.ssingserver.global.error.BusinessException;
 import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 // SEARCHING 중인 매칭 요청 재탐색과 후보/그룹/제안 생성 결정 서비스
@@ -63,7 +64,7 @@ public class MatchingSearchService {
     private final Clock clock;
 
     // 즉시 트리거와 스케줄러의 단건 탐색 입구, REQUESTED 요청 잠금 조회 처리
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public MatchingSearchResult search(Long matchingRequestId) {
         // 같은 요청 동시 처리와 중복 그룹/제안 생성 방지를 위한 REQUESTED row DB lock
         // 잠금 조회 실패 시 이미 그룹화/실패/취소 처리된 요청으로 보고 새 작업 생략
