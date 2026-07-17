@@ -36,7 +36,7 @@ class DevMatchingConsoleResourceTest {
     }
 
     @Test
-    void 매칭_콘솔은_목록_상세_새로고침과_영향미리보기만_제공한다() throws IOException {
+    void 매칭_콘솔은_목록_상세_새로고침과_허용된_상태동작을_제공한다() throws IOException {
         String html = resource("dev-matching-console.html");
 
         assertThat(html)
@@ -60,15 +60,20 @@ class DevMatchingConsoleResourceTest {
                 .contains("요청별 연결표")
                 .contains("<th>Name</th>")
                 .contains("person.name || \"-\"")
-                .contains("preview only")
+                .contains("공유 Dev DB는 항상 <code>idle-base</code>로 reset됩니다")
+                .doesNotContain("<code>matching-price-vivaldi</code>로 dev DB를 reset")
+                .contains("미리보기만")
+                .contains("실행 가능")
+                .contains("method: \"POST\"")
+                .contains("actionKey: action.actionKey")
+                .contains("stateToken: detail.stateToken")
+                .contains("DEV_MATCHING_STATE_CHANGED")
+                .contains("executeAction")
                 .contains("결제 대기")
                 .contains("PAYMENT_PENDING")
                 .contains("stateToken")
                 .contains("/dev/auth/console")
                 .contains("/adminer/")
-                .contains("공유 Dev DB는 항상 <code>idle-base</code>로 reset됩니다")
-                .doesNotContain("<code>matching-price-vivaldi</code>로 dev DB를 reset")
-                .doesNotContain("method: \"POST\"")
                 .doesNotContain("method: \"PATCH\"")
                 .doesNotContain("method: \"DELETE\"");
     }

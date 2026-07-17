@@ -62,4 +62,11 @@ public class Member extends BaseTimeEntity {
         member.status = status;
         return member;
     }
+
+    public void promoteToInstructor() {
+        if (status != MemberStatus.ACTIVE || role != MemberRole.CONSUMER) {
+            throw new IllegalStateException("Only active consumers can be promoted to instructor.");
+        }
+        role = MemberRole.INSTRUCTOR;
+    }
 }

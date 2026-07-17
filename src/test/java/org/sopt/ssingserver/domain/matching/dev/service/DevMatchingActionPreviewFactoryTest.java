@@ -17,7 +17,37 @@ import org.sopt.ssingserver.domain.payment.enums.MatchingRequestPaymentStatus;
 
 class DevMatchingActionPreviewFactoryTest {
 
-    private final DevMatchingActionPreviewFactory factory = new DevMatchingActionPreviewFactory();
+    private final DevMatchingActionPreviewFactory factory = new DevMatchingActionPreviewFactory(
+            new DevMatchingActionPolicy(true)
+    );
+
+    @Test
+    void 기능플래그가_꺼지면_조회는_유지하고_모든_동작을_미리보기로_표시한다() {
+        DevMatchingActionPreviewFactory disabledFactory = new DevMatchingActionPreviewFactory(
+                new DevMatchingActionPolicy(false)
+        );
+        DevMatchingActionContext context = new DevMatchingActionContext(
+                301L,
+                98L,
+                MatchingRequestGroupStatus.EXPOSED,
+                77L,
+                MatchingOfferStatus.OFFERED,
+                instructor(),
+                List.of(request(
+                        301L,
+                        MatchingRequestStatus.GROUPED,
+                        302L,
+                        MatchingRequestGroupItemStatus.NOT_REQUESTED,
+                        MatchingStatus.WAITING_FOR_INSTRUCTOR,
+                        consumer(12L, "consumer-a")
+                )),
+                List.of()
+        );
+
+        assertThat(disabledFactory.create(context))
+                .isNotEmpty()
+                .allSatisfy(action -> assertThat(action.previewOnly()).isTrue());
+    }
 
     @Test
     void 강사응답대기는_수락과_조건부거절_영향을_반환한다() {
@@ -52,7 +82,7 @@ class DevMatchingActionPreviewFactoryTest {
                 "MATCHING_REQUEST#301",
                 "MATCHING_REQUEST_GROUP_ITEM#302"
         );
-        assertThat(accept.previewOnly()).isTrue();
+        assertThat(accept.previewOnly()).isFalse();
         assertThat(accept.outcomes()).singleElement()
                 .satisfies(outcome -> {
                     assertThat(outcome.outcomeKey()).isEqualTo("ACCEPTED");
@@ -126,7 +156,7 @@ class DevMatchingActionPreviewFactoryTest {
                 "MATCHING_REQUEST_GROUP#98",
                 "MATCHING_REQUEST_PAYMENT#null"
         );
-        assertThat(accept.previewOnly()).isTrue();
+        assertThat(accept.previewOnly()).isFalse();
         assertThat(accept.outcomes()).singleElement().satisfies(outcome -> {
             assertThat(outcome.outcomeKey()).isEqualTo("PAYMENT_PENDING");
             assertThat(outcome.conditional()).isFalse();
@@ -249,7 +279,7 @@ class DevMatchingActionPreviewFactoryTest {
                 "MATCHING_REQUEST#301",
                 "LESSON#null"
         );
-        assertThat(action.previewOnly()).isTrue();
+        assertThat(action.previewOnly()).isFalse();
         assertThat(action.outcomes()).singleElement()
                 .satisfies(outcome -> {
                     assertThat(outcome.outcomeKey()).isEqualTo("MATCHING_CONFIRMED");
@@ -267,6 +297,69 @@ class DevMatchingActionPreviewFactoryTest {
                             "LESSON#null.status:ABSENT->CONFIRMED"
                     );
                 });
+    }
+
+    @Test
+    void 다중요청_그룹의_강사수락과_결제완료는_영향만_보이고_실행할_수_없다() {
+        DevMatchingActionContext instructorWaiting = new DevMatchingActionContext(
+                301L,
+                98L,
+                MatchingRequestGroupStatus.EXPOSED,
+                77L,
+                MatchingOfferStatus.OFFERED,
+                instructor(),
+                List.of(
+                        request(301L, MatchingRequestStatus.GROUPED, 302L,
+                                MatchingRequestGroupItemStatus.NOT_REQUESTED,
+                                MatchingStatus.WAITING_FOR_INSTRUCTOR,
+                                consumer(12L, "consumer-a")),
+                        request(303L, MatchingRequestStatus.GROUPED, 304L,
+                                MatchingRequestGroupItemStatus.NOT_REQUESTED,
+                                MatchingStatus.WAITING_FOR_INSTRUCTOR,
+                                consumer(13L, "consumer-b"))
+                ),
+                List.of()
+        );
+        DevMatchingActionContext paymentWaiting = new DevMatchingActionContext(
+                301L,
+                98L,
+                MatchingRequestGroupStatus.PAYMENT_PENDING,
+                77L,
+                MatchingOfferStatus.ACCEPTED,
+                instructor(),
+                List.of(
+                        request(301L, MatchingRequestStatus.MATCHED, 302L,
+                                MatchingRequestGroupItemStatus.ACCEPTED,
+                                MatchingStatus.PAYMENT_PENDING,
+                                consumer(12L, "consumer-a")),
+                        request(303L, MatchingRequestStatus.MATCHED, 304L,
+                                MatchingRequestGroupItemStatus.ACCEPTED,
+                                MatchingStatus.WAITING_FOR_OTHER_PAYMENTS,
+                                consumer(13L, "consumer-b"))
+                ),
+                List.of(
+                        new DevMatchingActionContext.PaymentState(
+                                401L,
+                                301L,
+                                MatchingRequestPaymentStatus.PENDING
+                        ),
+                        new DevMatchingActionContext.PaymentState(
+                                402L,
+                                303L,
+                                MatchingRequestPaymentStatus.COMPLETED
+                        )
+                )
+        );
+
+        DevMatchingActionPreviewResponse instructorAccept = factory.create(instructorWaiting).stream()
+                .filter(action -> action.actionKey() == DevMatchingActionKey.INSTRUCTOR_ACCEPT)
+                .findFirst()
+                .orElseThrow();
+        DevMatchingActionPreviewResponse paymentComplete = factory.create(paymentWaiting).getFirst();
+
+        assertThat(instructorAccept.previewOnly()).isTrue();
+        assertThat(paymentComplete.actionKey()).isEqualTo(DevMatchingActionKey.PAYMENT_COMPLETE);
+        assertThat(paymentComplete.previewOnly()).isTrue();
     }
 
     @Test

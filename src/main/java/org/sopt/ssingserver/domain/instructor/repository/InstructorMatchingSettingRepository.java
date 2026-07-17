@@ -10,6 +10,7 @@ import org.sopt.ssingserver.domain.instructor.enums.LessonLevel;
 import org.sopt.ssingserver.domain.instructor.enums.Sport;
 import org.sopt.ssingserver.domain.instructor.repository.projection.InstructorMatchingCandidateIdProjection;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -23,6 +24,9 @@ public interface InstructorMatchingSettingRepository extends JpaRepository<Instr
     Optional<InstructorMatchingSetting> findByInstructorProfileId(Long instructorProfileId);
 
     boolean existsByInstructorProfileId(Long instructorProfileId);
+
+    @EntityGraph(attributePaths = {"lessonLevels", "availableDurationMinutes"})
+    List<InstructorMatchingSetting> findAllByInstructorProfileIdIn(Collection<Long> instructorProfileIds);
 
     // 조건 수정/노출 중단 writer가 후보 선정과 같은 setting root row를 먼저 잠금
     @Lock(LockModeType.PESSIMISTIC_WRITE)

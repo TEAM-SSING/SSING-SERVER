@@ -20,7 +20,7 @@ public record DevMatchingActionPreviewResponse(
         List<AffectedResource> affectedResources,
         @Schema(description = "조건에 따라 가능한 예상 결과")
         List<Outcome> outcomes,
-        @Schema(description = "실행하지 않는 미리보기임을 나타냄", example = "true")
+        @Schema(description = "true면 영향 미리보기만 제공하고, false면 dev 실행 API에서 허용", example = "false")
         boolean previewOnly
 ) {
 

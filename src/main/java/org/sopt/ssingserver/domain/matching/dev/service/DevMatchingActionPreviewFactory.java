@@ -10,6 +10,7 @@ import static org.sopt.ssingserver.domain.matching.dev.enums.DevMatchingResource
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.sopt.ssingserver.domain.matching.dev.dto.response.DevMatchingActionPreviewResponse;
 import org.sopt.ssingserver.domain.matching.dev.dto.response.DevMatchingActionPreviewResponse.AffectedResource;
 import org.sopt.ssingserver.domain.matching.dev.dto.response.DevMatchingActionPreviewResponse.Outcome;
@@ -30,7 +31,10 @@ import org.springframework.stereotype.Component;
 
 @Profile({"local", "dev"})
 @Component
+@RequiredArgsConstructor
 class DevMatchingActionPreviewFactory {
+
+    private final DevMatchingActionPolicy actionPolicy;
 
     // 실제 전이 메서드를 호출하지 않고 production guard와 같은 원본 상태 조합에서만 미리보기를 만든다.
     List<DevMatchingActionPreviewResponse> create(DevMatchingActionContext context) {
@@ -112,6 +116,7 @@ class DevMatchingActionPreviewFactory {
                 "그룹의 모든 강습생이 최종 확인 단계로 이동합니다."
         );
         return action(
+                context,
                 DevMatchingActionKey.INSTRUCTOR_ACCEPT,
                 "강사 수락",
                 context.instructor(),
@@ -168,6 +173,7 @@ class DevMatchingActionPreviewFactory {
         );
 
         return action(
+                context,
                 DevMatchingActionKey.INSTRUCTOR_REJECT,
                 "강사 거절",
                 context.instructor(),
@@ -195,6 +201,7 @@ class DevMatchingActionPreviewFactory {
                 "결제 row의 ID는 실행 뒤 생성됩니다."
         );
         return action(
+                context,
                 DevMatchingActionKey.CONSUMER_ACCEPT,
                 "강습생 수락",
                 request.consumer(),
@@ -233,6 +240,7 @@ class DevMatchingActionPreviewFactory {
                 "현재 그룹 전체를 닫고 각 요청을 재탐색 상태로 돌립니다."
         );
         return action(
+                context,
                 DevMatchingActionKey.CONSUMER_REJECT,
                 "강습생 거절",
                 selected.consumer(),
@@ -285,6 +293,7 @@ class DevMatchingActionPreviewFactory {
                 note
         );
         return action(
+                context,
                 DevMatchingActionKey.PAYMENT_COMPLETE,
                 "결제 완료",
                 selected.consumer(),
@@ -294,6 +303,7 @@ class DevMatchingActionPreviewFactory {
     }
 
     private DevMatchingActionPreviewResponse action(
+            DevMatchingActionContext context,
             DevMatchingActionKey key,
             String label,
             DevMatchingPersonResponse actor,
@@ -312,7 +322,7 @@ class DevMatchingActionPreviewFactory {
                 List.copyOf(new LinkedHashSet<>(affectedPeople)),
                 affectedResources,
                 outcomes,
-                true
+                !actionPolicy.isExecutable(context, key)
         );
     }
 

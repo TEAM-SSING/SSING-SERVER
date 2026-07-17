@@ -5,6 +5,7 @@ import jakarta.persistence.QueryHint;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.sopt.ssingserver.domain.matching.entity.MatchingRequest;
 import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.springframework.data.domain.Page;
@@ -43,6 +44,17 @@ public interface MatchingRequestRepository extends JpaRepository<MatchingRequest
     boolean existsByMemberIdAndStatusIn(
             Long memberId,
             Collection<MatchingRequestStatus> statuses
+    );
+
+    @Query("""
+            select distinct matchingRequest.member.id
+            from MatchingRequest matchingRequest
+            where matchingRequest.member.id in :memberIds
+              and matchingRequest.status in :statuses
+            """)
+    Set<Long> findMemberIdsByStatusIn(
+            @Param("memberIds") Collection<Long> memberIds,
+            @Param("statuses") Collection<MatchingRequestStatus> statuses
     );
 
     // 인증 회원의 활성 협상은 DB unique 제약을 전제로 정확히 0건 또는 1건만 반환한다.

@@ -36,6 +36,7 @@ import org.sopt.ssingserver.domain.member.repository.MemberRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.sopt.ssingserver.domain.resort.repository.ResortRepository;
 import org.sopt.ssingserver.global.error.BusinessException;
+import org.sopt.ssingserver.global.error.CommonErrorCode;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -142,6 +143,23 @@ class MatchingOrchestrationServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isSameAs(MatchingErrorCode.MATCHING_MEMBER_NOT_FOUND);
+
+        verifyNoInteractions(resortRepository);
+        verifyNoInteractions(matchingRequestRepository);
+        verifyNoInteractions(matchingRequestParticipantRepository);
+        verifyNoInteractions(matchingSearchTriggerService);
+    }
+
+    @Test
+    void 잠금_대기중_강사로_승격된_회원은_소비자_매칭요청을_저장하지_않는다() {
+        MatchingOrchestrationService service = createService();
+        Member instructor = Member.create("강사", null, MemberRole.INSTRUCTOR, MemberStatus.ACTIVE);
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(instructor));
+
+        assertThatThrownBy(() -> service.createImmediateMatchingRequest(command()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isSameAs(CommonErrorCode.FORBIDDEN);
 
         verifyNoInteractions(resortRepository);
         verifyNoInteractions(matchingRequestRepository);

@@ -128,15 +128,15 @@ public class InstructorService {
             InstructorMatchingExposureRequest request,
             boolean createWhenMissing
     ) {
-        InstructorProfile instructorProfile = findInstructorProfile(memberId);
+        // 설정을 바꾸는 개발 도구와 같은 Profile -> Setting -> Price 순서로 잠가 섞인 응답을 막는다.
+        InstructorProfile instructorProfile = findInstructorProfileForUpdate(memberId);
         validateExposureAllowed(instructorProfile, request.sport());
-        InstructorPricePolicy pricePolicy = findActivePricePolicy(instructorProfile.getId());
-
         InstructorMatchingSetting setting = findOrCreateMatchingSetting(
                 instructorProfile,
                 request,
                 createWhenMissing
         );
+        InstructorPricePolicy pricePolicy = findActivePricePolicyForUpdate(instructorProfile.getId());
         int estimatedLessonPriceAmount = waitingPriceEstimator.estimate(
                 pricePolicy.getBasePriceAmount(),
                 pricePolicy.getAdditionalPersonPriceAmount(),
@@ -153,9 +153,10 @@ public class InstructorService {
         );
     }
 
-    private InstructorPricePolicy findActivePricePolicy(Long instructorProfileId) {
-        return instructorPricePolicyRepository
-                .findFirstByInstructorProfileIdAndIsActiveTrueOrderByIdDesc(instructorProfileId)
+    private InstructorPricePolicy findActivePricePolicyForUpdate(Long instructorProfileId) {
+        return instructorPricePolicyRepository.findActiveByInstructorProfileIdForUpdate(instructorProfileId)
+                .stream()
+                .findFirst()
                 .orElseThrow(() -> new BusinessException(MatchingErrorCode.MATCHING_PRICE_POLICY_NOT_FOUND));
     }
 
@@ -171,6 +172,11 @@ public class InstructorService {
     // 인증 회원의 강사 프로필 필수 존재 조회
     private InstructorProfile findInstructorProfile(Long memberId) {
         return instructorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
+    }
+
+    private InstructorProfile findInstructorProfileForUpdate(Long memberId) {
+        return instructorProfileRepository.findByMemberIdForUpdate(memberId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
     }
 

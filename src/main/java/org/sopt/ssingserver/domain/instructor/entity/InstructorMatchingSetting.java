@@ -17,6 +17,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -99,8 +100,30 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
             boolean isEquipmentReady
     ) {
         InstructorMatchingSetting setting = new InstructorMatchingSetting();
-        setting.instructorProfile = instructorProfile;
+        setting.instructorProfile = Objects.requireNonNull(instructorProfile, "instructorProfile");
         setting.updateConditions(sport, lessonLevels, availableDurationMinutes, maxHeadcount, isEquipmentReady);
+        return setting;
+    }
+
+    // 승인·설정 저장과 매칭 노출 시작을 분리하기 위한 개발 도구용 OFF 상태 생성 경로
+    public static InstructorMatchingSetting createDraft(
+            InstructorProfile instructorProfile,
+            Sport sport,
+            Collection<LessonLevel> lessonLevels,
+            Collection<Integer> availableDurationMinutes,
+            int maxHeadcount,
+            boolean isEquipmentReady
+    ) {
+        InstructorMatchingSetting setting = new InstructorMatchingSetting();
+        setting.instructorProfile = Objects.requireNonNull(instructorProfile, "instructorProfile");
+        setting.replaceConditions(
+                sport,
+                lessonLevels,
+                availableDurationMinutes,
+                maxHeadcount,
+                isEquipmentReady
+        );
+        setting.stopExposure();
         return setting;
     }
 
@@ -132,16 +155,24 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
             int maxHeadcount,
             boolean isEquipmentReady
     ) {
-        validateEquipmentReady(isEquipmentReady);
-        validateMaxHeadcount(maxHeadcount);
-
-        this.sport = sport;
-        replaceLessonLevels(lessonLevels);
-        replaceAvailableDurationMinutes(availableDurationMinutes);
-        this.maxHeadcount = maxHeadcount;
-        this.isEquipmentReady = isEquipmentReady;
+        replaceConditions(sport, lessonLevels, availableDurationMinutes, maxHeadcount, isEquipmentReady);
         // 조건 저장과 동시에 즉시 노출 시작
         startExposure();
+    }
+
+    // 노출 중인 설정을 실수로 바꾸지 않으며, 저장 뒤에도 OFF 상태를 유지한다.
+    public void updateDraftConditions(
+            Sport sport,
+            Collection<LessonLevel> lessonLevels,
+            Collection<Integer> availableDurationMinutes,
+            int maxHeadcount,
+            boolean isEquipmentReady
+    ) {
+        if (isExposed) {
+            throw new IllegalStateException("Exposed matching settings cannot be reconfigured.");
+        }
+        replaceConditions(sport, lessonLevels, availableDurationMinutes, maxHeadcount, isEquipmentReady);
+        stopExposure();
     }
 
     // 조건 저장 또는 ON 요청 이후 즉시 매칭 후보 조회 포함을 위한 노출 상태 ON
@@ -168,8 +199,32 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
         }
     }
 
+    private void replaceConditions(
+            Sport sport,
+            Collection<LessonLevel> lessonLevels,
+            Collection<Integer> availableDurationMinutes,
+            int maxHeadcount,
+            boolean isEquipmentReady
+    ) {
+        validateEquipmentReady(isEquipmentReady);
+        validateMaxHeadcount(maxHeadcount);
+        Sport nextSport = Objects.requireNonNull(sport, "sport");
+        LinkedHashSet<LessonLevel> nextLessonLevels = normalizedLessonLevels(lessonLevels);
+        LinkedHashSet<Integer> nextAvailableDurationMinutes = normalizedAvailableDurationMinutes(
+                availableDurationMinutes
+        );
+
+        this.sport = nextSport;
+        this.lessonLevels.clear();
+        this.lessonLevels.addAll(nextLessonLevels);
+        this.availableDurationMinutes.clear();
+        this.availableDurationMinutes.addAll(nextAvailableDurationMinutes);
+        this.maxHeadcount = maxHeadcount;
+        this.isEquipmentReady = isEquipmentReady;
+    }
+
     // 후보 매칭 기준 보호를 위한 레벨 목록 비어 있음/null 포함 검증
-    private void replaceLessonLevels(Collection<LessonLevel> lessonLevels) {
+    private LinkedHashSet<LessonLevel> normalizedLessonLevels(Collection<LessonLevel> lessonLevels) {
         if (lessonLevels == null || lessonLevels.isEmpty()) {
             throw new IllegalArgumentException("lessonLevels must not be empty.");
         }
@@ -183,12 +238,13 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
             nextLessonLevels.add(lessonLevel);
         }
 
-        this.lessonLevels.clear();
-        this.lessonLevels.addAll(nextLessonLevels);
+        return nextLessonLevels;
     }
 
     // 소비자 requestedDurationMinutes 교집합 비교용 가능 시간 목록 양수 검증
-    private void replaceAvailableDurationMinutes(Collection<Integer> availableDurationMinutes) {
+    private LinkedHashSet<Integer> normalizedAvailableDurationMinutes(
+            Collection<Integer> availableDurationMinutes
+    ) {
         if (availableDurationMinutes == null || availableDurationMinutes.isEmpty()) {
             throw new IllegalArgumentException("availableDurationMinutes must not be empty.");
         }
@@ -205,7 +261,6 @@ public class InstructorMatchingSetting extends BaseTimeEntity {
             nextAvailableDurationMinutes.add(durationMinutes);
         }
 
-        this.availableDurationMinutes.clear();
-        this.availableDurationMinutes.addAll(nextAvailableDurationMinutes);
+        return nextAvailableDurationMinutes;
     }
 }
