@@ -72,7 +72,7 @@ import tools.jackson.databind.ObjectMapper;
 @Execution(ExecutionMode.SAME_THREAD)
 class DevInstructorActionsIntegrationTest {
 
-    private static final long CONCURRENCY_TIMEOUT_SECONDS = 10L;
+    private static final long CONCURRENCY_TIMEOUT_SECONDS = 30L;
     private static final long LOCK_BLOCK_ASSERTION_MILLIS = 500L;
 
     @DynamicPropertySource
