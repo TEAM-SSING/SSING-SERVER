@@ -72,7 +72,7 @@ import tools.jackson.databind.ObjectMapper;
 @Execution(ExecutionMode.SAME_THREAD)
 class DevInstructorActionsIntegrationTest {
 
-    private static final long CONCURRENCY_TIMEOUT_SECONDS = 30L;
+    private static final long CONCURRENCY_TIMEOUT_SECONDS = 10L;
     private static final long LOCK_BLOCK_ASSERTION_MILLIS = 500L;
 
     @DynamicPropertySource
@@ -296,7 +296,7 @@ class DevInstructorActionsIntegrationTest {
                 });
             });
 
-            assertThat(configurationSaved.await(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+            awaitWorkerReady(configurationSaved, configurationSave, "Dev configuration save");
             Future<InstructorMatchingExposureResponse> exposureStart = executor.submit(() ->
                     instructorService.startExposure(memberId, exposureRequest)
             );
@@ -354,7 +354,7 @@ class DevInstructorActionsIntegrationTest {
                 });
             });
 
-            assertThat(approvalMutated.await(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+            awaitWorkerReady(approvalMutated, approval, "Instructor approval");
             Future<ErrorCode> matchingCreation = executor.submit(() ->
                     matchingCreationError(matchingCommand)
             );
@@ -410,7 +410,7 @@ class DevInstructorActionsIntegrationTest {
                 });
             });
 
-            assertThat(matchingCreated.await(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+            awaitWorkerReady(matchingCreated, matchingCreation, "Consumer matching creation");
             Future<ErrorCode> approval = executor.submit(() ->
                     instructorActionError(memberId, approvalRequest)
             );
@@ -810,5 +810,33 @@ class DevInstructorActionsIntegrationTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(timeoutMessage, exception);
         }
+    }
+
+    private void awaitWorkerReady(
+            CountDownLatch ready,
+            Future<?> worker,
+            String stage
+    ) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(CONCURRENCY_TIMEOUT_SECONDS);
+
+        while (ready.getCount() > 0 && !worker.isDone()) {
+            long remainingNanos = deadline - System.nanoTime();
+            if (remainingNanos <= 0) {
+                throw new AssertionError(stage + " did not reach the synchronization point in time.");
+            }
+
+            long waitMillis = Math.max(
+                    1L,
+                    Math.min(100L, TimeUnit.NANOSECONDS.toMillis(remainingNanos))
+            );
+            ready.await(waitMillis, TimeUnit.MILLISECONDS);
+        }
+
+        if (ready.getCount() == 0) {
+            return;
+        }
+
+        worker.get();
+        throw new AssertionError(stage + " completed before reaching the synchronization point.");
     }
 }
