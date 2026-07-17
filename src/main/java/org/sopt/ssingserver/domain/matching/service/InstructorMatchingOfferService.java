@@ -14,6 +14,7 @@ import org.sopt.ssingserver.domain.instructor.error.InstructorErrorCode;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorMatchingSettingRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorPricePolicyRepository;
 import org.sopt.ssingserver.domain.instructor.repository.InstructorProfileRepository;
+import org.sopt.ssingserver.domain.instructor.service.InstructorWaitingPriceEstimator;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDecisionResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOfferDetailResult;
 import org.sopt.ssingserver.domain.matching.dto.result.InstructorMatchingOffersResult;
@@ -56,6 +57,7 @@ public class InstructorMatchingOfferService {
     private final InstructorProfileRepository instructorProfileRepository;
     private final InstructorMatchingSettingRepository instructorMatchingSettingRepository;
     private final InstructorPricePolicyRepository instructorPricePolicyRepository;
+    private final InstructorWaitingPriceEstimator waitingPriceEstimator;
     private final MatchingOfferRepository matchingOfferRepository;
     private final MatchingRequestGroupRepository matchingRequestGroupRepository;
     private final MatchingRequestGroupItemRepository matchingRequestGroupItemRepository;
@@ -124,6 +126,12 @@ public class InstructorMatchingOfferService {
                         .toList(),
                 matchingSetting.getMaxHeadcount(),
                 matchingSetting.isEquipmentReady(),
+                waitingPriceEstimator.estimate(
+                        pricePolicy.getBasePriceAmount(),
+                        pricePolicy.getAdditionalPersonPriceAmount(),
+                        matchingSetting.getAvailableDurationMinutes(),
+                        matchingSetting.getMaxHeadcount()
+                ),
                 new InstructorMatchingOffersResult.PricePolicyResult(
                         pricePolicy.getBasePriceAmount(),
                         pricePolicy.getAdditionalPersonPriceAmount()

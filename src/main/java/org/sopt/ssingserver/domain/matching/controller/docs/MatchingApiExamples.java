@@ -344,6 +344,7 @@ final class MatchingApiExamples {
                 List.of(120, 240),
                 3,
                 true,
+                105_000,
                 new InstructorMatchingOffersResult.PricePolicyResult(60_000, 20_000)
         );
     }
