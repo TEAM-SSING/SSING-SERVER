@@ -1,8 +1,9 @@
 package org.sopt.ssingserver.domain.lesson.repository;
 
+import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import jakarta.persistence.LockModeType;
 import org.sopt.ssingserver.domain.lesson.entity.Lesson;
 import org.sopt.ssingserver.domain.lesson.enums.LessonStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -24,6 +25,18 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     );
 
     Optional<Lesson> findByMatchingOfferId(Long matchingOfferId);
+
+    @Query("""
+            select lesson
+            from Lesson lesson
+            join fetch lesson.matchingOffer matchingOffer
+            join fetch lesson.instructorProfile
+            where matchingOffer.id in :matchingOfferIds
+            order by matchingOffer.id asc, lesson.id desc
+            """)
+    List<Lesson> findByMatchingOfferIdInOrderByOfferIdAscLessonIdDesc(
+            @Param("matchingOfferIds") Collection<Long> matchingOfferIds
+    );
 
     @EntityGraph(attributePaths = {
             "resort",

@@ -18,6 +18,44 @@ public interface MatchingRequestGroupItemRepository extends JpaRepository<Matchi
 
     Optional<MatchingRequestGroupItem> findFirstByMatchingRequestIdOrderByIdDesc(Long matchingRequestId);
 
+    // dev 매칭 조회에서 페이지 안 각 요청의 최신 그룹 연결을 한 번에 읽는다.
+    @Query("""
+            select item
+            from MatchingRequestGroupItem item
+            join fetch item.matchingRequestGroup
+            join fetch item.matchingRequest matchingRequest
+            join fetch matchingRequest.member
+            where matchingRequest.id in :matchingRequestIds
+              and item.id = (
+                  select max(latestItem.id)
+                  from MatchingRequestGroupItem latestItem
+                  where latestItem.matchingRequest = item.matchingRequest
+              )
+            order by matchingRequest.id asc
+            """)
+    List<MatchingRequestGroupItem> findLatestByMatchingRequestIdIn(
+            @Param("matchingRequestIds") Collection<Long> matchingRequestIds
+    );
+
+    // dev 매칭 조회에서 요청별 전체 그룹 이력을 읽어 동시에 살아있는 그룹이 여러 개인지 진단한다.
+    @Query("""
+            select item
+            from MatchingRequestGroupItem item
+            join fetch item.matchingRequestGroup matchingRequestGroup
+            join fetch item.matchingRequest matchingRequest
+            join fetch matchingRequest.member
+            join fetch matchingRequest.resort
+            left join fetch matchingRequest.matchingOffer requestOffer
+            left join fetch requestOffer.matchingRequestGroup
+            left join fetch requestOffer.instructorProfile requestInstructorProfile
+            left join fetch requestInstructorProfile.member
+            where matchingRequest.id in :matchingRequestIds
+            order by matchingRequest.id asc, item.id asc
+            """)
+    List<MatchingRequestGroupItem> findHistoryByMatchingRequestIdInOrderByRequestIdAscItemIdAsc(
+            @Param("matchingRequestIds") Collection<Long> matchingRequestIds
+    );
+
     // 강사 홈 카드 목록의 그룹 요청들을 한 번에 조회
     @EntityGraph(attributePaths = {
             "matchingRequestGroup",

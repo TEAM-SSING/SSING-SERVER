@@ -5,6 +5,19 @@
 	# 응답 압축
 	encode zstd gzip
 
-	# Spring Boot 컨테이너 프록시
-	reverse_proxy app:8080
+	# Adminer의 상대 경로 링크가 유지되도록 trailing slash를 고정한다.
+	redir /adminer /adminer/ 308
+
+	# /adminer prefix를 제거하고 dev 전용 Adminer 컨테이너로 전달한다.
+	handle_path /adminer/* {
+		reverse_proxy adminer:8080 {
+			# Adminer가 redirect와 링크에 외부 /adminer prefix를 다시 붙인다.
+			header_up X-Forwarded-Prefix /adminer
+		}
+	}
+
+	# 나머지 요청은 Spring Boot 컨테이너로 전달한다.
+	handle {
+		reverse_proxy app:8080
+	}
 }

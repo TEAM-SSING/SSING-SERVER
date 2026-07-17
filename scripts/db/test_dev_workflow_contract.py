@@ -1,5 +1,9 @@
 from pathlib import Path
+import os
 import re
+import subprocess
+import tempfile
+import textwrap
 import unittest
 
 
@@ -10,10 +14,12 @@ DEPLOY_WORKFLOW = ROOT / ".github/workflows/deploy-dev.yml"
 DB_CHECK_WORKFLOW = ROOT / ".github/workflows/db-seed-check.yml"
 LEGACY_MIGRATION_WORKFLOW = ROOT / ".github/workflows/legacy-migration-test.yml"
 DEV_COMPOSE = ROOT / "deploy/docker-compose.dev.yml"
+DEV_CADDY = ROOT / "deploy/Caddyfile"
 BUILD_GRADLE = ROOT / "build.gradle"
 DEV_ENV_EXAMPLE = ROOT / "deploy/env.dev.example"
 INTEGRATION_SOURCE_ROOT = ROOT / "src/integrationTest/java"
 INTEGRATION_PROFILE = ROOT / "src/integrationTest/resources/application-integration-test.properties"
+DEV_ADMINER_PLUGIN = ROOT / "deploy/adminer/001-ssing-autologin.php"
 DEV_RUNNERS = (
     ROOT / "scripts/db/dev-common.sh",
     ROOT / "scripts/db/reset-dev.sh",
@@ -52,6 +58,7 @@ class DevWorkflowContractTest(unittest.TestCase):
         cls.db_check = DB_CHECK_WORKFLOW.read_text(encoding="utf-8")
         cls.legacy_migration = LEGACY_MIGRATION_WORKFLOW.read_text(encoding="utf-8")
         cls.dev_compose = DEV_COMPOSE.read_text(encoding="utf-8")
+        cls.dev_caddy = DEV_CADDY.read_text(encoding="utf-8")
         cls.build_gradle = BUILD_GRADLE.read_text(encoding="utf-8")
         cls.dev_env_example = DEV_ENV_EXAMPLE.read_text(encoding="utf-8")
         cls.integration_profile = INTEGRATION_PROFILE.read_text(encoding="utf-8")
@@ -243,6 +250,8 @@ class DevWorkflowContractTest(unittest.TestCase):
             "bash scripts/db/test-mysql-client-auth.sh",
             "bash scripts/db/test-install-dev-release.sh",
             "bash scripts/db/test-dev-runner-contract.sh",
+            "bash scripts/db/test-dev-adminer-autologin-contract.sh",
+            "node --test src/test/js/dev-matching-console.test.mjs",
             "python3 scripts/db/test_dev_workflow_contract.py",
         )
         self.assertIn("if: matrix.shard == 'application'", self.ci_verify_job)
@@ -469,17 +478,19 @@ class DevWorkflowContractTest(unittest.TestCase):
             "./scripts/db/prepare-dev-deploy-db.sh --confirm-dev-deploy-reset main"
         )
         restart_guard_position = self.deploy_job.index("Compose 재시작 직전 현재 main SHA 재확인")
-        activate_env_position = self.deploy_job.index("mv -f .env.next .env")
+        activate_env_position = self.deploy_job.index('mv -f "$candidate_env" .env')
         restart_position = self.deploy_job.index("up --pull never -d --remove-orphans")
-        health_position = self.deploy_job.index('/actuator/health | grep -q')
+        app_health_position = self.deploy_job.index('/actuator/health | grep -q')
+        external_health_position = self.deploy_job.index("외부 도메인 HTTPS 헬스체크")
+        adminer_smoke_position = self.deploy_job.index("Adminer 자동 로그인 스모크 체크")
         restart_step = indented_block(
             self.deploy_job,
             "- name: EC2 Docker Compose 재시작",
             6,
         )
-        health_step = indented_block(
+        app_health_step = indented_block(
             self.deploy_job,
-            "- name: 애플리케이션 헬스체크",
+            "- name: 애플리케이션 내부 헬스체크 및 런타임 설정 승격",
             6,
         )
 
@@ -496,24 +507,25 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertLess(restart_guard_position, restart_position)
         self.assertLess(migration_position, activate_env_position)
         self.assertLess(restart_position, activate_env_position)
-        self.assertLess(health_position, activate_env_position)
+        self.assertLess(app_health_position, activate_env_position)
+        self.assertLess(activate_env_position, external_health_position)
+        self.assertLess(external_health_position, adminer_smoke_position)
         self.assertLess(marker_position, restart_position)
         self.assertNotIn("mv -f .env.next .env", restart_step)
         self.assertRegex(
             restart_step,
-            r"sudo env SSING_RUNTIME_ENV_FILE=\.env\.next \\\n"
-            r"\s+docker compose --env-file \.env\.next -f \"\$COMPOSE_FILE\" "
+            r'sudo env SSING_RUNTIME_ENV_FILE="\$candidate_env" \\\n'
+            r'\s+docker compose --env-file "\$candidate_env" -f "\$COMPOSE_FILE" '
             r"up --pull never -d --remove-orphans",
         )
         self.assertNotIn("docker compose --env-file .env.next -f \"$COMPOSE_FILE\" pull", restart_step)
-        self.assertRegex(
-            health_step,
-            r"if curl [^\n]+; then\n"
-            r"\s+echo \"헬스체크 성공:[^\n]+\"\n"
-            r"\s+echo \"검증을 마친 런타임 설정으로 원자적 전환\"\n"
-            r"\s+if ! mv -f \.env\.next \.env; then",
+        self.assertLess(
+            app_health_step.index('/actuator/health | grep -q'),
+            app_health_step.index('mv -f "$candidate_env" .env'),
         )
-        self.assertIn("런타임 설정 전환 실패", health_step)
+        self.assertNotIn("/adminer/", app_health_step)
+        self.assertIn("검증을 마친 런타임 설정으로 원자적 전환", app_health_step)
+        self.assertIn("런타임 설정 전환 실패", app_health_step)
         self.assertIn("기존 .env는 교체하지 않았습니다", restart_step)
         marker_step = indented_block(
             self.deploy_job,
@@ -524,8 +536,10 @@ class DevWorkflowContractTest(unittest.TestCase):
         self.assertIn("최신 main의 clean·migration·base seed", marker_step)
         self.assertNotIn("exit 1", marker_step)
         self.assertGreaterEqual(self.deploy_job.count(".dev-db-reset-incomplete"), 2)
-        self.assertIn("--env-file .env.next", self.deploy_job)
-        self.assertIn("SSING_RUNTIME_ENV_FILE=.env.next", self.deploy_job)
+        self.assertIn('--env-file "$candidate_env"', restart_step)
+        self.assertIn('SSING_RUNTIME_ENV_FILE="$candidate_env"', restart_step)
+        self.assertIn('--env-file "$candidate_env"', app_health_step)
+        self.assertIn('SSING_RUNTIME_ENV_FILE="$candidate_env"', app_health_step)
         self.assertIn("${SSING_RUNTIME_ENV_FILE:-.env}", self.dev_compose)
         self.assertIn("SSING_JPA_DDL_AUTO: validate", self.deploy_job)
 
@@ -540,6 +554,132 @@ class DevWorkflowContractTest(unittest.TestCase):
                         prepare_runner.index("run_dev_flyway validate"))
         self.assertLess(prepare_runner.index("run_dev_flyway validate"),
                         prepare_runner.index("apply_dev_sql_directory"))
+
+    def test_deploy_preserves_candidate_env_after_compose_starts(self):
+        restart_step = indented_block(
+            self.deploy_job,
+            "- name: EC2 Docker Compose 재시작",
+            6,
+        )
+        app_health_step = indented_block(
+            self.deploy_job,
+            "- name: 애플리케이션 내부 헬스체크 및 런타임 설정 승격",
+            6,
+        )
+        cleanup_step = indented_block(
+            self.deploy_job,
+            "- name: 배포 임시 비밀 파일 정리",
+            6,
+        )
+        candidate_marker = ".dev-deploy-compose-started"
+        candidate_assignment = (
+            'candidate_env=".env.candidate-${DEPLOY_SHA}-'
+            '${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}"'
+        )
+        marker_write = (
+            'printf \'%s\\n\' "$candidate_env" '
+            f'> {candidate_marker}.tmp'
+        )
+
+        self.assertIn("DEPLOY_SHA='$DEPLOY_SHA'", restart_step)
+        self.assertIn("DEPLOY_RUN_ID='$GITHUB_RUN_ID'", restart_step)
+        self.assertIn("DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT'", restart_step)
+        self.assertIn(candidate_assignment, restart_step)
+        self.assertIn('mv -f .env.next "$candidate_env"', restart_step)
+        self.assertIn(marker_write, restart_step)
+        self.assertIn(
+            f"mv -f {candidate_marker}.tmp {candidate_marker}",
+            restart_step,
+        )
+        self.assertLess(
+            restart_step.index(marker_write),
+            restart_step.index("up --pull never -d --remove-orphans"),
+        )
+        self.assertIn('SSING_RUNTIME_ENV_FILE="$candidate_env"', restart_step)
+        self.assertIn('--env-file "$candidate_env"', restart_step)
+
+        self.assertIn("DEPLOY_SHA='$DEPLOY_SHA'", app_health_step)
+        self.assertIn("DEPLOY_RUN_ID='$GITHUB_RUN_ID'", app_health_step)
+        self.assertIn("DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT'", app_health_step)
+        self.assertIn(candidate_assignment, app_health_step)
+        self.assertIn('active_candidate="$(< .dev-deploy-compose-started)"', app_health_step)
+        self.assertIn('if [ "$active_candidate" != "$candidate_env" ]; then', app_health_step)
+        self.assertIn('mv -f "$candidate_env" .env', app_health_step)
+        self.assertIn(f"rm -f {candidate_marker}", app_health_step)
+        self.assertLess(
+            app_health_step.index('mv -f "$candidate_env" .env'),
+            app_health_step.index(f"rm -f {candidate_marker}"),
+        )
+        self.assertLess(
+            app_health_step.index(f"rm -f {candidate_marker}"),
+            app_health_step.index("rm -f .env.candidate-*"),
+        )
+
+        marker_guard = f'if [ -e "$DEPLOY_DIR/{candidate_marker}" ]; then'
+        candidate_cleanup = 'rm -f "$DEPLOY_DIR/.env.next"'
+        self.assertIn(marker_guard, cleanup_step)
+        self.assertIn(
+            'active_candidate="$(< "$DEPLOY_DIR/.dev-deploy-compose-started")"',
+            cleanup_step,
+        )
+        self.assertIn(
+            r'[[ ! "$active_candidate" =~ ^\.env\.candidate-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]',
+            cleanup_step,
+        )
+        self.assertIn('"$DEPLOY_DIR/$active_candidate"', cleanup_step)
+        self.assertIn("실행 중일 수 있는 SHA 고정 후보 설정을 보존합니다", cleanup_step)
+        self.assertIn(candidate_cleanup, cleanup_step)
+        self.assertLess(cleanup_step.index(candidate_cleanup), cleanup_step.index(marker_guard))
+        self.assertNotIn("docker compose --env-file .env ", cleanup_step)
+
+        activation_start = restart_step.index(candidate_assignment)
+        activation_end = restart_step.index(
+            'sudo env SSING_RUNTIME_ENV_FILE="$candidate_env"',
+            activation_start,
+        )
+        activation_script = textwrap.dedent(restart_step[activation_start:activation_end])
+        cleanup_start = cleanup_step.index(candidate_cleanup)
+        cleanup_end = cleanup_step.index("\n          EOF", cleanup_start)
+        cleanup_script = textwrap.dedent(cleanup_step[cleanup_start:cleanup_end])
+
+        with tempfile.TemporaryDirectory() as deploy_dir:
+            deploy_path = Path(deploy_dir)
+            previous_sha = "b" * 40
+            previous_run_id = "101"
+            previous_run_attempt = "1"
+            previous_candidate = deploy_path / (
+                f".env.candidate-{previous_sha}-{previous_run_id}-{previous_run_attempt}"
+            )
+            marker = deploy_path / candidate_marker
+
+            (deploy_path / ".env.next").write_text("candidate-b", encoding="utf-8")
+            subprocess.run(
+                ["bash", "-c", activation_script],
+                cwd=deploy_path,
+                env={
+                    **os.environ,
+                    "DEPLOY_SHA": previous_sha,
+                    "DEPLOY_RUN_ID": previous_run_id,
+                    "DEPLOY_RUN_ATTEMPT": previous_run_attempt,
+                },
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual("candidate-b", previous_candidate.read_text(encoding="utf-8"))
+            self.assertEqual(previous_candidate.name, marker.read_text(encoding="utf-8").strip())
+
+            (deploy_path / ".env.next").write_text("candidate-c", encoding="utf-8")
+            subprocess.run(
+                ["bash", "-c", cleanup_script],
+                env={**os.environ, "DEPLOY_DIR": deploy_dir},
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertFalse((deploy_path / ".env.next").exists())
+            self.assertEqual("candidate-b", previous_candidate.read_text(encoding="utf-8"))
+            self.assertEqual(previous_candidate.name, marker.read_text(encoding="utf-8").strip())
 
     def test_main_sha_is_rechecked_before_db_mutation_and_restart(self):
         sha_check = (
@@ -618,6 +758,92 @@ class DevWorkflowContractTest(unittest.TestCase):
                 ROOT / "src/integrationTest/java/org/sopt/ssingserver/database" / source_name
             ).read_text(encoding="utf-8")
             self.assertIn('@Tag("legacy-migration")', source)
+
+    def test_adminer_auto_login_keeps_the_real_password_server_side_and_is_health_checked(self):
+        adminer_block = indented_block(self.dev_compose, "adminer:", 2)
+        caddy_block = indented_block(self.dev_compose, "caddy:", 2)
+        runtime_env_step = indented_block(
+            self.deploy_job,
+            "- name: EC2 런타임 환경변수 생성",
+            6,
+        )
+        app_health_step = indented_block(
+            self.deploy_job,
+            "- name: 애플리케이션 내부 헬스체크 및 런타임 설정 승격",
+            6,
+        )
+        adminer_smoke_step = indented_block(
+            self.deploy_job,
+            "- name: Adminer 자동 로그인 스모크 체크",
+            6,
+        )
+        plugin = DEV_ADMINER_PLUGIN.read_text(encoding="utf-8")
+
+        self.assertIn("image: adminer:5.4.2-standalone", adminer_block)
+        self.assertIn("ADMINER_DEFAULT_SERVER: ${SSING_ADMINER_DEFAULT_SERVER}", adminer_block)
+        self.assertIn("SSING_ADMINER_DB_USERNAME: ${SSING_DATASOURCE_USERNAME}", adminer_block)
+        self.assertIn(
+            "SSING_ADMINER_DB_NAME: ${SSING_DEV_DB_NAME:?SSING_DEV_DB_NAME is required}",
+            adminer_block,
+        )
+        self.assertIn("SSING_ADMINER_DB_PASSWORD_FILE: /run/secrets/adminer_db_password", adminer_block)
+        self.assertIn("./adminer/001-ssing-autologin.php:/var/www/html/plugins-enabled/001-ssing-autologin.php:ro", adminer_block)
+        self.assertIn("adminer_db_password", adminer_block)
+        self.assertNotIn("ports:", adminer_block)
+        self.assertNotIn("SSING_DATASOURCE_PASSWORD:", adminer_block)
+        self.assertNotIn("SSING_ADMINER_DB_PASSWORD:", adminer_block)
+        self.assertIn("- adminer", caddy_block)
+
+        self.assertIn("redir /adminer /adminer/ 308", self.dev_caddy)
+        self.assertIn("handle_path /adminer/*", self.dev_caddy)
+        self.assertIn("reverse_proxy adminer:8080", self.dev_caddy)
+        self.assertIn("header_up X-Forwarded-Prefix /adminer", self.dev_caddy)
+        self.assertIn("handle {", self.dev_caddy)
+        self.assertLess(
+            self.dev_caddy.index("handle_path /adminer/*"),
+            self.dev_caddy.index("reverse_proxy app:8080"),
+        )
+
+        self.assertIn("SSING_ADMINER_DEFAULT_SERVER=your-rds-endpoint", self.dev_env_example)
+        self.assertIn("SSING_DEV_DB_NAME=ssing", self.dev_env_example)
+        self.assertIn("SSING_ADMINER_DEFAULT_SERVER: ${{ vars.SSING_DEV_DB_HOST }}", self.deploy_job)
+        self.assertIn("SSING_ADMINER_DEFAULT_SERVER\n", self.deploy_job)
+        self.assertIn(
+            "printf 'SSING_ADMINER_DEFAULT_SERVER=%s\\n' \"$SSING_ADMINER_DEFAULT_SERVER\"",
+            self.deploy_job,
+        )
+        self.assertIn("SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}", runtime_env_step)
+        self.assertIn("SSING_DEV_DB_NAME\n", runtime_env_step)
+        self.assertIn(
+            "printf 'SSING_DEV_DB_NAME=%s\\n' \"$SSING_DEV_DB_NAME\"",
+            runtime_env_step,
+        )
+        self.assertIn("tar -czf .deploy-adminer.tgz -C deploy adminer", self.deploy_job)
+        self.assertIn("secrets/adminer-db-password.next", self.deploy_job)
+        self.assertIn("secrets/adminer-db-password'", self.deploy_job)
+
+        self.assertIn("SSING_ADMINER_DB_PASSWORD_FILE", plugin)
+        self.assertIn("function credentials", plugin)
+        self.assertIn("function loginForm", plugin)
+        self.assertIn("function login", plugin)
+        self.assertNotIn("SSING_DATASOURCE_PASSWORD", plugin)
+
+        app_health = app_health_step.index("/actuator/health")
+        env_promotion = app_health_step.index('mv -f "$candidate_env" .env')
+        self.assertLess(app_health, env_promotion)
+        self.assertNotIn("/adminer/", app_health_step)
+        self.assertNotIn("mv -f .env.next .env", adminer_smoke_step)
+        self.assertIn("auth[password]=ssing-managed-login", adminer_smoke_step)
+        self.assertIn("SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}", adminer_smoke_step)
+        self.assertIn("SSING_DEV_DB_NAME='$SSING_DEV_DB_NAME'", adminer_smoke_step)
+        self.assertIn('auth[db]=${SSING_DEV_DB_NAME}', adminer_smoke_step)
+        self.assertNotIn("auth[db]=ssing", adminer_smoke_step)
+        self.assertIn('name="logout"', adminer_smoke_step)
+        self.assertNotIn("<title>Login - Adminer</title>", adminer_smoke_step)
+        self.assertIn("--env-file .env", adminer_smoke_step)
+        self.assertIn("SSING_RUNTIME_ENV_FILE=.env", adminer_smoke_step)
+        self.assertIn("logs --tail=100 adminer caddy", adminer_smoke_step)
+        self.assertIn("앱 런타임 설정은 이미 승격되었습니다", adminer_smoke_step)
 
     def test_disposable_db_check_does_not_reference_shared_dev_credentials(self):
         forbidden = (

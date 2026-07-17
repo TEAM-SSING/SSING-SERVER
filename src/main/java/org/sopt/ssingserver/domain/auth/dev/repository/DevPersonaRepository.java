@@ -1,5 +1,6 @@
 package org.sopt.ssingserver.domain.auth.dev.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.sopt.ssingserver.domain.auth.dev.entity.DevPersona;
@@ -10,6 +11,9 @@ public interface DevPersonaRepository extends JpaRepository<DevPersona, Long> {
 
     @EntityGraph(attributePaths = "member")
     List<DevPersona> findAllByOrderByCreatedAtAsc();
+
+    @EntityGraph(attributePaths = "member")
+    List<DevPersona> findByMemberIdIn(Collection<Long> memberIds);
 
     boolean existsByPersonaKey(String personaKey);
 

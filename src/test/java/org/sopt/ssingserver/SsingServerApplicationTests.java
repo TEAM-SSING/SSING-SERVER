@@ -49,6 +49,8 @@ class SsingServerApplicationTests {
 
 	private static final Set<String> EXPECTED_OPEN_API_OPERATIONS = Set.of(
 			"GET /dev/auth/personas",
+			"GET /dev/matching/requests",
+			"GET /dev/matching/requests/{matchingRequestId}",
 			"POST /api/v1/consumer/auth/kakao",
 			"POST /api/v1/instructor/auth/kakao",
 			"POST /api/v1/auth/refresh",
@@ -78,6 +80,8 @@ class SsingServerApplicationTests {
 	);
 	private static final Set<String> PUBLIC_OPEN_API_OPERATIONS = Set.of(
 			"GET /dev/auth/personas",
+			"GET /dev/matching/requests",
+			"GET /dev/matching/requests/{matchingRequestId}",
 			"POST /api/v1/consumer/auth/kakao",
 			"POST /api/v1/instructor/auth/kakao",
 			"POST /api/v1/auth/refresh",
@@ -966,6 +970,16 @@ class SsingServerApplicationTests {
 		assertNoContentResponse(openApi, "POST /api/v1/auth/logout");
 		assertNoContentResponse(openApi, "PUT /api/v1/fcm-tokens");
 		assertNoContentResponse(openApi, "POST /api/v1/fcm-tokens/unregister");
+		assertSuccessDataSchemaReference(
+				openApi,
+				"GET /dev/matching/requests",
+				"#/components/schemas/DevMatchingRequestListResponse"
+		);
+		assertSuccessDataSchemaReference(
+				openApi,
+				"GET /dev/matching/requests/{matchingRequestId}",
+				"#/components/schemas/DevMatchingRequestDetailResponse"
+		);
 		assertThat(findOperation(openApi, "POST /api/v1/consumer/matching-requests")
 				.path("responses").has("201")).isTrue();
 		assertThat(findOperation(openApi, "POST /api/v1/consumer/matching-requests")
@@ -975,6 +989,34 @@ class SsingServerApplicationTests {
 				.path("application/json")
 				.path("examples")
 				.has("MATCHING_REQUEST_ALREADY_EXISTS")).isTrue();
+		JsonNode devMatchingDetailProperties = openApi.path("components")
+				.path("schemas")
+				.path("DevMatchingRequestDetailResponse")
+				.path("properties");
+		assertThat(devMatchingDetailProperties.has("requestRelations")).isTrue();
+		assertThat(devMatchingDetailProperties.path("requestRelations").path("description").asString())
+				.isNotBlank();
+		JsonNode devMatchingParticipantProperties = openApi.path("components")
+				.path("schemas")
+				.path("DevMatchingParticipantResponse")
+				.path("properties");
+		assertThat(devMatchingParticipantProperties.has("name")).isTrue();
+		assertThat(devMatchingParticipantProperties.path("name").path("description").asString())
+				.contains("기존 row는 null");
+		JsonNode participantNameSchema = devMatchingParticipantProperties.path("name");
+		boolean stringParticipantName = participantNameSchema.path("type").toString().matches(".*\\\"string\\\".*")
+				|| participantNameSchema.path("types").toString().matches(".*\\\"string\\\".*")
+				|| participantNameSchema.path("anyOf").toString().matches(".*\\\"string\\\".*");
+		boolean nullableParticipantName = participantNameSchema.path("nullable").asBoolean()
+				|| participantNameSchema.path("type").toString().matches(".*\\\"null\\\".*")
+				|| participantNameSchema.path("types").toString().matches(".*\\\"null\\\".*")
+				|| participantNameSchema.path("anyOf").toString().matches(".*\\\"null\\\".*");
+		assertThat(stringParticipantName).isTrue();
+		assertThat(nullableParticipantName).isTrue();
+		assertThat(textValues(openApi.path("components")
+				.path("schemas")
+				.path("DevMatchingParticipantResponse")
+				.path("required"))).contains("name");
 		assertAllLocalReferencesResolve(openApi, openApi);
 	}
 
@@ -1120,6 +1162,24 @@ class SsingServerApplicationTests {
 		JsonNode response = findOperation(openApi, operationKey).path("responses").path("204");
 		assertThat(response.isMissingNode()).as(operationKey + " 204 response").isFalse();
 		assertThat(response.has("content")).as(operationKey + " 204 content").isFalse();
+	}
+
+	private void assertSuccessDataSchemaReference(
+			JsonNode openApi,
+			String operationKey,
+			String expectedReference
+	) {
+		JsonNode dataSchema = findOperation(openApi, operationKey)
+				.path("responses")
+				.path("200")
+				.path("content")
+				.path("application/json")
+				.path("schema")
+				.path("properties")
+				.path("data");
+		assertThat(dataSchema.path("$ref").asString())
+				.as(operationKey + " success data schema")
+				.isEqualTo(expectedReference);
 	}
 
 	private void assertAllLocalReferencesResolve(JsonNode openApi, JsonNode node) {

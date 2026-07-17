@@ -2,6 +2,7 @@ package org.sopt.ssingserver.domain.payment.repository;
 
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.sopt.ssingserver.domain.payment.entity.MatchingRequestPayment;
@@ -20,6 +21,19 @@ public interface MatchingRequestPaymentRepository extends JpaRepository<Matching
     Optional<MatchingRequestPayment> findByMatchingRequestIdAndMatchingOfferId(
             Long matchingRequestId,
             Long matchingOfferId
+    );
+
+    // dev 매칭 조회에서 현재 제안들의 요청별 결제를 한 번에 읽는다.
+    @Query("""
+            select payment
+            from MatchingRequestPayment payment
+            join fetch payment.matchingRequest matchingRequest
+            join fetch payment.matchingOffer matchingOffer
+            where matchingOffer.id in :matchingOfferIds
+            order by matchingOffer.id asc, matchingRequest.id asc, payment.id desc
+            """)
+    List<MatchingRequestPayment> findByMatchingOfferIdInOrderByOfferIdAscRequestIdAscPaymentIdDesc(
+            @Param("matchingOfferIds") Collection<Long> matchingOfferIds
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
