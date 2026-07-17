@@ -338,7 +338,13 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
 
     private String loadStoredSport() {
         return jdbcTemplate.queryForObject(
-                "SELECT sport FROM instructor_matching_settings",
+                """
+                SELECT setting.sport
+                FROM instructor_matching_settings setting
+                JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
+                JOIN dev_personas persona ON persona.member_id = profile.member_id
+                WHERE persona.persona_key = '보법다른-유정-승인강사'
+                """,
                 String.class
         );
     }
@@ -346,9 +352,14 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
     private List<String> loadStoredLessonLevels() {
         return jdbcTemplate.queryForList(
                 """
-                SELECT lesson_level
-                FROM instructor_matching_settings_lesson_levels
-                ORDER BY lesson_level
+                SELECT level.lesson_level
+                FROM instructor_matching_settings_lesson_levels level
+                JOIN instructor_matching_settings setting
+                  ON setting.id = level.instructor_matching_setting_id
+                JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
+                JOIN dev_personas persona ON persona.member_id = profile.member_id
+                WHERE persona.persona_key = '보법다른-유정-승인강사'
+                ORDER BY level.lesson_level
                 """,
                 String.class
         );
@@ -357,9 +368,14 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
     private List<Integer> loadStoredDurationMinutes() {
         return jdbcTemplate.queryForList(
                 """
-                SELECT available_duration_minutes
-                FROM instructor_matching_settings_available_durations
-                ORDER BY available_duration_minutes
+                SELECT duration.available_duration_minutes
+                FROM instructor_matching_settings_available_durations duration
+                JOIN instructor_matching_settings setting
+                  ON setting.id = duration.instructor_matching_setting_id
+                JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
+                JOIN dev_personas persona ON persona.member_id = profile.member_id
+                WHERE persona.persona_key = '보법다른-유정-승인강사'
+                ORDER BY duration.available_duration_minutes
                 """,
                 Integer.class
         );

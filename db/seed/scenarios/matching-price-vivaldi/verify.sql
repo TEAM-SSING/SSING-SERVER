@@ -53,6 +53,8 @@ SELECT (
        AND setting.is_equipment_ready = b'1'
        AND setting.is_exposed = b'1') = 1
     AND
+    (SELECT COUNT(*) FROM instructor_matching_settings WHERE is_exposed = b'1') = 1
+    AND
     (SELECT COUNT(*)
      FROM instructor_matching_settings_lesson_levels level
      JOIN instructor_matching_settings setting

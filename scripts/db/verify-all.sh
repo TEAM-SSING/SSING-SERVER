@@ -5,9 +5,12 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-scenario_key="${1:-}"
-[[ -n "$scenario_key" ]] || fail "scenario key is required"
+seed_target="${1:-$IDLE_SEED_TARGET}"
 
 assert_local_target
-assert_scenario_key "$scenario_key"
-run_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$scenario_key/verify.sql"
+assert_seed_target "$seed_target"
+if is_idle_seed_target "$seed_target"; then
+  run_mysql_file "$PROJECT_ROOT/db/seed/verify-base.sql"
+else
+  run_mysql_file "$PROJECT_ROOT/db/seed/scenarios/$seed_target/verify.sql"
+fi

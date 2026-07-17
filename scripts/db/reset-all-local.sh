@@ -11,12 +11,15 @@ source "$SCRIPT_DIR/common.sh"
 }
 readonly confirmation="$1"
 
+printf 'Resetting seed target: %s\n' "$IDLE_SEED_TARGET"
+"$SCRIPT_DIR/reset-local.sh" "$confirmation" "$IDLE_SEED_TARGET"
+
 scenario_found=false
 for scenario_directory in "$PROJECT_ROOT"/db/seed/scenarios/*; do
   [[ -d "$scenario_directory" ]] || continue
   scenario_found=true
   scenario_key="$(basename "$scenario_directory")"
-  printf 'Resetting seed scenario: %s\n' "$scenario_key"
+  printf 'Resetting seed target: %s\n' "$scenario_key"
   "$SCRIPT_DIR/reset-local.sh" "$confirmation" "$scenario_key"
 done
 

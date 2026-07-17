@@ -98,7 +98,7 @@ class DatabaseSeedContractTest {
     @BeforeEach
     void resetDatabaseAndApplyBaseSeed() {
         DatabaseCleaner.clean(dataSource);
-        BaseSeedLoader.apply(dataSource);
+        BaseSeedLoader.apply(SharedMySqlDatabase.dataSource());
     }
 
     @ParameterizedTest(name = "{0} seed 계약")
@@ -137,6 +137,28 @@ class DatabaseSeedContractTest {
     @Test
     void 자동_Dev_배포용_base_verify_SQL을_실제_MySQL에서_검증한다() {
         runSql("db/seed/verify-base.sql");
+    }
+
+    @Test
+    void idle_base는_모든_QA_계정을_제공하고_scheduler_실행_후에도_매칭상태를_만들지_않는다() throws Exception {
+        String consumerToken = accessTokenProvider.createAccessToken(
+                personaMemberId("냅다레전드-유빈-일반강습생"),
+                MemberRole.CONSUMER
+        );
+        String instructorToken = accessTokenProvider.createAccessToken(
+                personaMemberId("보법다른-유정-승인강사"),
+                MemberRole.INSTRUCTOR
+        );
+
+        runSql("db/seed/verify-base.sql");
+        assertNoActiveMatchingRequest(consumerToken);
+        assertIdleInstructorHome(instructorToken);
+
+        matchingSearchScheduler.runScheduledSearch();
+
+        runSql("db/seed/verify-base.sql");
+        assertNoActiveMatchingRequest(consumerToken);
+        assertIdleInstructorHome(instructorToken);
     }
 
     @ParameterizedTest(name = "{0} 매칭 요청 생성")
@@ -197,17 +219,10 @@ class DatabaseSeedContractTest {
     }
 
     @Test
-    void PM_dev_playground는_원본_snapshot을_바꾸지_않고_활성_요청이_없는_QA_소비자를_추가한다() throws Exception {
+    void idle_base_QA_소비자는_PM_snapshot과_scheduler_전이에서도_활성요청이_생기지_않는다() throws Exception {
         applyScenario("pm-full-requested-catalog");
 
         PmSeedSnapshotContract.assertMatches(jdbcTemplate, objectMapper);
-        runSql("db/seed/scenarios/pm-full-requested-catalog/dev-playground.sql");
-        runSql("db/seed/scenarios/pm-full-requested-catalog/verify-dev-playground.sql");
-        PmSeedSnapshotContract.assertMatchesIgnoringConsumerPersona(
-                jdbcTemplate,
-                objectMapper,
-                "냅다레전드-유빈-일반강습생"
-        );
 
         Long memberId = personaMemberId("냅다레전드-유빈-일반강습생");
         String consumerToken = accessTokenProvider.createAccessToken(memberId, MemberRole.CONSUMER);
@@ -731,6 +746,14 @@ class DatabaseSeedContractTest {
                 .andExpect(jsonPath("$.data.matchingStatus").doesNotExist());
     }
 
+    private void assertIdleInstructorHome(String instructorToken) throws Exception {
+        mockMvc.perform(get("/api/v1/instructor/home")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lessonCards").isEmpty())
+                .andExpect(jsonPath("$.data.matchingPeopleCount").value(0));
+    }
+
     private void assertConsumerHomeLessonReadback(String consumerToken, long lessonId) throws Exception {
         mockMvc.perform(get("/api/v1/consumer/home")
                         .header(HttpHeaders.AUTHORIZATION, bearer(consumerToken)))
@@ -1103,6 +1126,6 @@ class DatabaseSeedContractTest {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new FileSystemResource(path));
         populator.setSqlScriptEncoding(StandardCharsets.UTF_8.name());
         populator.setContinueOnError(false);
-        populator.execute(dataSource);
+        populator.execute(SharedMySqlDatabase.dataSource());
     }
 }

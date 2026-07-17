@@ -42,7 +42,7 @@ jobs:
           test "$exit_code" -eq 2
           grep -q -- "Usage:" <<< "$output"
 
-      - name: 모든 seed scenario local reset 검증
+      - name: idle base와 모든 seed scenario local reset 검증
         env:
           SSING_LOCAL_DB_ROOT_PASSWORD: 'local seed #42;"quoted"=value'
         run: ./scripts/db/reset-all-local.sh --confirm-local-reset

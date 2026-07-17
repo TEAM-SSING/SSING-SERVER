@@ -10,6 +10,7 @@ execution_scope:
 base_dependencies:
   - db/seed/base/001_reference_data.sql
   - db/seed/base/010_dev_personas.sql
+  - db/seed/base/020_instructor_foundations.sql
 source:
   spreadsheet: SSING 유저·강사 페르소나 목데이터
   request: matching_requests!A9:L9
@@ -29,6 +30,7 @@ personas:
 start_state:
   resort_code: VIVALDI_PARK
   pass_fee_amount: 25000
+  exposed_instructor_count: 1
   active_matching_request_count: 0
 action:
   method: POST

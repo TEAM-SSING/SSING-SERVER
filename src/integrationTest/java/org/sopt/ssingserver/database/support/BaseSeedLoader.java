@@ -1,5 +1,9 @@
 package org.sopt.ssingserver.database.support;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import javax.sql.DataSource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -8,21 +12,28 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 /** Flyway가 만든 최신 schema에 테스트 공통 base seed만 다시 적용한다. */
 public final class BaseSeedLoader {
 
-    private static final String[] BASE_SEED_FILES = {
-            "db/seed/base/001_reference_data.sql",
-            "db/seed/base/010_dev_personas.sql"
-    };
+    private static final Path BASE_SEED_DIRECTORY = Path.of("db/seed/base");
 
     private BaseSeedLoader() {
     }
 
     public static void apply(DataSource dataSource) {
-        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-        for (String path : BASE_SEED_FILES) {
-            populator.addScript(new FileSystemResource(path));
+        try (var seedFiles = Files.list(BASE_SEED_DIRECTORY)) {
+            seedFiles
+                    .filter(path -> path.getFileName().toString().endsWith(".sql"))
+                    .sorted()
+                    .forEach(path -> applyScript(dataSource, path));
+        } catch (IOException exception) {
+            throw new IllegalStateException("base seed SQL 목록을 읽지 못했습니다.", exception);
         }
-        populator.execute(dataSource);
         assertRequiredData(dataSource);
+    }
+
+    private static void applyScript(DataSource dataSource, Path path) {
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new FileSystemResource(path));
+        populator.setSqlScriptEncoding(StandardCharsets.UTF_8.name());
+        populator.setContinueOnError(false);
+        populator.execute(dataSource);
     }
 
     public static void assertRequiredData(DataSource dataSource) {
@@ -52,20 +63,23 @@ public final class BaseSeedLoader {
                 Integer.class
         );
         Integer requiredPersonas = jdbcTemplate.queryForObject(
-                """
-                SELECT COUNT(*)
-                FROM dev_personas
-                WHERE persona_key IN (
-                    '대뜸GOAT-성빈-일반강습생',
-                    '보법다른-유정-승인강사'
-                )
-                """,
+                "SELECT COUNT(*) FROM dev_personas",
+                Integer.class
+        );
+        Integer idleInstructorSettings = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM instructor_matching_settings WHERE is_exposed = b'0'",
+                Integer.class
+        );
+        Integer matchingRequests = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_requests",
                 Integer.class
         );
 
         if (activeFeePolicies == null || activeFeePolicies != 1
                 || requiredResorts == null || requiredResorts != 11
-                || requiredPersonas == null || requiredPersonas != 2) {
+                || requiredPersonas == null || requiredPersonas != 14
+                || idleInstructorSettings == null || idleInstructorSettings != 4
+                || matchingRequests == null || matchingRequests != 0) {
             throw new IllegalStateException("migration 필수 데이터 또는 base seed 계약이 충족되지 않았습니다.");
         }
     }

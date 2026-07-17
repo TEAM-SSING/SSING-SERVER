@@ -7,6 +7,7 @@ readonly PROJECT_ROOT="$(cd "$DB_SCRIPT_DIR/../.." && pwd)"
 readonly FLYWAY_IMAGE="flyway/flyway:12.4.0-alpine"
 readonly MYSQL_IMAGE="mysql:8.4.8"
 readonly MYSQL_CLIENT_DEFAULTS_PATH="/run/secrets/ssing-mysql-client.cnf"
+readonly IDLE_SEED_TARGET="idle-base"
 
 fail() {
   printf 'seed error: %s\n' "$*" >&2
@@ -36,6 +37,18 @@ assert_scenario_key() {
     || fail "invalid scenario key: $scenario_key"
   [[ -d "$PROJECT_ROOT/db/seed/scenarios/$scenario_key" ]] \
     || fail "unknown scenario key: $scenario_key"
+}
+
+is_idle_seed_target() {
+  [[ "$1" == "$IDLE_SEED_TARGET" ]]
+}
+
+assert_seed_target() {
+  local seed_target="$1"
+  if is_idle_seed_target "$seed_target"; then
+    return 0
+  fi
+  assert_scenario_key "$seed_target"
 }
 
 flyway_url() {

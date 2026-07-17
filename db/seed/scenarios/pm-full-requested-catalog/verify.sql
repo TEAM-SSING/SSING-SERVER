@@ -26,7 +26,7 @@ SELECT (
        AND display_name = '무주덕유산리조트'
        AND pass_fee_amount = 30000) = 1
     AND
-    (SELECT COUNT(*) FROM dev_personas) = 13
+    (SELECT COUNT(*) FROM dev_personas) = 14
     AND
     (SELECT COUNT(*)
      FROM dev_personas persona
@@ -51,7 +51,7 @@ SELECT (
        AND (
            (member.role = 'CONSUMER' AND persona.template = 'GENERAL_CONSUMER')
            OR (member.role = 'INSTRUCTOR' AND persona.template = 'INSTRUCTOR_APPROVED')
-       )) = 13
+       )) = 14
     AND
     (SELECT COUNT(*) FROM instructor_profiles) = 4
     AND

@@ -28,32 +28,17 @@ final class PmSeedSnapshotContract {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
-    private final Set<String> ignoredConsumerPersonaKeys;
 
     private PmSeedSnapshotContract(
             JdbcTemplate jdbcTemplate,
-            ObjectMapper objectMapper,
-            Set<String> ignoredConsumerPersonaKeys
+            ObjectMapper objectMapper
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
-        this.ignoredConsumerPersonaKeys = ignoredConsumerPersonaKeys;
     }
 
     static void assertMatches(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) throws IOException {
-        new PmSeedSnapshotContract(jdbcTemplate, objectMapper, Set.of()).assertMatches();
-    }
-
-    static void assertMatchesIgnoringConsumerPersona(
-            JdbcTemplate jdbcTemplate,
-            ObjectMapper objectMapper,
-            String ignoredPersonaKey
-    ) throws IOException {
-        new PmSeedSnapshotContract(
-                jdbcTemplate,
-                objectMapper,
-                Set.of(ignoredPersonaKey)
-        ).assertMatches();
+        new PmSeedSnapshotContract(jdbcTemplate, objectMapper).assertMatches();
     }
 
     // DB에 원본 source key를 저장하지 않으므로 가변 ID·시각을 뺀 aggregate 값의 multiset을 비교한다.
@@ -63,17 +48,29 @@ final class PmSeedSnapshotContract {
                 .filter(aggregate -> aggregate.type().equals("RESORT"))
                 .map(aggregate -> aggregate.json().path("code").asText())
                 .toList());
+        Set<String> pmConsumerPersonaKeys = Set.copyOf(expected.stream()
+                .filter(aggregate -> aggregate.type().equals("CONSUMER"))
+                .map(aggregate -> aggregate.json().path("personaKey").asText())
+                .toList());
+        Set<String> pmInstructorPersonaKeys = Set.copyOf(expected.stream()
+                .filter(aggregate -> aggregate.type().equals("INSTRUCTOR"))
+                .map(aggregate -> aggregate.json().path("personaKey").asText())
+                .toList());
         List<ActualAggregate> actual = new ArrayList<>();
         // Base-only 리조트는 PM 시트의 9개 원본 aggregate 계약에 포함하지 않는다.
         actual.addAll(readActualResorts().stream()
                 .filter(aggregate -> pmResortCodes.contains(aggregate.json().path("code").asText()))
                 .toList());
         actual.addAll(readActualConsumers().stream()
-                .filter(aggregate -> !ignoredConsumerPersonaKeys.contains(
+                .filter(aggregate -> pmConsumerPersonaKeys.contains(
                         aggregate.json().path("personaKey").asText()
                 ))
                 .toList());
-        actual.addAll(readActualInstructors());
+        actual.addAll(readActualInstructors().stream()
+                .filter(aggregate -> pmInstructorPersonaKeys.contains(
+                        aggregate.json().path("personaKey").asText()
+                ))
+                .toList());
         actual.addAll(readActualRequests());
 
         for (String aggregateType : List.of("RESORT", "CONSUMER", "INSTRUCTOR", "REQUEST")) {

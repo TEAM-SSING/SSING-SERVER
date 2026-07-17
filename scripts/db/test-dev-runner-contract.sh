@@ -156,10 +156,6 @@ sudo() {
       printf ' SQL_STAGE=utf8\n' >> "$FAKE_COMMAND_LOG"
     elif [[ "$sql_payload" == *"seed_contract_assertion"* ]]; then
       printf ' SQL_STAGE=verify\n' >> "$FAKE_COMMAND_LOG"
-    elif [[ "$sql_payload" == *"Dev QA playground overlay"* ]]; then
-      printf ' SQL_STAGE=playground\n' >> "$FAKE_COMMAND_LOG"
-    elif [[ "$sql_payload" == *"dev_playground_contract_assertion"* ]]; then
-      printf ' SQL_STAGE=playground-verify\n' >> "$FAKE_COMMAND_LOG"
     fi
     case "${FAKE_FAIL_STAGE:-}" in
       base)
@@ -172,16 +168,11 @@ sudo() {
         [[ "$sql_payload" != *"Local/CI SNAPSHOT only"* ]] || return 45
         ;;
       verify)
-        [[ "$sql_payload" != *"seed_contract_assertion"* ]] || return 46
+        [[ "$sql_payload" != *"seed_contract_assertion"* \
+            || "$sql_payload" == *"base_seed_contract_assertion"* ]] || return 46
         ;;
       utf8)
         [[ "$sql_payload" != *"seed_utf8_contract_assertion"* ]] || return 47
-        ;;
-      playground)
-        [[ "$sql_payload" != *"Dev QA playground overlay"* ]] || return 48
-        ;;
-      playground-verify)
-        [[ "$sql_payload" != *"dev_playground_contract_assertion"* ]] || return 49
         ;;
     esac
     return 0
@@ -278,11 +269,34 @@ app-stop| compose .* stop app |1
 flyway-clean| flyway/flyway:.* clean[[:space:]]*$|1
 migrate| flyway/flyway:.* migrate[[:space:]]*$|1
 base|SQL_STAGE=base|1
+base-verify|SQL_STAGE=base-verify|1
 scenario|SQL_STAGE=scenario|1
 scenario-verify|SQL_STAGE=verify|1
 utf8-verify|SQL_STAGE=utf8|1
-playground|SQL_STAGE=playground$|1
-playground-verify|SQL_STAGE=playground-verify|1
+final-validate| flyway/flyway:.* validate[[:space:]]*$|1
+app-start| compose .* up --detach app |1
+health|/actuator/health|1
+persona|/dev/auth/personas|1
+EOF
+}
+
+assert_idle_success_order() {
+  local command_log="$1"
+  local previous_position=0
+  local label pattern occurrence position
+  while IFS='|' read -r label pattern occurrence; do
+    position="$(command_position "$command_log" "$pattern" "$occurrence")"
+    [[ -n "$position" ]] || fail_test "idle-base 성공 순서에서 $label 단계가 없습니다."
+    [[ "$position" -gt "$previous_position" ]] \
+      || fail_test "idle-base 성공 순서가 잘못됐습니다: $label"
+    previous_position="$position"
+  done <<'EOF'
+app-stop| compose .* stop app |1
+flyway-clean| flyway/flyway:.* clean[[:space:]]*$|1
+migrate| flyway/flyway:.* migrate[[:space:]]*$|1
+base|SQL_STAGE=base|1
+base-verify|SQL_STAGE=base-verify|1
+utf8-verify|SQL_STAGE=utf8|1
 final-validate| flyway/flyway:.* validate[[:space:]]*$|1
 app-start| compose .* up --detach app |1
 health|/actuator/health|1
@@ -336,7 +350,7 @@ run_case() {
   local fail_stage="$2"
   local confirmation="$3"
   local ref_name="$4"
-  local scenario="$5"
+  local seed_target="$5"
   local expected_success="$6"
   local target_hash_override="${7:-}"
   local preexisting_marker="${8:-false}"
@@ -402,10 +416,10 @@ run_case() {
     ln -s "$(command -v chmod)" "$isolated_bin/chmod"
     /usr/bin/env -u 'BASH_FUNC_docker%%' PATH="$isolated_bin" /bin/bash \
       "$reset_script" \
-      "$confirmation" "$ref_name" "$scenario" > "$output_file" 2>&1
+      "$confirmation" "$ref_name" "$seed_target" > "$output_file" 2>&1
   else
     bash "$reset_script" \
-      "$confirmation" "$ref_name" "$scenario" > "$output_file" 2>&1
+      "$confirmation" "$ref_name" "$seed_target" > "$output_file" 2>&1
   fi
   local exit_code=$?
   set -e
@@ -645,6 +659,8 @@ printf '%s\n' '-- migration fixture' 'SELECT 1;' \
   > "$missing_artifact_root/src/main/resources/db/migration/V1__fixture.sql"
 printf '%s\n' '-- base fixture' 'SELECT 1;' \
   > "$missing_artifact_root/db/seed/base/001_fixture.sql"
+printf '%s\n' '-- base verify fixture' 'SELECT 1;' \
+  > "$missing_artifact_root/db/seed/verify-base.sql"
 printf '%s\n' '-- scenario fixture' 'SELECT 1;' \
   > "$missing_artifact_root/db/seed/scenarios/matching-price-vivaldi/seed.sql"
 printf '%s\n' '-- utf8 fixture' 'SELECT 1;' \
@@ -669,8 +685,8 @@ grep -Fq '이전 reset의 부분 또는 미확인 상태' \
 run_case invalid-ref "" --confirm-dev-reset feature pm-full-requested-catalog false
 assert_no_mutation_command "$TEST_TMP/invalid-ref/commands.log"
 
-run_case invalid-scenario "" --confirm-dev-reset main not-allowed false
-assert_no_mutation_command "$TEST_TMP/invalid-scenario/commands.log"
+run_case invalid-seed-target "" --confirm-dev-reset main not-allowed false
+assert_no_mutation_command "$TEST_TMP/invalid-seed-target/commands.log"
 
 (
   RUN_CASE_MISSING_COMMAND=docker \
@@ -814,11 +830,10 @@ done <<'EOF'
 flyway-clean|Flyway clean
 flyway-migrate|Flyway migrate
 base|Base Seed 적용
+base-verify|Base Seed 검증
 scenario|Scenario Seed 적용
-verify|Scenario와 UTF-8 검증
-utf8|Scenario와 UTF-8 검증
-playground|PM dev playground 적용과 검증
-playground-verify|PM dev playground 적용과 검증
+verify|Scenario 검증
+utf8|UTF-8 검증
 flyway-validate|최종 Flyway validate와 연결 검증
 final-charset|최종 Flyway validate와 연결 검증
 EOF
@@ -868,13 +883,14 @@ grep -Fq '현재 앱 상태: 정상 실행(health UP)' \
   "$TEST_TMP/failure-persona-encoding/report.md" \
   || fail_test "문자셋 smoke 실패 report가 이미 확인한 health UP 상태를 잃었습니다."
 
-for success_scenario in \
+for success_seed_target in \
+  idle-base \
   matching-price-vivaldi \
   matching-no-candidate-alpensia \
   matching-multi-request-oak \
   pm-full-requested-catalog; do
-  run_case "success-${success_scenario}" "" \
-    --confirm-dev-reset main "$success_scenario" true
+  run_case "success-${success_seed_target}" "" \
+    --confirm-dev-reset main "$success_seed_target" true
 done
 
 (
@@ -884,17 +900,11 @@ done
       --confirm-dev-reset main matching-price-vivaldi true
 )
 
-for non_pm_scenario in \
-  matching-price-vivaldi \
-  matching-no-candidate-alpensia \
-  matching-multi-request-oak; do
-  ! grep -Fq 'SQL_STAGE=playground' \
-    "$TEST_TMP/success-${non_pm_scenario}/commands.log" \
-    || fail_test "$non_pm_scenario 시나리오에 PM playground overlay를 적용했습니다."
-done
-grep -Fq 'SQL_STAGE=playground' \
-  "$TEST_TMP/success-pm-full-requested-catalog/commands.log" \
-  || fail_test "PM 시나리오에 dev playground overlay가 적용되지 않았습니다."
+assert_idle_success_order \
+  "$TEST_TMP/success-idle-base/commands.log"
+! grep -Eq 'SQL_STAGE=(scenario|verify)' \
+  "$TEST_TMP/success-idle-base/commands.log" \
+  || fail_test "idle-base reset이 scenario SQL을 실행했습니다."
 assert_pm_success_order \
   "$TEST_TMP/success-pm-full-requested-catalog/commands.log"
 [[ "$(grep -Fc 'character_set_client' \
