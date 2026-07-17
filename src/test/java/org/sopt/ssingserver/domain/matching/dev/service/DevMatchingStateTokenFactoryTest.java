@@ -83,7 +83,7 @@ class DevMatchingStateTokenFactoryTest {
                 List.of()
         );
 
-        assertThat(first).startsWith("v1:").isEqualTo(reordered).isNotEqualTo(changed);
+        assertThat(first).startsWith("v2:").isEqualTo(reordered).isNotEqualTo(changed);
     }
 
     @Test
@@ -108,6 +108,50 @@ class DevMatchingStateTokenFactoryTest {
         );
 
         assertThat(before).isNotEqualTo(after);
+    }
+
+    @Test
+    void stateToken은_문자열_구분자를_필드_경계와_구분한다() {
+        DevMatchingPersonResponse firstPerson = person("a|b", "c");
+        DevMatchingPersonResponse secondPerson = person("a", "b|c");
+
+        String first = tokenForPerson(firstPerson);
+        String second = tokenForPerson(secondPerson);
+
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    void stateToken은_null과_실제_null_표현_문자열을_구분한다() {
+        DevMatchingPersonResponse nullPersonaKey = person(null, "같은 이름");
+        DevMatchingPersonResponse literalNullPersonaKey = person("<null>", "같은 이름");
+
+        String first = tokenForPerson(nullPersonaKey);
+        String second = tokenForPerson(literalNullPersonaKey);
+
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    private String tokenForPerson(DevMatchingPersonResponse person) {
+        return factory.create(
+                301L,
+                MatchingStatus.SEARCHING,
+                List.of(person),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+    }
+
+    private DevMatchingPersonResponse person(String personaKey, String displayName) {
+        return new DevMatchingPersonResponse(
+                DevMatchingPersonRole.CONSUMER,
+                12L,
+                null,
+                personaKey,
+                displayName
+        );
     }
 
     private DevMatchingParticipantResponse participant(String name) {

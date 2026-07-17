@@ -749,7 +749,7 @@
             <section class="hero">
                 <div class="metric"><label>계산된 MatchingStatus</label><strong>${statusText(detail.matchingStatus, detail.resolutionState)}</strong><code>${escapeHtml(detail.matchingStatus || detail.resolutionState)}</code></div>
                 <div class="metric"><label>원본 Request</label><strong>${escapeHtml(detail.requestStatus)}</strong><code>reason: ${escapeHtml(detail.requestStatusReason || "-")}</code></div>
-                <div class="metric"><label>State token</label><strong>v1 snapshot</strong><code title="${escapeHtml(detail.stateToken)}">${escapeHtml(shortToken(detail.stateToken))}</code></div>
+                <div class="metric"><label>State token</label><strong>조회 snapshot</strong><code title="${escapeHtml(detail.stateToken)}">${escapeHtml(shortToken(detail.stateToken))}</code></div>
             </section>
 
             <section class="section">

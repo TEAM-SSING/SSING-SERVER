@@ -478,6 +478,7 @@ jobs:
           SSING_DATASOURCE_PASSWORD: ${{ secrets.SSING_DEV_DATASOURCE_PASSWORD }}
           SSING_JPA_DDL_AUTO: validate
           SSING_ADMINER_DEFAULT_SERVER: ${{ vars.SSING_DEV_DB_HOST }}
+          SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}
           SSING_JWT_SECRET: ${{ secrets.SSING_DEV_JWT_SECRET }}
           SSING_KAKAO_APP_ID: ${{ vars.SSING_DEV_KAKAO_APP_ID }}
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
@@ -501,6 +502,7 @@ jobs:
             SSING_DATASOURCE_USERNAME
             SSING_DATASOURCE_PASSWORD
             SSING_ADMINER_DEFAULT_SERVER
+            SSING_DEV_DB_NAME
             SSING_JWT_SECRET
             SSING_KAKAO_APP_ID
             SSING_DEV_DOMAIN
@@ -554,6 +556,7 @@ jobs:
             printf 'SSING_DATASOURCE_PASSWORD=%s\n' "$SSING_DATASOURCE_PASSWORD"
             printf 'SSING_JPA_DDL_AUTO=%s\n' "$SSING_JPA_DDL_AUTO"
             printf 'SSING_ADMINER_DEFAULT_SERVER=%s\n' "$SSING_ADMINER_DEFAULT_SERVER"
+            printf 'SSING_DEV_DB_NAME=%s\n' "$SSING_DEV_DB_NAME"
             printf 'SSING_JWT_SECRET=%s\n' "$SSING_JWT_SECRET"
             printf 'SSING_KAKAO_APP_ID=%s\n' "$SSING_KAKAO_APP_ID"
             printf 'SSING_DEV_DOMAIN=%s\n' "$SSING_DEV_DOMAIN"
@@ -725,7 +728,7 @@ jobs:
           SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
 
           if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' bash -s" <<'EOF'
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_RUN_ID='$GITHUB_RUN_ID' DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT' bash -s" <<'EOF'
           set -euo pipefail
           echo "배포 디렉터리 이동: $DEPLOY_DIR"
           cd "$DEPLOY_DIR"
@@ -741,15 +744,21 @@ jobs:
           fi
 
           echo "사전 검증에서 받은 후보 image로 Docker Compose 컨테이너 재시작"
-          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
-            docker compose --env-file .env.next -f "$COMPOSE_FILE" up --pull never -d --remove-orphans
+          # 다음 배포가 .env.next를 덮어써도 실행 중 후보를 찾을 수 있도록 run별 파일과 marker를 함께 남긴다.
+          candidate_env=".env.candidate-${DEPLOY_SHA}-${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}"
+          mv -f .env.next "$candidate_env"
+          printf '%s\n' "$candidate_env" > .dev-deploy-compose-started.tmp
+          chmod 600 .dev-deploy-compose-started.tmp
+          mv -f .dev-deploy-compose-started.tmp .dev-deploy-compose-started
+          sudo env SSING_RUNTIME_ENV_FILE="$candidate_env" \
+            docker compose --env-file "$candidate_env" -f "$COMPOSE_FILE" up --pull never -d --remove-orphans
 
           echo "Docker Compose 컨테이너 상태"
-          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
-            docker compose --env-file .env.next -f "$COMPOSE_FILE" ps
+          sudo env SSING_RUNTIME_ENV_FILE="$candidate_env" \
+            docker compose --env-file "$candidate_env" -f "$COMPOSE_FILE" ps
           EOF
           then
-            echo "::error title=EC2 Docker Compose 재시작 실패::Docker 실행 상태, 이미지 pull 가능 여부, docker-compose.dev.yml 문법, 후보 .env.next 값을 확인하세요. 기존 .env는 교체하지 않았습니다."
+            echo "::error title=EC2 Docker Compose 재시작 실패::Docker 실행 상태, 이미지 pull 가능 여부, docker-compose.dev.yml 문법, run별 후보 설정과 marker를 확인하세요. 기존 .env는 교체하지 않았습니다."
             echo "::endgroup::"
             exit 1
           fi
@@ -769,19 +778,36 @@ jobs:
           SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
 
           if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' bash -s" <<'EOF'
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_RUN_ID='$GITHUB_RUN_ID' DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT' bash -s" <<'EOF'
           set -euo pipefail
           cd "$DEPLOY_DIR"
+
+          candidate_env=".env.candidate-${DEPLOY_SHA}-${DEPLOY_RUN_ID}-${DEPLOY_RUN_ATTEMPT}"
+          if [ ! -f .dev-deploy-compose-started ]; then
+            echo "후보 Compose marker가 없어 실행 중인 후보 설정을 확인할 수 없습니다."
+            exit 1
+          fi
+          active_candidate="$(< .dev-deploy-compose-started)"
+          if [ "$active_candidate" != "$candidate_env" ]; then
+            echo "후보 Compose marker가 현재 배포 run의 후보 설정과 일치하지 않습니다."
+            exit 1
+          fi
+          if [ ! -f "$candidate_env" ]; then
+            echo "현재 배포 run의 후보 설정 파일이 없습니다: $candidate_env"
+            exit 1
+          fi
 
           for attempt in {1..30}; do
             echo "애플리케이션 내부 헬스체크 시도: ${attempt}/30"
             if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
               echo "애플리케이션 내부 헬스체크 성공: app status UP"
               echo "검증을 마친 런타임 설정으로 원자적 전환"
-              if ! mv -f .env.next .env; then
-                echo "런타임 설정 전환 실패: .env.next를 .env로 교체하지 못했습니다. 파일 권한과 디스크 여유 공간을 확인하세요."
+              if ! mv -f "$candidate_env" .env; then
+                echo "런타임 설정 전환 실패: SHA 고정 후보 설정을 .env로 교체하지 못했습니다. 파일 권한과 디스크 여유 공간을 확인하세요."
                 exit 1
               fi
+              rm -f .dev-deploy-compose-started
+              rm -f .env.candidate-*
               exit 0
             fi
 
@@ -789,17 +815,17 @@ jobs:
           done
 
           echo "애플리케이션 내부 헬스체크 실패: app 컨테이너 최근 로그"
-          sudo env SSING_RUNTIME_ENV_FILE=.env.next \
-            docker compose --env-file .env.next -f "$COMPOSE_FILE" logs --tail=100 app
+          sudo env SSING_RUNTIME_ENV_FILE="$candidate_env" \
+            docker compose --env-file "$candidate_env" -f "$COMPOSE_FILE" logs --tail=100 app
           exit 1
           EOF
           then
-            echo "::error title=애플리케이션 내부 검증 실패::app health 로그와 런타임 설정 전환 실패 메시지를 확인하세요. 기존 .env 보존 여부, 후보 .env.next 권한, 디스크 여유 공간을 함께 확인하세요."
+            echo "::error title=애플리케이션 내부 검증 실패::app health 로그와 런타임 설정 전환 실패 메시지를 확인하세요. 기존 .env 보존 여부, run별 후보 설정과 marker, 디스크 여유 공간을 함께 확인하세요."
             echo "::endgroup::"
             exit 1
           fi
 
-          echo "::notice title=애플리케이션 내부 검증 완료::app status UP을 확인하고 .env.next를 현재 .env로 승격했습니다."
+          echo "::notice title=애플리케이션 내부 검증 완료::app status UP을 확인하고 현재 run의 후보 설정을 .env로 승격했습니다."
           echo "::endgroup::"
 
       # 외부 도메인 HTTPS 헬스체크
@@ -843,6 +869,7 @@ jobs:
           SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}
           SSING_ADMINER_DEFAULT_SERVER: ${{ vars.SSING_DEV_DB_HOST }}
           SSING_DATASOURCE_USERNAME: ${{ vars.SSING_DEV_DATASOURCE_USERNAME }}
+          SSING_DEV_DB_NAME: ${{ vars.SSING_DEV_DB_NAME }}
         run: |
           set -euo pipefail
 
@@ -850,7 +877,7 @@ jobs:
           SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
 
           if ! ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' SSING_DEV_DOMAIN='$SSING_DEV_DOMAIN' SSING_ADMINER_DEFAULT_SERVER='$SSING_ADMINER_DEFAULT_SERVER' SSING_DATASOURCE_USERNAME='$SSING_DATASOURCE_USERNAME' bash -s" <<'EOF'
+            "DEPLOY_DIR='$DEPLOY_DIR' COMPOSE_FILE='$COMPOSE_FILE' SSING_DEV_DOMAIN='$SSING_DEV_DOMAIN' SSING_ADMINER_DEFAULT_SERVER='$SSING_ADMINER_DEFAULT_SERVER' SSING_DATASOURCE_USERNAME='$SSING_DATASOURCE_USERNAME' SSING_DEV_DB_NAME='$SSING_DEV_DB_NAME' bash -s" <<'EOF'
           set -euo pipefail
           cd "$DEPLOY_DIR"
 
@@ -882,7 +909,7 @@ jobs:
                 --data-urlencode "auth[server]=${SSING_ADMINER_DEFAULT_SERVER}" \
                 --data-urlencode "auth[username]=${SSING_DATASOURCE_USERNAME}" \
                 --data-urlencode 'auth[password]=ssing-managed-login' \
-                --data-urlencode 'auth[db]=ssing' \
+                --data-urlencode "auth[db]=${SSING_DEV_DB_NAME}" \
                 "$adminer_url")" \
                 && grep -q 'name="logout"' <<< "$adminer_response"; then
               echo "Adminer 자동 로그인 확인 성공"
@@ -985,6 +1012,31 @@ jobs:
           if [ -f ~/.ssh/ssing-dev-key ]; then
             SSH_TARGET="${EC2_USERNAME}@${EC2_HOST}"
             ssh -i ~/.ssh/ssing-dev-key "$SSH_TARGET" \
-              "rm -f '$DEPLOY_DIR/.migration.env' '$DEPLOY_DIR/.deploy-db-tooling.tgz' '$DEPLOY_DIR/.deploy-adminer.tgz' '$DEPLOY_DIR/.install-dev-release.sh' '$DEPLOY_DIR/.dev-deploy-preflight' '$DEPLOY_DIR/.env.next' '$DEPLOY_DIR/secrets/firebase-admin.json.next' '$DEPLOY_DIR/secrets/adminer-db-password.next'" || true
+              "DEPLOY_DIR='$DEPLOY_DIR' bash -s" <<'EOF' || true
+          set -euo pipefail
+          rm -f \
+            "$DEPLOY_DIR/.migration.env" \
+            "$DEPLOY_DIR/.deploy-db-tooling.tgz" \
+            "$DEPLOY_DIR/.deploy-adminer.tgz" \
+            "$DEPLOY_DIR/.install-dev-release.sh" \
+            "$DEPLOY_DIR/.dev-deploy-preflight" \
+            "$DEPLOY_DIR/.dev-deploy-compose-started.tmp" \
+            "$DEPLOY_DIR/secrets/firebase-admin.json.next" \
+            "$DEPLOY_DIR/secrets/adminer-db-password.next"
+
+          rm -f "$DEPLOY_DIR/.env.next"
+          if [ -e "$DEPLOY_DIR/.dev-deploy-compose-started" ]; then
+            active_candidate="$(< "$DEPLOY_DIR/.dev-deploy-compose-started")"
+            if [[ ! "$active_candidate" =~ ^\.env\.candidate-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]; then
+              echo "후보 Compose marker 형식이 올바르지 않아 후보 설정을 임의로 정리하지 않습니다."
+              exit 1
+            fi
+            if [ ! -f "$DEPLOY_DIR/$active_candidate" ]; then
+              echo "marker가 가리키는 SHA 고정 후보 설정이 없어 원격 상태를 확정할 수 없습니다."
+              exit 1
+            fi
+            echo "후보 Compose가 시작되어 실행 중일 수 있는 SHA 고정 후보 설정을 보존합니다: $active_candidate"
+          fi
+          EOF
           fi
           rm -f ~/.ssh/ssing-dev-key
