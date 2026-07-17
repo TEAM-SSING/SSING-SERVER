@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -150,6 +151,115 @@ class InstructorMatchingRecoveryIntegrationTest {
             clientScheduler.shutdown();
         }
         brokerChannel.removeInterceptor(subscriptionObserver);
+    }
+
+    @Test
+    void 강습생이먼저_REQUESTED면_강사노출시작후_즉시_GROUPED되고_강사에게제안이전달된다() throws Exception {
+        Long consumerMemberId = personaMemberId("대뜸GOAT-성빈-일반강습생");
+        Long instructorMemberId = personaMemberId("보법다른-유정-승인강사");
+        String consumerToken = accessTokenProvider.createAccessToken(consumerMemberId, MemberRole.CONSUMER);
+        String instructorToken = accessTokenProvider.createAccessToken(instructorMemberId, MemberRole.INSTRUCTOR);
+
+        int hiddenSettings = jdbcTemplate.update(
+                """
+                UPDATE instructor_matching_settings setting
+                JOIN instructor_profiles profile ON profile.id = setting.instructor_profile_id
+                SET setting.is_exposed = b'0'
+                WHERE profile.member_id = ?
+                """,
+                instructorMemberId
+        );
+        assertThat(hiddenSettings).isEqualTo(1);
+
+        long matchingRequestId = createMatchingRequest(consumerToken);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM matching_requests WHERE id = ?",
+                String.class,
+                matchingRequestId
+        )).isEqualTo("REQUESTED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_request_group_items WHERE matching_request_id = ?",
+                Integer.class,
+                matchingRequestId
+        )).isZero();
+
+        EventSubscription subscription = subscribe(instructorToken, "/user/queue/matching");
+        mockMvc.perform(put("/api/v1/instructor/matching-exposure")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "sport": "SKI",
+                                  "lessonLevels": ["FIRST_TIME", "BEGINNER"],
+                                  "availableDurationMinutes": [120],
+                                  "maxHeadcount": 3,
+                                  "equipmentReady": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isExposed").value(true));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM matching_requests WHERE id = ?",
+                String.class,
+                matchingRequestId
+        )).isEqualTo("GROUPED");
+        Long groupId = jdbcTemplate.queryForObject(
+                "SELECT matching_request_group_id FROM matching_request_group_items WHERE matching_request_id = ?",
+                Long.class,
+                matchingRequestId
+        );
+        Long offerId = jdbcTemplate.queryForObject(
+                "SELECT id FROM matching_offers WHERE matching_request_group_id = ?",
+                Long.class,
+                groupId
+        );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM matching_offers WHERE id = ?",
+                String.class,
+                offerId
+        )).isEqualTo("OFFERED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM matching_offer_price_snapshots WHERE matching_offer_id = ?",
+                Integer.class,
+                offerId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM notifications
+                WHERE member_id = ?
+                  AND client_app = 'INSTRUCTOR'
+                  AND type = 'MATCHING_OFFER_RECEIVED'
+                  AND JSON_UNQUOTE(JSON_EXTRACT(data_json, '$.offerId')) = ?
+                """,
+                Integer.class,
+                instructorMemberId,
+                String.valueOf(offerId)
+        )).isEqualTo(1);
+
+        JsonNode matchingEvent = awaitEvent(subscription.events(), "MATCHING_OFFER_RECEIVED");
+        assertThat(matchingEvent.path("recipientRole").asText()).isEqualTo("INSTRUCTOR");
+        assertThat(matchingEvent.path("offerId").asLong()).isEqualTo(offerId);
+        assertThat(matchingEvent.path("groupId").asLong()).isEqualTo(groupId);
+        assertThat(matchingEvent.at("/payload/requestSummary").isObject()).isTrue();
+        assertThat(matchingEvent.at("/payload/lessonSummary").isObject()).isTrue();
+
+        mockMvc.perform(get("/api/v1/instructor/matching-offers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.matchingSetting.isExposed").value(true));
+
+        mockMvc.perform(get("/api/v1/instructor/matching-offers/{offerId}", offerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(instructorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.recoveryState").value("AVAILABLE"))
+                .andExpect(jsonPath("$.data.offerId").value(offerId))
+                .andExpect(jsonPath("$.data.groupId").value(groupId))
+                .andExpect(jsonPath("$.data.offerStatus").value("OFFERED"))
+                .andExpect(jsonPath("$.data.groupStatus").value("EXPOSED"))
+                .andExpect(jsonPath("$.data.matchingStatus").value("WAITING_FOR_INSTRUCTOR"));
     }
 
     @Test

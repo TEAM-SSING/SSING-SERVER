@@ -8,9 +8,6 @@ import org.sopt.ssingserver.domain.matching.enums.MatchingRequestStatus;
 import org.sopt.ssingserver.domain.matching.repository.MatchingRequestRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 // 요청 생성 직후 트리거와 주기 스케줄러의 공통 재탐색 입구
 @Service
@@ -23,8 +20,7 @@ public class MatchingSearchTriggerService {
     private final MatchingRequestRepository matchingRequestRepository;
     private final MatchingSearchService matchingSearchService;
 
-    // 생성 커밋 이후 후속 DB 쓰기를 위한 새 트랜잭션 단건 재탐색
-    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
+    // 단건 탐색 위임, 후속 DB 쓰기의 새 트랜잭션은 MatchingSearchService가 요청별로 관리
     public void triggerSearch(Long matchingRequestId) {
         matchingSearchService.search(matchingRequestId);
     }

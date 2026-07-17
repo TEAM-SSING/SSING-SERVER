@@ -134,6 +134,70 @@ class InstructorActiveNegotiationConcurrencyIntegrationTest {
         }
     }
 
+    // 강사 노출 즉시 스캔과 스케줄러가 같은 요청을 잡아도 REQUESTED row lock으로 매칭 체인은 한 번만 만든다.
+    @Test
+    void concurrentSearches는_같은_REQUESTED요청의_매칭체인을_한번만_생성한다() throws Exception {
+        long matchingRequestId = createRequestedMatchingRequest("동일요청동시성소비자");
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            Future<MatchingSearchResult> exposureSearch = executor.submit(() -> searchAfterBarrier(
+                    matchingRequestId,
+                    ready,
+                    start
+            ));
+            Future<MatchingSearchResult> schedulerSearch = executor.submit(() -> searchAfterBarrier(
+                    matchingRequestId,
+                    ready,
+                    start
+            ));
+
+            assertThat(ready.await(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<MatchingSearchResult> results = List.of(
+                    exposureSearch.get(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+                    schedulerSearch.get(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            );
+
+            assertThat(results).filteredOn(result -> result.matchingStatus() == MatchingStatus.WAITING_FOR_INSTRUCTOR)
+                    .hasSize(1);
+            assertThat(results).filteredOn(result -> result.matchingStatus() == null)
+                    .hasSize(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT status FROM matching_requests WHERE id = ?",
+                    String.class,
+                    matchingRequestId
+            )).isEqualTo("GROUPED");
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM matching_request_groups",
+                    Integer.class
+            )).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM matching_request_group_items WHERE matching_request_id = ?",
+                    Integer.class,
+                    matchingRequestId
+            )).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM matching_offers",
+                    Integer.class
+            )).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM matching_offer_price_snapshots",
+                    Integer.class
+            )).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM notifications WHERE type = 'MATCHING_OFFER_RECEIVED'",
+                    Integer.class
+            )).isEqualTo(1);
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(CONCURRENCY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }
+    }
+
     // 강사 수락 직후부터 결제 대기까지 모든 활성 협상 상태가 실제 JPQL에서 새 후보 선정을 막는지 검증한다.
     @ParameterizedTest(name = "{0} 활성 협상이 있으면 새 제안을 차단한다")
     @EnumSource(

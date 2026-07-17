@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -56,6 +57,9 @@ import org.sopt.ssingserver.domain.payment.repository.MatchingOfferPriceSnapshot
 import org.sopt.ssingserver.domain.payment.repository.PlatformFeePolicyRepository;
 import org.sopt.ssingserver.domain.resort.entity.Resort;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -98,6 +102,17 @@ class MatchingSearchServiceTest {
 
     @Mock
     private MatchingEventPublisher matchingEventPublisher;
+
+    @Test
+    void search는_요청별_새_트랜잭션과_READ_COMMITTED를_선언한다() throws NoSuchMethodException {
+        Method method = MatchingSearchService.class.getMethod("search", Long.class);
+
+        Transactional transactional = method.getAnnotation(Transactional.class);
+
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.propagation()).isSameAs(Propagation.REQUIRES_NEW);
+        assertThat(transactional.isolation()).isSameAs(Isolation.READ_COMMITTED);
+    }
 
     @Test
     void search는_무제한탐색_요청에_후보가_없어도_REQUESTED_SEARCHING을_유지한다() {
