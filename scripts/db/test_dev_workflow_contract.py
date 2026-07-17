@@ -20,6 +20,7 @@ DEV_ENV_EXAMPLE = ROOT / "deploy/env.dev.example"
 INTEGRATION_SOURCE_ROOT = ROOT / "src/integrationTest/java"
 INTEGRATION_PROFILE = ROOT / "src/integrationTest/resources/application-integration-test.properties"
 DEV_ADMINER_PLUGIN = ROOT / "deploy/adminer/001-ssing-autologin.php"
+DEV_CADDY_MANAGER = ROOT / "scripts/deploy/manage-dev-caddy.sh"
 DEV_RUNNERS = (
     ROOT / "scripts/db/dev-common.sh",
     ROOT / "scripts/db/reset-dev.sh",
@@ -680,6 +681,434 @@ class DevWorkflowContractTest(unittest.TestCase):
             self.assertFalse((deploy_path / ".env.next").exists())
             self.assertEqual("candidate-b", previous_candidate.read_text(encoding="utf-8"))
             self.assertEqual(previous_candidate.name, marker.read_text(encoding="utf-8").strip())
+
+    def test_deploy_activates_caddy_candidate_before_proxy_smoke_checks(self):
+        upload_step = indented_block(
+            self.deploy_job,
+            "- name: EC2 배포 파일 업로드",
+            6,
+        )
+        restart_step = indented_block(
+            self.deploy_job,
+            "- name: EC2 Docker Compose 재시작",
+            6,
+        )
+        caddy_preflight_step = indented_block(
+            self.deploy_job,
+            "- name: Caddy 후보 설정 사전 검증",
+            6,
+        )
+        caddy_activation_step = indented_block(
+            self.deploy_job,
+            "- name: Caddy 설정 검증 및 무중단 반영",
+            6,
+        )
+        external_health_step = indented_block(
+            self.deploy_job,
+            "- name: 외부 도메인 HTTPS 헬스체크",
+            6,
+        )
+        cleanup_step = indented_block(
+            self.deploy_job,
+            "- name: 배포 임시 비밀 파일 정리",
+            6,
+        )
+        finalize_step = indented_block(
+            self.deploy_job,
+            "- name: Caddy 설정 확정 또는 복구",
+            6,
+        )
+        caddy_manager = DEV_CADDY_MANAGER.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'caddy_candidate="Caddyfile.candidate-${DEPLOY_SHA}-'
+            '${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"',
+            upload_step,
+        )
+        self.assertIn(
+            'deploy/Caddyfile "$SSH_TARGET:$DEPLOY_DIR/$caddy_candidate"',
+            upload_step,
+        )
+        self.assertIn("scripts/deploy/manage-dev-caddy.sh", upload_step)
+        self.assertIn("$DEPLOY_DIR/.manage-dev-caddy.sh", upload_step)
+        self.assertIn('"$DEPLOY_DIR/.manage-dev-caddy.sh" preflight', caddy_preflight_step)
+        self.assertIn("dev DB는 아직 초기화하지 않았습니다", caddy_preflight_step)
+        self.assertLess(
+            self.deploy_job.index("- name: Caddy 후보 설정 사전 검증"),
+            self.deploy_job.index("dev DB 초기화 직전 현재 main SHA 재확인"),
+        )
+        self.assertLess(
+            self.deploy_job.index("- name: Caddy 후보 설정 사전 검증"),
+            self.deploy_job.index("up --pull never -d --remove-orphans"),
+        )
+        self.assertIn(
+            "up --pull never -d --remove-orphans app adminer",
+            restart_step,
+        )
+        self.assertNotIn(
+            "up --pull never -d --remove-orphans app adminer caddy",
+            restart_step,
+        )
+
+        self.assertIn("SSING_DEV_DOMAIN: ${{ vars.SSING_DEV_DOMAIN }}", caddy_activation_step)
+        self.assertIn("DEPLOY_SHA='$DEPLOY_SHA'", caddy_activation_step)
+        self.assertIn("DEPLOY_RUN_ID='$GITHUB_RUN_ID'", caddy_activation_step)
+        self.assertIn("DEPLOY_RUN_ATTEMPT='$GITHUB_RUN_ATTEMPT'", caddy_activation_step)
+        self.assertIn('"$DEPLOY_DIR/.manage-dev-caddy.sh" activate', caddy_activation_step)
+
+        env_promotion_position = self.deploy_job.index('mv -f "$candidate_env" .env')
+        caddy_activation_position = self.deploy_job.index(
+            "- name: Caddy 설정 검증 및 무중단 반영"
+        )
+        external_health_position = self.deploy_job.index(
+            "- name: 외부 도메인 HTTPS 헬스체크"
+        )
+        adminer_smoke_position = self.deploy_job.index(
+            "- name: Adminer 자동 로그인 스모크 체크"
+        )
+        finalize_position = self.deploy_job.index(
+            "- name: Caddy 설정 확정 또는 복구"
+        )
+        self.assertLess(env_promotion_position, caddy_activation_position)
+        self.assertLess(caddy_activation_position, external_health_position)
+        self.assertLess(external_health_position, adminer_smoke_position)
+        self.assertLess(adminer_smoke_position, finalize_position)
+
+        self.assertIn("EC2_HOST: ${{ vars.EC2_HOST }}", external_health_step)
+        self.assertIn('HEALTH_URL="http://${EC2_HOST}/actuator/health"', external_health_step)
+        self.assertNotIn("외부 도메인 헬스체크 생략", external_health_step)
+        self.assertIn("curl -fsS", external_health_step)
+
+        self.assertIn("id: caddy_app_health", external_health_step)
+        adminer_smoke_step = indented_block(
+            self.deploy_job,
+            "- name: Adminer 자동 로그인 스모크 체크",
+            6,
+        )
+        self.assertIn("id: adminer_smoke", adminer_smoke_step)
+        self.assertIn("if: always()", finalize_step)
+        self.assertIn("steps.caddy_app_health.outcome", finalize_step)
+        self.assertIn("steps.adminer_smoke.outcome", finalize_step)
+        self.assertIn('caddy_smoke_succeeded="true"', finalize_step)
+        self.assertIn('caddy_smoke_succeeded="false"', finalize_step)
+        self.assertIn("CADDY_SMOKE_SUCCEEDED='$caddy_smoke_succeeded'", finalize_step)
+        self.assertIn('"$DEPLOY_DIR/.manage-dev-caddy.sh" settle', finalize_step)
+        self.assertIn('"$DEPLOY_DIR/.manage-dev-caddy.sh" cleanup', cleanup_step)
+        self.assertIn("미완료 Caddy transaction", cleanup_step)
+
+        self.assertIn("run --rm --no-deps -T", caddy_manager)
+        self.assertIn("caddy validate --config - --adapter caddyfile", caddy_manager)
+        self.assertIn("caddy reload --config - --adapter caddyfile", caddy_manager)
+        self.assertIn(".dev-deploy-caddy-activated", caddy_manager)
+        self.assertIn("rollback_activation", caddy_manager)
+        self.assertIn("probe_app_route", caddy_manager)
+        self.assertIn("config --hash caddy", caddy_manager)
+        self.assertIn("com.docker.compose.config-hash", caddy_manager)
+        self.assertIn("Caddy domain 변경은", caddy_manager)
+        self.assertIn("up --pull never -d --no-deps caddy", caddy_manager)
+        self.assertIn("smoke 결과 대기", caddy_manager)
+        self.assertIn("복구 파일을 보존합니다", caddy_manager)
+        self.assertNotIn("--force-recreate", caddy_manager)
+        self.assertTrue(os.access(DEV_CADDY_MANAGER, os.X_OK))
+
+    def test_caddy_manager_rolls_back_failed_activation_and_preserves_failed_recovery(self):
+        activation_id = f"{'a' * 40}-101-1"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            fake_bin = temp_path / "fake-bin"
+            fake_bin.mkdir()
+            fake_log = temp_path / "caddy.log"
+
+            fake_sudo = fake_bin / "sudo"
+            fake_sudo.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+                    args="$*"
+                    if [[ "$args" == *" ps --status running -q caddy"* ]]; then
+                      if [[ -n "${FAKE_CADDY_STATE_FILE:-}" \
+                          && "$(cat "$FAKE_CADDY_STATE_FILE")" != "running" ]]; then
+                        exit 0
+                      fi
+                      echo "fake-caddy-id"
+                      exit 0
+                    fi
+                    if [[ "$args" == *" up --pull never -d --no-deps caddy"* ]]; then
+                      if [[ -n "${FAKE_CADDY_STATE_FILE:-}" ]]; then
+                        printf 'running' > "$FAKE_CADDY_STATE_FILE"
+                      fi
+                      exit 0
+                    fi
+                    if [[ "$args" == *" exec -T caddy printenv SSING_DEV_DOMAIN"* ]]; then
+                      echo "${FAKE_PREVIOUS_DOMAIN:-:80}"
+                      exit 0
+                    fi
+                    if [[ "$args" == *"docker inspect"* ]]; then
+                      echo "${FAKE_CURRENT_HASH}"
+                      exit 0
+                    fi
+                    if [[ "$args" == *" config --hash caddy"* ]]; then
+                      echo "caddy ${FAKE_DESIRED_HASH}"
+                      exit 0
+                    fi
+                    if [[ "$args" == *"caddy validate --config - --adapter caddyfile"* ]]; then
+                      config="$(cat)"
+                      printf 'validate:%s\\n' "$config" >> "$FAKE_CADDY_LOG"
+                      if [[ -n "${FAKE_VALIDATE_FAIL_CONFIG:-}" \
+                          && "$config" == "$FAKE_VALIDATE_FAIL_CONFIG" ]]; then
+                        exit 1
+                      fi
+                      exit 0
+                    fi
+                    if [[ "$args" == *"caddy reload --config - --adapter caddyfile"* ]]; then
+                      config="$(cat)"
+                      printf 'reload:%s\\n' "$config" >> "$FAKE_CADDY_LOG"
+                      if [[ -n "${FAKE_RELOAD_FAIL_CONFIG:-}" \
+                          && "$config" == "$FAKE_RELOAD_FAIL_CONFIG" ]]; then
+                        exit 1
+                      fi
+                      exit 0
+                    fi
+                    echo "unexpected sudo command: $args" >&2
+                    exit 1
+                    """
+                ),
+                encoding="utf-8",
+            )
+            fake_sudo.chmod(0o755)
+
+            fake_curl = fake_bin / "curl"
+            fake_curl.write_text(
+                "#!/usr/bin/env bash\nprintf '{\"status\":\"UP\"}'\n",
+                encoding="utf-8",
+            )
+            fake_curl.chmod(0o755)
+
+            base_env = {
+                **os.environ,
+                "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+                "COMPOSE_FILE": "docker-compose.dev.yml",
+                "DEPLOY_SHA": "a" * 40,
+                "DEPLOY_RUN_ID": "101",
+                "DEPLOY_RUN_ATTEMPT": "1",
+                "SSING_DEV_DOMAIN": ":80",
+                "FAKE_CADDY_LOG": str(fake_log),
+                "FAKE_CURRENT_HASH": "b" * 64,
+                "FAKE_DESIRED_HASH": "b" * 64,
+            }
+
+            def prepare_deploy(name, live="last-good", candidate="candidate"):
+                deploy_path = temp_path / name
+                deploy_path.mkdir()
+                (deploy_path / ".env.next").write_text("next", encoding="utf-8")
+                (deploy_path / ".env").write_text("current", encoding="utf-8")
+                if live is not None:
+                    (deploy_path / "Caddyfile").write_text(live, encoding="utf-8")
+                (deploy_path / f"Caddyfile.candidate-{activation_id}").write_text(
+                    candidate,
+                    encoding="utf-8",
+                )
+                return deploy_path
+
+            def run_manager(deploy_path, command, **env_overrides):
+                return subprocess.run(
+                    [str(DEV_CADDY_MANAGER), command],
+                    env={
+                        **base_env,
+                        "DEPLOY_DIR": str(deploy_path),
+                        **env_overrides,
+                    },
+                    capture_output=True,
+                    text=True,
+                )
+
+            success_path = prepare_deploy("success")
+            self.assertEqual(0, run_manager(success_path, "preflight").returncode)
+            self.assertEqual(0, run_manager(success_path, "activate").returncode)
+            self.assertEqual("candidate", (success_path / "Caddyfile").read_text())
+            self.assertTrue((success_path / ".dev-deploy-caddy-activated").exists())
+            self.assertTrue(
+                (success_path / f"Caddyfile.rollback-{activation_id}").exists()
+            )
+            self.assertEqual(
+                0,
+                run_manager(
+                    success_path,
+                    "settle",
+                    CADDY_SMOKE_SUCCEEDED="true",
+                ).returncode,
+            )
+            self.assertFalse((success_path / ".dev-deploy-caddy-activated").exists())
+
+            smoke_failure_path = prepare_deploy("smoke-failure")
+            self.assertEqual(0, run_manager(smoke_failure_path, "preflight").returncode)
+            self.assertEqual(0, run_manager(smoke_failure_path, "activate").returncode)
+            # reload 명령 자체는 성공했지만 Adminer route smoke가 실패한 상황을 모델링한다.
+            smoke_rollback = run_manager(
+                smoke_failure_path,
+                "settle",
+                CADDY_SMOKE_SUCCEEDED="false",
+            )
+            self.assertEqual(
+                0,
+                smoke_rollback.returncode,
+                msg=smoke_rollback.stdout + smoke_rollback.stderr,
+            )
+            self.assertEqual("last-good", (smoke_failure_path / "Caddyfile").read_text())
+            self.assertFalse(
+                (smoke_failure_path / ".dev-deploy-caddy-activated").exists()
+            )
+
+            reload_failure_path = prepare_deploy("reload-failure")
+            self.assertEqual(0, run_manager(reload_failure_path, "preflight").returncode)
+            reload_failure = run_manager(
+                reload_failure_path,
+                "activate",
+                FAKE_RELOAD_FAIL_CONFIG="candidate",
+            )
+            self.assertNotEqual(0, reload_failure.returncode)
+            self.assertEqual("last-good", (reload_failure_path / "Caddyfile").read_text())
+            self.assertFalse(
+                (reload_failure_path / ".dev-deploy-caddy-activated").exists()
+            )
+
+            recovery_failure_path = prepare_deploy("recovery-failure")
+            self.assertEqual(0, run_manager(recovery_failure_path, "preflight").returncode)
+            self.assertEqual(0, run_manager(recovery_failure_path, "activate").returncode)
+            recovery_failure = run_manager(
+                recovery_failure_path,
+                "rollback",
+                FAKE_RELOAD_FAIL_CONFIG="last-good",
+            )
+            self.assertNotEqual(0, recovery_failure.returncode)
+            self.assertTrue(
+                (recovery_failure_path / ".dev-deploy-caddy-activated").exists()
+            )
+            self.assertTrue(
+                (recovery_failure_path / f"Caddyfile.rollback-{activation_id}").exists()
+            )
+            self.assertEqual(0, run_manager(recovery_failure_path, "cleanup").returncode)
+            self.assertTrue(
+                (recovery_failure_path / f"Caddyfile.rollback-{activation_id}").exists()
+            )
+
+            stopped_recovery_path = prepare_deploy("stopped-recovery")
+            self.assertEqual(0, run_manager(stopped_recovery_path, "preflight").returncode)
+            self.assertEqual(0, run_manager(stopped_recovery_path, "activate").returncode)
+            caddy_state = temp_path / "caddy.state"
+            caddy_state.write_text("stopped", encoding="utf-8")
+            stopped_recovery = run_manager(
+                stopped_recovery_path,
+                "settle",
+                CADDY_SMOKE_SUCCEEDED="false",
+                FAKE_CADDY_STATE_FILE=str(caddy_state),
+            )
+            self.assertEqual(
+                0,
+                stopped_recovery.returncode,
+                msg=stopped_recovery.stdout + stopped_recovery.stderr,
+            )
+            self.assertEqual("running", caddy_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "last-good",
+                (stopped_recovery_path / "Caddyfile").read_text(encoding="utf-8"),
+            )
+
+            first_start_path = prepare_deploy(
+                "first-start",
+                live=None,
+                candidate="candidate",
+            )
+            first_start_state = temp_path / "first-start.state"
+            first_start_state.write_text("stopped", encoding="utf-8")
+            self.assertEqual(
+                0,
+                run_manager(
+                    first_start_path,
+                    "preflight",
+                    FAKE_CADDY_STATE_FILE=str(first_start_state),
+                ).returncode,
+            )
+            first_start = run_manager(
+                first_start_path,
+                "activate",
+                FAKE_CADDY_STATE_FILE=str(first_start_state),
+            )
+            self.assertEqual(
+                0,
+                first_start.returncode,
+                msg=first_start.stdout + first_start.stderr,
+            )
+            self.assertEqual("running", first_start_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                0,
+                run_manager(
+                    first_start_path,
+                    "settle",
+                    CADDY_SMOKE_SUCCEEDED="true",
+                    FAKE_CADDY_STATE_FILE=str(first_start_state),
+                ).returncode,
+            )
+
+            invalid_bootstrap_path = prepare_deploy(
+                "invalid-bootstrap",
+                live=None,
+                candidate="invalid",
+            )
+            invalid_bootstrap = run_manager(
+                invalid_bootstrap_path,
+                "preflight",
+                FAKE_VALIDATE_FAIL_CONFIG="invalid",
+            )
+            self.assertNotEqual(0, invalid_bootstrap.returncode)
+            self.assertFalse((invalid_bootstrap_path / "Caddyfile").exists())
+            self.assertEqual(0, run_manager(invalid_bootstrap_path, "cleanup").returncode)
+            self.assertFalse(
+                (invalid_bootstrap_path / f"Caddyfile.candidate-{activation_id}").exists()
+            )
+
+            invalid_existing_path = prepare_deploy(
+                "invalid-existing",
+                live="last-good",
+                candidate="invalid",
+            )
+            invalid_existing = run_manager(
+                invalid_existing_path,
+                "preflight",
+                FAKE_VALIDATE_FAIL_CONFIG="invalid",
+            )
+            self.assertNotEqual(0, invalid_existing.returncode)
+            self.assertEqual(
+                "last-good",
+                (invalid_existing_path / "Caddyfile").read_text(),
+            )
+
+            domain_change_path = prepare_deploy("domain-change")
+            domain_change = run_manager(
+                domain_change_path,
+                "preflight",
+                SSING_DEV_DOMAIN="dev-api.ssing.app",
+                FAKE_PREVIOUS_DOMAIN="old-api.ssing.app",
+            )
+            self.assertNotEqual(0, domain_change.returncode)
+            self.assertEqual(
+                "last-good",
+                (domain_change_path / "Caddyfile").read_text(encoding="utf-8"),
+            )
+
+            service_change_path = prepare_deploy("service-change")
+            service_change = run_manager(
+                service_change_path,
+                "preflight",
+                FAKE_DESIRED_HASH="c" * 64,
+            )
+            self.assertNotEqual(0, service_change.returncode)
+            self.assertEqual(
+                "last-good",
+                (service_change_path / "Caddyfile").read_text(encoding="utf-8"),
+            )
 
     def test_main_sha_is_rechecked_before_db_mutation_and_restart(self):
         sha_check = (
