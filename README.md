@@ -2,6 +2,8 @@
 > ### 스키 강습의 새로운 기준을 세우다
 <img width="3840" height="2160" alt="SSING 표지" src="https://github.com/user-attachments/assets/9babfed7-7592-4114-b6cf-4a8a204bbb70" />
 
+[서버 설계와 동작 시연](docs/portfolio-readme/README.md)
+
 ## ✨ About SSING
 
 SSING은 스키장, 일정, 종목, 실력, 인원 조건을 바탕으로 강습생에게 알맞은 강사를 연결하는 서비스입니다.</br>
