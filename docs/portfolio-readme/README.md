@@ -6,13 +6,13 @@
 
 서버에서 Kakao 로그인과 토큰 정책, 매칭 상태 복구, 가격·참가자 응답, 개발용 검증 도구를 담당했습니다. 강습생·강사용 Android 앱은 팀의 공동 결과입니다.
 
-[서버 저장소](https://github.com/TEAM-SSING/SSING-SERVER) · [Android 저장소](https://github.com/TEAM-SSING/SSING-ANDROID) · [SOPT 프로젝트 아카이브](https://www.sopt.org/project/291)
+[서버 저장소](https://github.com/TEAM-SSING/SSING-SERVER) · [Android 팀 저장소](https://github.com/TEAM-SSING/SSING-ANDROID) · [SOPT 프로젝트 아카이브](https://www.sopt.org/project/291)
 
-## 두 앱이 하나의 강습을 확정하기까지
+## 팀 Android 앱 · 두 앱이 하나의 강습을 확정하기까지
 
 ![왼쪽 강사용 Android 앱 오른쪽 강습생용 Android 앱. 강습 조건 입력부터 제안·수락·확정 화면을 두 기기에서 함께 보여준다.](assets/readme/matching-android.gif)
 
-왼쪽은 강사, 오른쪽은 강습생 앱입니다. 강습생이 조건을 제출하면 강사에게 제안이 도착합니다. 강사가 수락해도 바로 강습이 잡히지 않습니다. 강습생이 확인하고 결제 완료 상태까지 반영되어야 양쪽에서 확정된 강습을 볼 수 있습니다. [Android 팀 시연](https://github.com/TEAM-SSING/SSING-ANDROID/tree/7ba5f249ae7b05af048e42c3e5a79b7abe75c4bb#-screenshot)
+왼쪽은 강사, 오른쪽은 강습생 앱입니다. 강습생이 조건을 제출하면 강사에게 제안이 도착합니다. 강사가 수락한 뒤 강습생이 제안을 확인하고 결제를 마치면 양쪽 앱에 강습이 확정됩니다.
 
 ## 앱을 닫았다 열어도 진행 중인 요청으로 돌아갑니다
 
@@ -32,9 +32,9 @@
 
 진행 중인 매칭 중단과 이미 확정된 강습 취소는 다릅니다. 강습 상세에서 취소 사유를 선택하고 확인하면 상세 화면에 취소 상태와 사유가 반영됩니다.
 
-## QA 콘솔에서 매칭을 끝까지 재현하기
+## Spring Boot 백엔드 · QA 콘솔에서 매칭을 끝까지 재현하기
 
-![SSING 로컬 QA 화면에서 강사 수락, 강습생 확인, 결제 완료를 차례로 실행해 매칭 확정을 확인한다.](assets/readme/matching-qa.gif)
+![SSING QA 콘솔에서 강사 수락, 강습생 수락, 테스트 결제 후 강습을 확정하는 화면](assets/readme/matching-qa.gif)
 
 QA 콘솔에서 **강사 수락 → 강습생 수락 → 테스트 결제**를 차례로 실행하면 요청이 강습 확정으로 바뀝니다.
 
@@ -50,6 +50,8 @@ QA 콘솔에서 **강사 수락 → 강습생 수락 → 테스트 결제**를 �
 | 데이터 | MySQL 8.4, Flyway |
 | 연동 | Kakao OAuth, JWT, REST, WebSocket, Firebase Cloud Messaging |
 | 배포·관측 | GitHub Actions, Docker Hub, Docker Compose, EC2·RDS, Caddy, Sentry |
+
+![강습 요청에서 제안과 결제를 거쳐 강습이 확정되며 앱을 다시 열면 현재 요청으로 돌아가는 흐름](assets/readme/workflow.png)
 
 [시스템 원본](assets/readme/system.drawio) · [배포 원본](assets/readme/infra.drawio) · [매칭 흐름 원본](assets/readme/workflow.drawio)
 
