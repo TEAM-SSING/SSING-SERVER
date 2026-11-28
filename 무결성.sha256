@@ -1,0 +1,5 @@
+051cc521f7cbf20db7e3af9ee2a384b38997a0166b0a17fba8e9bc6c754a0722  ./websocket-hardening.patch
+3f98b6edc8629f8e49ff5fb82fd10e8f673ffabaa65aac0c7108e5586081308e  ./README.md
+37c605605b92f67afe1f4cc3421037289347c2b8a832a019a7c504d0f61899f5  ./bases.txt
+0b61243561aeab920e25b3164a8d3cd029f57b24666f24ed93aeffc2706f37fa  ./notification-cursor-review.patch
+cdfebc973dfabb066f80792105796f721d8ff1be7643d2f131c355ce4e39a496  ./json-log-tests.patch
